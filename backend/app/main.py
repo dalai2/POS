@@ -13,6 +13,7 @@ from app.routes.inventory import router as inventory_router
 from app.routes.credits import router as credits_router
 from app.routes.reports import router as reports_router
 from app.routes.import_export import router as import_export_router
+from app.routes.init import router as init_router
 from app.core.database import SessionLocal, init_db
 from app.services.seed import seed_demo
 
@@ -31,6 +32,7 @@ def create_app() -> FastAPI:
         )
 
     app.include_router(health_router, tags=["health"])
+    app.include_router(init_router, prefix="/init", tags=["init"])
     app.include_router(auth_router, prefix="/auth", tags=["auth"]) 
     app.include_router(products_router, prefix="/products", tags=["products"]) 
     app.include_router(admin_router, prefix="/admin", tags=["admin"]) 
