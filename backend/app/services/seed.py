@@ -11,7 +11,7 @@ def seed_demo(db: Session):
         # Ensure base user exists and jewelry products are seeded
         tenant = db.query(Tenant).filter(Tenant.slug == 'demo').first()
         if tenant:
-            seed_jewelry_demo(db, tenant)
+            seed_jewelry_demo(db)
         return
     tenant = Tenant(name='Demo', slug='demo')
     db.add(tenant)
@@ -19,6 +19,6 @@ def seed_demo(db: Session):
     user = User(email='owner@demo.com', hashed_password=hash_password('secret123'), role='owner', tenant_id=tenant.id)
     db.add(user)
     db.commit()
-    seed_jewelry_demo(db, tenant)
+    seed_jewelry_demo(db)
 
 
