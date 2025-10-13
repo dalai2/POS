@@ -20,7 +20,7 @@ from app.services.seed import seed_demo
 def create_app() -> FastAPI:
     app = FastAPI(title="ERP POS API", version="0.1.0")
 
-    origins = [o.strip() for o in settings.backend_cors_origins.split(",") if o.strip()]
+    origins = settings.cors_origins
     if origins:
         app.add_middleware(
             CORSMiddleware,

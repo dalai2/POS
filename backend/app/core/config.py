@@ -1,4 +1,6 @@
 from pydantic_settings import BaseSettings
+from typing import List
+import os
 
 
 class Settings(BaseSettings):
@@ -10,6 +12,15 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./dev.db"
     tenant_header: str = "X-Tenant-ID"
     backend_cors_origins: str = "http://localhost:5173"
+    
+    # Railway specific - use PORT env var if available
+    port: int = int(os.getenv("PORT", "8000"))
+    
+    @property
+    def cors_origins(self) -> List[str]:
+        """Parse CORS origins from comma-separated string or ALLOWED_ORIGINS env var"""
+        origins = os.getenv("ALLOWED_ORIGINS", self.backend_cors_origins)
+        return [origin.strip() for origin in origins.split(",")]
 
     class Config:
         env_file = ".env"

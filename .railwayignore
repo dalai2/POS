@@ -13,12 +13,6 @@ venv/
 ENV/
 .venv
 
-# Environment variables
-.env
-.env.local
-.env.production
-.env.*.local
-
 # IDE
 .vscode/
 .idea/
@@ -30,24 +24,21 @@ ENV/
 .DS_Store
 Thumbs.db
 
+# Git
+.git/
+.gitignore
+
+# Docker (no necesario en Railway)
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Local env
+.env
+.env.local
+
 # Build artifacts
 dist/
 build/
 *.egg-info/
 
-# Database
-*.db
-*.sqlite
-*.sqlite3
-
-# Logs
-*.log
-logs/
-
-# Coverage
-.coverage
-htmlcov/
-.pytest_cache/
-
-# Railway
-.railway/
