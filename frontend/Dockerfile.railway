@@ -3,10 +3,12 @@ FROM node:18-alpine AS builder
 
 WORKDIR /app
 
-COPY package*.json ./
+# Copy package files from frontend directory
+COPY frontend/package*.json ./
 RUN npm ci
 
-COPY . .
+# Copy all frontend files
+COPY frontend/ ./
 RUN npm run build
 
 # Production stage
