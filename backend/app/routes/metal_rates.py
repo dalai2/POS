@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 from typing import List
+from datetime import datetime
 
 from app.core.database import get_db
 from app.core.deps import get_tenant, get_current_user
@@ -26,11 +27,10 @@ class MetalRateResponse(BaseModel):
     id: int
     metal_type: str
     rate_per_gram: float
-    created_at: str
-    updated_at: str
+    created_at: datetime
+    updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 @router.get("", response_model=List[MetalRateResponse])
