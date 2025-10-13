@@ -1,7 +1,6 @@
 [build]
-builder = "dockerfile"
-dockerfilePath = "../Dockerfile.frontend"
+builder = "nixpacks"
 
 [deploy]
-startCommand = ""
+startCommand = "npx http-server dist -p $PORT -a 0.0.0.0"
 
