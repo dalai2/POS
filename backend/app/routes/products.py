@@ -27,6 +27,21 @@ class ProductBase(BaseModel):
     barcode: Optional[str] = None
     default_discount_pct: condecimal(max_digits=5, decimal_places=2) = 0
     active: bool = True
+    
+    # Jewelry-specific fields
+    codigo: Optional[str] = None
+    marca: Optional[str] = None
+    modelo: Optional[str] = None
+    color: Optional[str] = None
+    quilataje: Optional[str] = None
+    base: Optional[str] = None
+    tipo_joya: Optional[str] = None
+    talla: Optional[str] = None
+    peso_gramos: Optional[condecimal(max_digits=10, decimal_places=3)] = None
+    descuento_porcentaje: Optional[condecimal(max_digits=5, decimal_places=2)] = None
+    precio_manual: Optional[condecimal(max_digits=10, decimal_places=2)] = None
+    costo: Optional[condecimal(max_digits=10, decimal_places=2)] = None
+    precio_venta: Optional[condecimal(max_digits=10, decimal_places=2)] = None
 
 
 class ProductOut(ProductBase):
@@ -83,6 +98,20 @@ def create_product(
         default_discount_pct=data.default_discount_pct,
         active=data.active,
         tenant_id=tenant.id,
+        # Jewelry fields
+        codigo=data.codigo,
+        marca=data.marca,
+        modelo=data.modelo,
+        color=data.color,
+        quilataje=data.quilataje,
+        base=data.base,
+        tipo_joya=data.tipo_joya,
+        talla=data.talla,
+        peso_gramos=data.peso_gramos,
+        descuento_porcentaje=data.descuento_porcentaje,
+        precio_manual=data.precio_manual,
+        costo=data.costo,
+        precio_venta=data.precio_venta,
     )
     db.add(product)
     try:
@@ -133,6 +162,20 @@ def update_product(
     product.barcode = data.barcode
     product.default_discount_pct = data.default_discount_pct
     product.active = data.active
+    # Jewelry fields
+    product.codigo = data.codigo
+    product.marca = data.marca
+    product.modelo = data.modelo
+    product.color = data.color
+    product.quilataje = data.quilataje
+    product.base = data.base
+    product.tipo_joya = data.tipo_joya
+    product.talla = data.talla
+    product.peso_gramos = data.peso_gramos
+    product.descuento_porcentaje = data.descuento_porcentaje
+    product.precio_manual = data.precio_manual
+    product.costo = data.costo
+    product.precio_venta = data.precio_venta
     try:
         db.commit()
     except IntegrityError as e:
