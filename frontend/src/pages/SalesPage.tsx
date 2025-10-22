@@ -36,7 +36,7 @@ export default function SalesPage() {
   // Jewelry store fields
   const [saleType, setSaleType] = useState<'contado' | 'credito'>('contado')
   const [vendedorId, setVendedorId] = useState<number | null>(null)
-  const [customerName, setCustomerName] = useState('')
+  const [customerName, setCustomerName] = useState('Cliente Genérico')
   const [customerPhone, setCustomerPhone] = useState('')
   const [customerAddress, setCustomerAddress] = useState('')
   
@@ -121,31 +121,189 @@ export default function SalesPage() {
   const removeItem = (id: number) => setCart(prev => prev.filter(ci => ci.product.id !== id))
 
   // Calculate totals
-  const subtotal = cart.reduce((sum, ci) => {
+  const subtotal = Math.round(cart.reduce((sum, ci) => {
     const unit = parseFloat(ci.product.price || '0')
     const lineSub = unit * ci.quantity
     const discPct = ci.discount_pct || 0
     const discAmt = lineSub * (discPct / 100)
     return sum + (lineSub - discAmt)
-  }, 0)
+  }, 0) * 100) / 100
 
-  const totalCost = cart.reduce((sum, ci) => {
-    const cost = parseFloat(ci.product.costo || ci.product.cost_price || '0')
+  const totalCost = Math.round(cart.reduce((sum, ci) => {
+    const cost = parseFloat(ci.product.costo || ci.product.cost_price || '0') || 0
     return sum + (cost * ci.quantity)
-  }, 0)
+  }, 0) * 100) / 100
 
-  const discountPct = parseFloat(discount || '0')
-  const taxRateNum = parseFloat(taxRate || '0')
-  const discountAmountCalc = subtotal * (discountPct / 100)
-  const taxable = Math.max(0, subtotal - discountAmountCalc)
-  const taxAmount = taxable * (taxRateNum / 100)
-  const total = taxable + taxAmount
+  // Usar cálculo más preciso similar al backend (usando Decimal-like precision)
+  const discountPct = parseFloat(discount || '0') || 0
+  const taxRateNum = parseFloat(taxRate || '0') || 0
+
+  // Calcular con la misma precisión que el backend usa Decimal
+  const discountAmountCalc = Math.round((subtotal * (discountPct / 100)) * 100) / 100
+  const taxable = Math.max(0, Math.round((subtotal - discountAmountCalc) * 100) / 100)
+  const taxAmount = taxRateNum > 0 ? Math.round((taxable * (taxRateNum / 100)) * 100) / 100 : 0
+  const total = Math.round((taxable + taxAmount) * 100) / 100
   const profit = total - totalCost
 
-  const cashNumCalc = parseFloat(cash || '0')
-  const cardNumCalc = parseFloat(card || '0')
-  const paid = cashNumCalc + cardNumCalc
-  const change = Math.max(0, paid - total)
+  const cashNumCalc = Math.round((parseFloat(cash || '0') || 0) * 100) / 100
+  const cardNumCalc = Math.round((parseFloat(card || '0') || 0) * 100) / 100
+  const paid = Math.round((cashNumCalc + cardNumCalc) * 100) / 100
+  const change = Math.max(0, Math.round((paid - total) * 100) / 100)
+
+  // Reset calculations when dependencies change
+  useEffect(() => {
+    // This effect runs when any calculation dependency changes
+  }, [subtotal, discountPct, taxRateNum, cashNumCalc, cardNumCalc, saleType])
+
+  const printSaleTicket = (saleData: any, cartItems: CartItem[], subtotal: number, discountAmount: number, taxAmount: number, total: number, paid: number, change: number) => {
+    try {
+      const w = window.open('', '_blank')
+      if (!w) return
+
+      const items = cartItems.map((ci, index) => ({
+        index: index + 1,
+        name: ci.product.name,
+        quantity: ci.quantity,
+        unit: 'Pz', // Unidad por defecto
+        price: parseFloat(ci.product.price || '0'),
+        discount_pct: ci.discount_pct || 0,
+        netPrice: parseFloat(ci.product.price || '0') * (1 - (ci.discount_pct || 0) / 100),
+        total: parseFloat(ci.product.price || '0') * ci.quantity * (1 - (ci.discount_pct || 0) / 100)
+      }))
+
+      const date = new Date(saleData.created_at || new Date())
+      const formattedDate = date.toLocaleDateString('es-ES', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric'
+      }).replace('.', '')
+
+      const customerInfo = saleData.customer_name || 'Cliente Genérico'
+      const vendedorInfo = 'Vendedor 1' // Esto debería venir del backend
+
+      const html = `
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Ticket ${saleData.id}</title>
+<style>
+  @media print {
+    @page {
+      size: A4;
+      margin: 0.5cm;
+    }
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Courier New', monospace;
+      font-size: 10px;
+      line-height: 1.2;
+    }
+  }
+  body {
+    margin: 0;
+    padding: 5px;
+    font-family: 'Courier New', monospace;
+    font-size: 10px;
+    line-height: 1.2;
+    width: 100%;
+  }
+  .center { text-align: center; }
+  .right { text-align: right; }
+  .left { text-align: left; }
+  .bold { font-weight: bold; }
+  .header-title { font-size: 14px; font-weight: bold; }
+  .header-subtitle { font-size: 12px; }
+  .info-section { margin: 8px 0; }
+  .table-header { font-weight: bold; border-bottom: 1px solid #000; margin: 5px 0; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 3px 0;
+  }
+  td {
+    padding: 1px 2px;
+    vertical-align: top;
+    font-size: 9px;
+  }
+  .total-row { border-top: 1px solid #000; font-weight: bold; }
+  .footer { text-align: center; margin-top: 10px; font-size: 8px; }
+</style></head>
+<body>
+  <div style="max-width: 190mm; margin: 0 auto;">
+    <!-- Header -->
+    <div class="center info-section">
+      <div class="header-title">Matriz Relación de Mercancía</div>
+    </div>
+
+    <!-- Sale Info -->
+    <div class="info-section" style="display: flex; justify-content: space-between;">
+      <div>
+        <div><strong>Folio</strong> ${saleData.id}</div>
+        <div><strong>Fecha</strong> ${formattedDate}</div>
+      </div>
+      <div style="text-align: right;">
+        <div><strong>Vence</strong> ${formattedDate}</div>
+        <div><strong>Alm</strong> Matriz Almacén</div>
+        <div><strong>Vend</strong> ${vendedorInfo}</div>
+        <div><strong>Estatus</strong> Activo</div>
+      </div>
+    </div>
+
+    <!-- Client Info -->
+    <div class="info-section" style="margin-bottom: 10px;">
+      <div><strong>Tipo C</strong> ${saleType === 'credito' ? 'Crédito' : 'Contado'}</div>
+      <div><strong>Base Oro</strong> 2135.00</div>
+      <div><strong>Base Plata</strong> 19.50</div>
+    </div>
+
+    <!-- Items Table -->
+    <table>
+      <thead>
+        <tr class="table-header">
+          <td style="width: 8%;">Un</td>
+          <td style="width: 8%;">Precio</td>
+          <td style="width: 8%;">% Desc</td>
+          <td style="width: 12%;">$ Neto</td>
+          <td style="width: 12%;">Importe</td>
+        </tr>
+      </thead>
+      <tbody>
+        ${items.map(item => `
+          <tr>
+            <td>${item.quantity}</td>
+            <td>$${item.price.toFixed(2)}</td>
+            <td>${item.discount_pct.toFixed(2)}</td>
+            <td>$${item.netPrice.toFixed(2)}</td>
+            <td>$${item.total.toFixed(2)}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+
+    <!-- Totals -->
+    <div style="margin-top: 10px; text-align: right;">
+      <div>Sub Total: $${subtotal.toFixed(2)}</div>
+      ${discountAmount > 0 ? `<div>Descuento: $${discountAmount.toFixed(2)}</div>` : ''}
+      ${taxAmount > 0 ? `<div>I.V.A.: $${taxAmount.toFixed(2)}</div>` : ''}
+      <div style="font-size: 12px; font-weight: bold; border-top: 1px solid #000; padding-top: 3px;">
+        Total: $${total.toFixed(2)}
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <div>¡Gracias por su compra!</div>
+      <div>JOYERÍA EL DIAMANTE</div>
+    </div>
+  </div>
+</body></html>`
+
+      w.document.write(html)
+      w.document.close()
+      w.print()
+    } catch (e) {
+      console.error('Error printing ticket:', e)
+    }
+  }
 
   const checkout = async () => {
     try {
@@ -155,12 +313,19 @@ export default function SalesPage() {
       }
 
       // Validate sale type specific requirements
-      if (saleType === 'credito' && !customerName) {
+      if (saleType === 'credito' && !vendedorId) {
+        setMsg('Por favor seleccione un vendedor para ventas a crédito')
+        return
+      }
+
+      if (saleType === 'credito' && !customerName.trim()) {
         setMsg('Por favor ingrese el nombre del cliente para venta a crédito')
         return
       }
 
-      if (saleType === 'contado' && paid < total) {
+      // Verificar pago con tolerancia mínima para errores de redondeo
+      const tolerance = 0.001 // 0.1 centavo de tolerancia
+      if (saleType === 'contado' && (paid - total) < -tolerance) {
         setMsg(`Pago insuficiente. Total: $${total.toFixed(2)}, Pagado: $${paid.toFixed(2)}`)
         return
       }
@@ -168,35 +333,43 @@ export default function SalesPage() {
       const items = cart.map(ci => ({
         product_id: ci.product.id,
         quantity: ci.quantity,
-        discount_pct: Number(ci.discount_pct || 0)
+        discount_pct: parseFloat(ci.discount_pct || 0) || 0
       }))
 
-      const payments = []
+      let payments = null
       if (saleType === 'contado') {
-        if (cashNumCalc > 0) payments.push({ method: 'cash', amount: cashNumCalc })
-        if (cardNumCalc > 0) payments.push({ method: 'card', amount: cardNumCalc })
+        payments = []
+        if (cashNumCalc > 0) payments.push({ method: 'cash', amount: parseFloat(cashNumCalc.toFixed(2)) })
+        if (cardNumCalc > 0) payments.push({ method: 'card', amount: parseFloat(cardNumCalc.toFixed(2)) })
       }
 
       const saleData: any = {
         items,
-        payments: saleType === 'contado' ? payments : [],
-        discount_amount: Number(discountAmountCalc.toFixed(2)),
-        tax_rate: Number(taxRate || '0'),
-        tipo_venta: saleType,
-        vendedor_id: vendedorId,
-        utilidad: Number(profit.toFixed(2)),
-        total_cost: Number(totalCost.toFixed(2))
+        discount_amount: parseFloat(discountAmountCalc.toFixed(2)),
+        tax_rate: parseFloat(taxRateNum.toFixed(2)) || 0,
+        tipo_venta: saleType
       }
 
-      // Add customer info for credit sales
+      // Add payments only if there are any
+      if (payments && payments.length > 0) {
+        saleData.payments = payments
+      }
+
+      // Add customer info only for credit sales
       if (saleType === 'credito') {
-        saleData.customer_name = customerName
-        saleData.customer_phone = customerPhone || null
-        saleData.customer_address = customerAddress || null
+        if (customerName.trim()) {
+          saleData.customer_name = customerName.trim()
+        }
+        if (customerPhone.trim()) {
+          saleData.customer_phone = customerPhone.trim()
+        }
+        if (customerAddress.trim()) {
+          saleData.customer_address = customerAddress.trim()
+        }
       }
 
       const r = await api.post('/sales/', saleData)
-      
+
       setCart([])
       setCash('')
       setCard('')
@@ -204,11 +377,12 @@ export default function SalesPage() {
       setCustomerName('')
       setCustomerPhone('')
       setCustomerAddress('')
-      
+
       setMsg(`✅ Venta realizada. Folio ${r.data.id}. Total $${r.data.total}`)
-      
+
+      // Generar ticket de venta
       if (saleType === 'contado') {
-        openPrint(r.data)
+        printSaleTicket(r.data, cart, subtotal, discountAmountCalc, taxAmount, total, paid, change)
       }
     } catch (e: any) {
       setMsg(e?.response?.data?.detail || 'Error al crear venta')
@@ -272,7 +446,7 @@ export default function SalesPage() {
         {/* Left: Product Selection */}
         <div className="col-span-5 flex flex-col space-y-4">
           <h1 className="text-2xl font-bold">🛒 Punto de Venta</h1>
-          
+
           {/* Barcode Scanner */}
           <div>
             <label className="block text-sm font-medium mb-1">Escanear Código / SKU</label>
@@ -308,7 +482,7 @@ export default function SalesPage() {
                   className="bg-white border border-gray-300 rounded-lg p-3 hover:bg-blue-50 text-left"
                 >
                   <div className="font-medium text-sm">{p.name}</div>
-                  <div className="text-green-600 font-bold">${parseFloat(p.price).toFixed(2)}</div>
+                  <div className="text-green-600 font-bold">${parseFloat(p.price || '0').toFixed(2)}</div>
                   {p.sku && <div className="text-xs text-gray-500">SKU: {p.sku}</div>}
                 </button>
               ))}
@@ -376,7 +550,7 @@ export default function SalesPage() {
           )}
 
           {/* Cart Items */}
-          <div className="flex-1 overflow-y-auto border rounded-lg bg-white">
+          <div className="">
             <table className="w-full">
               <thead className="bg-gray-100 sticky top-0">
                 <tr>
@@ -402,7 +576,7 @@ export default function SalesPage() {
                     const discPct = ci.discount_pct || 0
                     const discAmt = lineSub * (discPct / 100)
                     const lineTotal = lineSub - discAmt
-                    
+
                     return (
                       <tr key={ci.product.id} className="border-t">
                         <td className="px-3 py-2 text-sm">{ci.product.name}</td>

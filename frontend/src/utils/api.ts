@@ -55,8 +55,22 @@ api.interceptors.response.use(
         isRefreshing = false
       }
     }
+
+    // Handle 403 Forbidden errors - redirect to dashboard or show appropriate message
+    if (error.response?.status === 403) {
+      console.warn('Access forbidden:', error.response.data.detail)
+      // Don't redirect to login for 403, just show error or redirect to dashboard
+      if (typeof window !== 'undefined') {
+        try {
+          // Try to redirect to dashboard or show error message
+          if (window.location.pathname !== '/dashboard') {
+            window.location.href = '/dashboard'
+          }
+        } catch {}
+      }
+      return Promise.reject(error)
+    }
+
     return Promise.reject(error)
   }
 )
-
-

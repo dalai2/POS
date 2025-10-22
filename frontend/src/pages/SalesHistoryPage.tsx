@@ -30,18 +30,158 @@ export default function SalesHistoryPage() {
 
   useEffect(() => { load() }, [])
 
+  const printSaleTicket = (saleData: any) => {
+    try {
+      const w = window.open('', '_blank')
+      if (!w) return
+
+      const items = saleData.items || []
+      const date = new Date(saleData.created_at || new Date())
+      const formattedDate = date.toLocaleDateString('es-ES', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric'
+      }).replace('.', '')
+
+      const customerInfo = saleData.customer_name || 'Cliente Genérico'
+      const vendedorInfo = 'Vendedor 1' // Esto debería venir del backend
+
+      const subtotal = parseFloat(saleData.subtotal || '0')
+      const discountAmount = parseFloat(saleData.discount_amount || '0')
+      const taxAmount = parseFloat(saleData.tax_amount || '0')
+      const total = parseFloat(saleData.total || '0')
+
+      const html = `
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Ticket ${saleData.id}</title>
+<style>
+  @media print {
+    @page {
+      size: A4;
+      margin: 0.5cm;
+    }
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Courier New', monospace;
+      font-size: 10px;
+      line-height: 1.2;
+    }
+  }
+  body {
+    margin: 0;
+    padding: 5px;
+    font-family: 'Courier New', monospace;
+    font-size: 10px;
+    line-height: 1.2;
+    width: 100%;
+  }
+  .center { text-align: center; }
+  .right { text-align: right; }
+  .left { text-align: left; }
+  .bold { font-weight: bold; }
+  .header-title { font-size: 14px; font-weight: bold; }
+  .header-subtitle { font-size: 12px; }
+  .info-section { margin: 8px 0; }
+  .table-header { font-weight: bold; border-bottom: 1px solid #000; margin: 5px 0; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 3px 0;
+  }
+  td {
+    padding: 1px 2px;
+    vertical-align: top;
+    font-size: 9px;
+  }
+  .total-row { border-top: 1px solid #000; font-weight: bold; }
+  .footer { text-align: center; margin-top: 10px; font-size: 8px; }
+</style></head>
+<body>
+  <div style="max-width: 190mm; margin: 0 auto;">
+    <!-- Header -->
+    <div class="center info-section">
+      <div class="header-title">Matriz Relación de Mercancía</div>
+    </div>
+
+    <!-- Sale Info -->
+    <div class="info-section" style="display: flex; justify-content: space-between;">
+      <div>
+        <div><strong>Folio</strong> ${saleData.id}</div>
+        <div><strong>Fecha</strong> ${formattedDate}</div>
+      </div>
+      <div style="text-align: right;">
+        <div><strong>Vence</strong> ${formattedDate}</div>
+        <div><strong>Alm</strong> Matriz Almacén</div>
+        <div><strong>Vend</strong> ${vendedorInfo}</div>
+        <div><strong>Estatus</strong> Activo</div>
+      </div>
+    </div>
+
+    <!-- Client Info -->
+    <div class="info-section" style="margin-bottom: 10px;">
+      <div><strong>Tipo C</strong> ${saleData.tipo_venta === 'credito' ? 'Crédito' : 'Contado'}</div>
+      <div><strong>Base Oro</strong> 2135.00</div>
+      <div><strong>Base Plata</strong> 19.50</div>
+    </div>
+
+    <!-- Items Table -->
+    <table>
+      <thead>
+        <tr class="table-header">
+          <td style="width: 8%;">Un</td>
+          <td style="width: 8%;">Precio</td>
+          <td style="width: 8%;">% Desc</td>
+          <td style="width: 12%;">$ Neto</td>
+          <td style="width: 12%;">Importe</td>
+        </tr>
+      </thead>
+      <tbody>
+        ${items.map((item: any) => `
+          <tr>
+            <td>${item.quantity}</td>
+            <td>$${(parseFloat(item.unit_price || '0')).toFixed(2)}</td>
+            <td>${(parseFloat(item.discount_pct || '0')).toFixed(2)}</td>
+            <td>$${(parseFloat(item.unit_price || '0') * (1 - (parseFloat(item.discount_pct || '0')) / 100)).toFixed(2)}</td>
+            <td>$${(parseFloat(item.total_price || '0')).toFixed(2)}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+
+    <!-- Totals -->
+    <div style="margin-top: 10px; text-align: right;">
+      <div>Sub Total: $${subtotal.toFixed(2)}</div>
+      ${discountAmount > 0 ? `<div>Descuento: $${discountAmount.toFixed(2)}</div>` : ''}
+      ${taxAmount > 0 ? `<div>I.V.A.: $${taxAmount.toFixed(2)}</div>` : ''}
+      <div style="font-size: 12px; font-weight: bold; border-top: 1px solid #000; padding-top: 3px;">
+        Total: $${total.toFixed(2)}
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <div>¡Gracias por su compra!</div>
+      <div>JOYERÍA EL DIAMANTE</div>
+    </div>
+  </div>
+</body></html>`
+
+      w.document.write(html)
+      w.document.close()
+      w.print()
+    } catch (e) {
+      console.error('Error printing ticket:', e)
+    }
+  }
+
   const ticket = async (id: number) => {
     try {
       const r = await api.get(`/sales/${id}`)
-      const w = window.open('', '_blank', 'width=400,height=600')
-      if (!w) return
-      const sale = r.data
-      const items = sale.items || []
-      const date = sale.created_at ? new Date(sale.created_at) : new Date()
-      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Ticket ${sale.id}</title></head><body onload="window.print()">Folio ${sale.id} - ${date.toLocaleString()}<hr/>${items.map((it: any)=>`${it.quantity} x ${it.name} $${Number(it.total_price).toFixed(2)}`).join('<br/>')}<hr/>Total $${Number(sale.total).toFixed(2)}</body></html>`
-      w.document.write(html)
-      w.document.close()
-    } catch {}
+      printSaleTicket(r.data)
+    } catch (e: any) {
+      setMsg(e?.response?.data?.detail || 'Error al cargar ticket')
+    }
   }
 
   return (
@@ -82,7 +222,7 @@ export default function SalesHistoryPage() {
                 <td className="p-2">${Number(s.total).toFixed(2)}</td>
                 <td className="p-2 flex gap-2">
                   <button className="btn" onClick={() => ticket(s.id)}>Ticket</button>
-                  <button className="btn" onClick={async () => { if (!confirm('¿Devolver venta completa?')) return; try { await api.post(`/sales/${s.id}/return`); await load(0) } catch (e:any) { setMsg(e?.response?.data?.detail || 'Error al devolver') } }}>Devolver</button>
+                  <button className="btn" onClick={async () => { if (!confirm('¿Devolver venta completa?')) return; try { await api.post(`/sales/${s.id}/return`); await load(0); setMsg('Venta devuelta exitosamente') } catch (e:any) { setMsg(e?.response?.data?.detail || 'Error al devolver venta') } }}>Devolver</button>
                 </td>
               </tr>
             ))}

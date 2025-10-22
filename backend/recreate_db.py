@@ -20,31 +20,31 @@ from app.models.inventory_movement import InventoryMovement
 from app.models.credit_payment import CreditPayment
 
 def recreate_db():
-    print("🔄 Recreating database with new jewelry store schema...")
+    print("Recreating database with new jewelry store schema...")
     
     engine = create_engine(settings.database_url, pool_pre_ping=True)
     
     # Drop all tables
-    print("🗑️  Dropping existing tables...")
+    print("Dropping existing tables...")
     Base.metadata.drop_all(bind=engine)
     
     # Create all tables with new schema
-    print("🏗️  Creating tables with new schema...")
+    print("Creating tables with new schema...")
     Base.metadata.create_all(bind=engine)
     
     # Seed demo data
-    print("🌱 Seeding demo data...")
+    print("Seeding demo data...")
     db = SessionLocal()
     try:
         seed_jewelry_demo(db)
     except Exception as e:
-        print(f"❌ Error seeding data: {e}")
+        print(f"Error seeding data: {e}")
         db.rollback()
     finally:
         db.close()
     
-    print("✅ Database recreated successfully!")
-    print("\n📋 Login credentials:")
+    print("Database recreated successfully!")
+    print("\nLogin credentials:")
     print("   Email: owner@demo.com")
     print("   Password: secret123")
     print("   Tenant: demo")

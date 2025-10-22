@@ -171,5 +171,5 @@ def seed_jewelry_demo(db: Session):
             db.add(product)
     
     db.commit()
-    print(f"✅ Jewelry demo data seeded for tenant '{tenant.slug}'")
+    print(f"Jewelry demo data seeded for tenant '{tenant.slug}'")
 

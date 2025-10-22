@@ -2,12 +2,12 @@ from typing import List
 from decimal import Decimal
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Response, Request
 from pydantic import BaseModel, condecimal
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.deps import get_current_user, get_tenant
+from app.core.deps import get_current_user, get_tenant, require_admin
 from app.models.tenant import Tenant
 from app.models.user import User
 from app.models.product import Product
@@ -51,20 +51,44 @@ class SaleOut(BaseModel):
     items: List[SaleOutItem]
     created_at: datetime | None = None
 
+    # Jewelry store fields
+    tipo_venta: str | None = None
+    vendedor_id: int | None = None
+    utilidad: condecimal(max_digits=10, decimal_places=2) | None = None
+    total_cost: condecimal(max_digits=10, decimal_places=2) | None = None
+
+    # Credit sale fields
+    customer_name: str | None = None
+    customer_phone: str | None = None
+    customer_address: str | None = None
+    amount_paid: condecimal(max_digits=10, decimal_places=2) | None = None
+    credit_status: str | None = None
+
     class Config:
         from_attributes = True
 
 
 @router.post("/", response_model=SaleOut)
-def create_sale(
+async def create_sale(
+    request: Request,
     items: List[SaleItemIn],
     payments: List[PaymentIn] | None = None,
     discount_amount: condecimal(max_digits=10, decimal_places=2) | None = Decimal("0"),
-    tax_rate: condecimal(max_digits=5, decimal_places=2) | None = Decimal("15"),
+    tax_rate: condecimal(max_digits=5, decimal_places=2) | None = Decimal("0"),
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(get_tenant),
     user: User = Depends(get_current_user),
 ):
+    # Get the raw JSON data from request body
+    body = await request.json()
+    tipo_venta = body.get('tipo_venta')
+    vendedor_id = body.get('vendedor_id')
+    utilidad = body.get('utilidad')
+    total_cost = body.get('total_cost')
+    customer_name = body.get('customer_name')
+    customer_phone = body.get('customer_phone')
+    customer_address = body.get('customer_address')
+
     if not items:
         raise HTTPException(status_code=400, detail="No hay artículos en la venta")
 
@@ -76,9 +100,10 @@ def create_sale(
             raise HTTPException(status_code=400, detail=f"Producto inválido: {it.product_id}")
         product_map[it.product_id] = p
 
-    sale = Sale(tenant_id=tenant.id, user_id=user.id, total=Decimal("0"))
+    # Create sale object first
+    sale = Sale(tenant_id=tenant.id, user_id=user.id)
     db.add(sale)
-    db.flush()
+    db.flush()  # Get the sale.id
 
     subtotal = Decimal("0")
     for it in items:
@@ -86,11 +111,11 @@ def create_sale(
         q = max(1, int(it.quantity))
         if p.stock is not None and p.stock < q:
             raise HTTPException(status_code=400, detail=f"Stock insuficiente para {p.name}")
-        unit = Decimal(str(p.price))
-        line_subtotal = unit * q
-        line_disc_pct = Decimal(str(getattr(it, 'discount_pct', Decimal('0')) or 0))
+        unit = Decimal(str(p.price)).quantize(Decimal("0.01"))
+        line_subtotal = (unit * q).quantize(Decimal("0.01"))
+        line_disc_pct = Decimal(str(getattr(it, 'discount_pct', Decimal('0')) or 0)).quantize(Decimal("0.01"))
         line_disc_amount = (line_subtotal * line_disc_pct / Decimal('100')).quantize(Decimal('0.01'))
-        line_total = line_subtotal - line_disc_amount
+        line_total = (line_subtotal - line_disc_amount).quantize(Decimal('0.01'))
         subtotal += line_total
         db.add(SaleItem(
             sale_id=sale.id,
@@ -107,21 +132,46 @@ def create_sale(
         if p.stock is not None:
             p.stock = int(p.stock) - q
 
-    sale.subtotal = subtotal
-    sale.discount_amount = Decimal(str(discount_amount or 0))
-    sale.tax_rate = Decimal(str(tax_rate or 0))
-    taxable = max(Decimal("0"), sale.subtotal - sale.discount_amount)
+    sale.subtotal = subtotal.quantize(Decimal("0.01"))
+    sale.discount_amount = Decimal(str(discount_amount or 0)).quantize(Decimal("0.01"))
+    sale.tax_rate = Decimal(str(tax_rate or 0)).quantize(Decimal("0.01"))
+    taxable = max(Decimal("0"), sale.subtotal - sale.discount_amount).quantize(Decimal("0.01"))
     sale.tax_amount = (taxable * sale.tax_rate / Decimal("100")).quantize(Decimal("0.01"))
     sale.total = (taxable + sale.tax_amount).quantize(Decimal("0.01"))
+
+    # Set additional fields if provided in request
+    if tipo_venta is not None:
+        sale.tipo_venta = tipo_venta
+        # Set credit status for credit sales
+        if tipo_venta == "credito":
+            sale.credit_status = "pendiente"
+    if vendedor_id is not None:
+        sale.vendedor_id = vendedor_id
+    if utilidad is not None:
+        sale.utilidad = Decimal(str(utilidad))
+    if total_cost is not None:
+        sale.total_cost = Decimal(str(total_cost))
+
+    # Set customer info if provided
+    if customer_name is not None:
+        sale.customer_name = customer_name
+    if customer_phone is not None:
+        sale.customer_phone = customer_phone
+    if customer_address is not None:
+        sale.customer_address = customer_address
+
     # Save payments (optional)
+    paid = Decimal("0")
     if payments:
-        paid = Decimal("0")
         for p in payments:
-            amt = Decimal(str(p.amount))
+            amt = Decimal(str(p.amount)).quantize(Decimal("0.01"))
             paid += amt
             db.add(Payment(sale_id=sale.id, method=p.method, amount=amt))
-        if paid < sale.total:
-            raise HTTPException(status_code=400, detail="Pago insuficiente")
+
+    # For contado sales, verify payment is sufficient only if payments were provided
+    if sale.tipo_venta == "contado" and payments and paid < sale.total:
+        raise HTTPException(status_code=400, detail=f"Pago insuficiente: {paid} < {sale.total}")
+
     db.commit()
     db.refresh(sale)
     return sale
@@ -132,7 +182,7 @@ def return_sale(
     sale_id: int,
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(get_tenant),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_admin),
 ):
     orig = db.query(Sale).filter(Sale.id == sale_id, Sale.tenant_id == tenant.id).first()
     if not orig:

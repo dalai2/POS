@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
     refresh_token_expire_minutes: int = 60 * 24 * 30
-    database_url: str = "sqlite:///./dev.db"
+    database_url: str = "postgresql+psycopg2://erpuser:erppass@db:5432/erppos"
     tenant_header: str = "X-Tenant-ID"
     backend_cors_origins: str = "http://localhost:5173"
     
@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     @property
     def cors_origins(self) -> List[str]:
         """Parse CORS origins from comma-separated string or ALLOWED_ORIGINS env var"""
-        origins = os.getenv("ALLOWED_ORIGINS", self.backend_cors_origins)
+        origins = self.backend_cors_origins
         return [origin.strip() for origin in origins.split(",")]
 
     class Config:

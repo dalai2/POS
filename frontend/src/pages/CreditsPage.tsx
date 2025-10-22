@@ -45,9 +45,12 @@ export default function CreditsPage() {
       const params = statusFilter ? `?status=${statusFilter}` : '';
       const response = await api.get(`/credits/sales${params}`);
       setCredits(response.data);
-    } catch (error) {
-      console.error('Error loading credits:', error);
-      alert('Error al cargar créditos');
+    } catch (error: any) {
+      if (error.response?.status === 403) {
+        alert('No tienes permisos para ver los créditos. Solo los administradores pueden acceder a esta función.');
+      } else {
+        alert('Error al cargar créditos');
+      }
     } finally {
       setLoading(false);
     }
@@ -71,8 +74,11 @@ export default function CreditsPage() {
       setPaymentData({ amount: '', payment_method: 'efectivo', notes: '' });
       loadCredits();
     } catch (error: any) {
-      console.error('Error registering payment:', error);
-      alert(error.response?.data?.detail || 'Error al registrar pago');
+      if (error.response?.status === 403) {
+        alert('No tienes permisos para registrar pagos. Solo los administradores pueden realizar esta acción.');
+      } else {
+        alert(error.response?.data?.detail || 'Error al registrar pago');
+      }
     }
   };
 

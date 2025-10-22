@@ -32,7 +32,7 @@ async def import_products(
     - marca
     - modelo
     - color
-    - quilataje (10k, 14k, 18k, oro_italiano, plata_gold, plata_silver)
+    - quilataje (cualquier tipo de metal, ej: 14k, Plata Gold, Oro Italiano)
     - tipo_joya
     - talla
     - peso_gramos
@@ -165,11 +165,11 @@ async def export_template():
     # Create sample data
     data = {
         'codigo': ['AN-001', 'COL-002'],
-        'name': ['Anillo Oro 14K', 'Collar Plata'],
+        'name': ['Anillo Oro 14K', 'Collar Plata Gold'],
         'marca': ['DEMO', 'DEMO'],
         'modelo': ['M-001', 'M-002'],
         'color': ['Amarillo', 'Plata'],
-        'quilataje': ['14k', 'plata_gold'],
+        'quilataje': ['14k', 'Plata Gold'],
         'tipo_joya': ['Anillo', 'Collar'],
         'talla': ['7', ''],
         'peso_gramos': [3.5, 8.0],
@@ -200,7 +200,7 @@ async def export_template():
             'Descripción': [
                 'Código único del producto (REQUERIDO)',
                 'Nombre del producto (REQUERIDO)',
-                'Quilataje: 10k, 14k, 18k, oro_italiano, plata_gold, plata_silver',
+                'Quilataje: cualquier tipo de metal (ej: 14k, Plata Gold, Oro Italiano)',
                 'Peso en gramos (para cálculo automático de precio)',
                 'Descuento porcentaje (0-100)',
                 'Dejar vacío para cálculo automático, o poner precio fijo',
@@ -220,3 +220,79 @@ async def export_template():
         headers={"Content-Disposition": "attachment; filename=plantilla_productos.xlsx"}
     )
 
+
+@router.get("/products/export")
+async def export_products(
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_tenant),
+    current_user: User = Depends(get_current_user)
+):
+    """Export all products to Excel file"""
+
+    try:
+        # Get all active products for the tenant
+        products = db.query(Product).filter(
+            Product.tenant_id == tenant.id,
+            Product.active == True
+        ).all()
+
+        if not products:
+            raise HTTPException(status_code=404, detail="No hay productos para exportar")
+
+        # Prepare data for export
+        data = []
+        for product in products:
+            row = {
+                'codigo': product.codigo or '',
+                'name': product.name,
+                'marca': product.marca or '',
+                'modelo': product.modelo or '',
+                'color': product.color or '',
+                'quilataje': product.quilataje or '',
+                'tipo_joya': product.tipo_joya or '',
+                'talla': product.talla or '',
+                'peso_gramos': product.peso_gramos or '',
+                'descuento_porcentaje': product.descuento_porcentaje or '',
+                'precio_manual': product.precio_manual or '',
+                'costo': product.costo or product.cost_price or '',
+                'stock': product.stock or '',
+                'sku': product.sku or '',
+                'barcode': product.barcode or ''
+            }
+            data.append(row)
+
+        df = pd.DataFrame(data)
+
+        # Create Excel file in memory
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name='Productos')
+
+            # Get worksheet
+            worksheet = writer.sheets['Productos']
+
+            # Auto-adjust column widths
+            for column in worksheet.columns:
+                max_length = 0
+                column_letter = column[0].column_letter
+                for cell in column:
+                    try:
+                        if len(str(cell.value)) > max_length:
+                            max_length = len(str(cell.value))
+                    except:
+                        pass
+                adjusted_width = min(max_length + 2, 50)  # Max width of 50
+                worksheet.column_dimensions[column_letter].width = adjusted_width
+
+        output.seek(0)
+
+        from fastapi.responses import StreamingResponse
+
+        return StreamingResponse(
+            output,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": "attachment; filename=productos_exportados.xlsx"}
+        )
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error exportando productos: {str(e)}")

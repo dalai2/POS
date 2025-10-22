@@ -10,19 +10,7 @@ interface MetalRate {
   updated_at: string;
 }
 
-const metalTypesOro = [
-  { value: '10k', label: '10K' },
-  { value: '14k', label: '14K' },
-  { value: '18k', label: '18K' },
-  { value: 'oro_italiano', label: 'Oro Italiano' },
-];
-
-const metalTypesPlata = [
-  { value: 'plata_gold', label: 'Plata Gold' },
-  { value: 'plata_silver', label: 'Plata Silver' },
-];
-
-const allMetalTypes = [...metalTypesOro, ...metalTypesPlata];
+// Metal types are now free text input
 
 export default function MetalRatesPage() {
   const [rates, setRates] = useState<MetalRate[]>([]);
@@ -42,7 +30,7 @@ export default function MetalRatesPage() {
     try {
       const response = await api.get('/metal-rates');
       setRates(response.data);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading metal rates:', error);
       alert('Error al cargar tasas de metal');
     } finally {
@@ -73,7 +61,12 @@ export default function MetalRatesPage() {
       setFormData({ metal_type: '', rate_per_gram: '' });
     } catch (error: any) {
       console.error('Error saving metal rate:', error);
-      alert(error.response?.data?.detail || 'Error al guardar tasa');
+      if (error.response?.status === 403) {
+        const action = editingRate ? 'editar' : 'crear';
+        alert(`No tienes permisos para ${action} tasas de metal. Solo los administradores pueden realizar esta acción.`);
+      } else {
+        alert(error.response?.data?.detail || 'Error al guardar tasa');
+      }
     }
   };
 
@@ -88,23 +81,21 @@ export default function MetalRatesPage() {
 
   const handleDelete = async (id: number) => {
     if (!confirm('¿Está seguro de eliminar esta tasa?')) return;
-    
+
     try {
       await api.delete(`/metal-rates/${id}`);
       loadRates();
       alert('Tasa eliminada exitosamente');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting metal rate:', error);
-      alert('Error al eliminar tasa');
+      if (error.response?.status === 403) {
+        alert('No tienes permisos para eliminar tasas de metal. Solo los administradores pueden realizar esta acción.');
+      } else {
+        alert('Error al eliminar tasa');
+      }
     }
   };
 
-  const getMetalTypeLabel = (type: string) => {
-    return allMetalTypes.find(mt => mt.value === type)?.label || type;
-  };
-
-  const isOro = (type: string) => metalTypesOro.some(mt => mt.value === type);
-  const isPlata = (type: string) => metalTypesPlata.some(mt => mt.value === type);
 
   if (loading) {
     return (
@@ -143,29 +134,18 @@ export default function MetalRatesPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Tipo de Metal
                 </label>
-                <select
+                <input
+                  type="text"
                   value={formData.metal_type}
                   onChange={(e) => setFormData({ ...formData, metal_type: e.target.value })}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                  placeholder="Ej: 14k, Plata Gold, Oro Italiano..."
                   required
                   disabled={!!editingRate}
-                >
-                  <option value="">Seleccionar tipo...</option>
-                  <optgroup label="🥇 ORO">
-                    {metalTypesOro.map(type => (
-                      <option key={type.value} value={type.value}>
-                        {type.label}
-                      </option>
-                    ))}
-                  </optgroup>
-                  <optgroup label="🥈 PLATA">
-                    {metalTypesPlata.map(type => (
-                      <option key={type.value} value={type.value}>
-                        {type.label}
-                      </option>
-                    ))}
-                  </optgroup>
-                </select>
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Ingrese el tipo de metal (ej: 14k, Plata Gold, Oro Italiano)
+                </p>
               </div>
 
               <div>
@@ -241,9 +221,8 @@ export default function MetalRatesPage() {
                 rates.map((rate) => (
                   <tr key={rate.id}>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`font-medium ${isOro(rate.metal_type) ? 'text-yellow-600' : 'text-gray-600'}`}>
-                        {isOro(rate.metal_type) ? '🥇 ' : '🥈 '}
-                        {getMetalTypeLabel(rate.metal_type)}
+                      <span className="font-medium text-gray-900">
+                        {rate.metal_type}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">

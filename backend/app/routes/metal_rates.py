@@ -5,7 +5,7 @@ from typing import List
 from datetime import datetime
 
 from app.core.database import get_db
-from app.core.deps import get_tenant, get_current_user
+from app.core.deps import get_tenant, get_current_user, require_admin
 from app.models.tenant import Tenant
 from app.models.user import User
 from app.models.metal_rate import MetalRate
@@ -15,7 +15,7 @@ router = APIRouter()
 
 
 class MetalRateCreate(BaseModel):
-    metal_type: str  # "10k", "14k", "18k", "oro_italiano", "plata_gold", "plata_silver"
+    metal_type: str  # Any metal type (e.g., "14k", "Plata Gold", "Oro Italiano")
     rate_per_gram: float
 
 
@@ -49,7 +49,7 @@ def create_metal_rate(
     data: MetalRateCreate,
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(get_tenant),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_admin)
 ):
     """Create a new metal rate"""
     # Check if rate already exists for this metal type
@@ -79,7 +79,7 @@ def update_metal_rate(
     recalculate_prices: bool = True,
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(get_tenant),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_admin)
 ):
     """Update a metal rate and optionally recalculate product prices"""
     rate = db.query(MetalRate).filter(
@@ -123,7 +123,7 @@ def delete_metal_rate(
     rate_id: int,
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(get_tenant),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_admin)
 ):
     """Delete a metal rate"""
     rate = db.query(MetalRate).filter(

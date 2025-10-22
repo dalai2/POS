@@ -6,7 +6,7 @@ from typing import List, Optional
 from datetime import datetime
 
 from app.core.database import get_db
-from app.core.deps import get_tenant, get_current_user
+from app.core.deps import get_tenant, get_current_user, require_admin
 from app.models.tenant import Tenant
 from app.models.user import User
 from app.models.credit_payment import CreditPayment
@@ -57,22 +57,22 @@ def get_credit_sales(
     vendedor_id: Optional[int] = None,
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(get_tenant),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_admin)
 ):
     """Get all credit sales with optional filters"""
     query = db.query(Sale).filter(
         Sale.tenant_id == tenant.id,
         Sale.tipo_venta == "credito"
     )
-    
+
     if status:
         query = query.filter(Sale.credit_status == status)
-    
+
     if vendedor_id:
         query = query.filter(Sale.vendedor_id == vendedor_id)
-    
+
     sales = query.order_by(Sale.created_at.desc()).all()
-    
+
     # Add payments and balance to each sale
     result = []
     for sale in sales:
@@ -103,7 +103,7 @@ def register_payment(
     data: CreditPaymentCreate,
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(get_tenant),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_admin)
 ):
     """Register a payment (abono) for a credit sale"""
     # Verify sale exists and is a credit sale
@@ -154,7 +154,7 @@ def get_sale_payments(
     sale_id: int,
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(get_tenant),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_admin)
 ):
     """Get all payments for a specific credit sale"""
     # Verify sale exists

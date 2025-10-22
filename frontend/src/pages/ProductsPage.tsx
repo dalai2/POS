@@ -113,10 +113,11 @@ export default function ProductsPage() {
     if (!quilataje || !pesoGramos) return 0
     const rate = metalRates.find(r => r.metal_type === quilataje)
     if (!rate) return 0
-    
-    const basePrice = rate.rate_per_gram * parseFloat(pesoGramos)
+
+    const basePrice = Math.round((rate.rate_per_gram * parseFloat(pesoGramos)) * 100) / 100
     const discount = parseFloat(descuento || '0')
-    const finalPrice = basePrice - (basePrice * discount / 100)
+    const discountAmount = Math.round((basePrice * discount / 100) * 100) / 100
+    const finalPrice = Math.round((basePrice - discountAmount) * 100) / 100
     return finalPrice
   }
 
@@ -136,6 +137,7 @@ export default function ProductsPage() {
   const add = async () => {
     try {
       const calculatedPrice = getCalculatedPrice()
+      const roundedPrice = Math.round(calculatedPrice * 100) / 100
       await api.post('/products/', {
         name: form.name,
         codigo: form.codigo || undefined,
@@ -151,8 +153,8 @@ export default function ProductsPage() {
         precio_manual: form.precio_manual ? parseFloat(form.precio_manual) : undefined,
         costo: parseFloat(form.costo) || undefined,
         cost_price: parseFloat(form.costo) || 0,
-        precio_venta: calculatedPrice,
-        price: calculatedPrice,
+        precio_venta: roundedPrice,
+        price: roundedPrice,
         stock: parseInt(form.stock) || 0,
         sku: form.sku || undefined,
         barcode: form.barcode || undefined,
@@ -170,6 +172,7 @@ export default function ProductsPage() {
   const updateProduct = async (id: number) => {
     try {
       const calculatedPrice = getCalculatedPrice()
+      const roundedPrice = Math.round(calculatedPrice * 100) / 100
       await api.put(`/products/${id}`, {
         name: form.name,
         codigo: form.codigo || undefined,
@@ -185,8 +188,8 @@ export default function ProductsPage() {
         precio_manual: form.precio_manual ? parseFloat(form.precio_manual) : undefined,
         costo: parseFloat(form.costo) || undefined,
         cost_price: parseFloat(form.costo) || 0,
-        precio_venta: calculatedPrice,
-        price: calculatedPrice,
+        precio_venta: roundedPrice,
+        price: roundedPrice,
         stock: parseInt(form.stock) || 0,
         sku: form.sku || undefined,
         barcode: form.barcode || undefined,
@@ -238,22 +241,26 @@ export default function ProductsPage() {
   const calculatedPrice = getCalculatedPrice()
   const isManualPrice = !!form.precio_manual
 
-  const handleDownloadTemplate = async () => {
+  const handleExportProducts = async () => {
     try {
-      const response = await api.get('/import/products/export-template', {
+      const response = await api.get('/import/products/export', {
         responseType: 'blob'
       })
-      
+
       const url = window.URL.createObjectURL(new Blob([response.data]))
       const link = document.createElement('a')
       link.href = url
-      link.setAttribute('download', 'plantilla_productos.xlsx')
+      link.setAttribute('download', 'productos_exportados.xlsx')
       document.body.appendChild(link)
       link.click()
       link.remove()
-    } catch (error) {
-      console.error('Error downloading template:', error)
-      alert('Error al descargar plantilla')
+    } catch (error: any) {
+      console.error('Error exporting products:', error)
+      if (error.response?.status === 404) {
+        alert('No hay productos para exportar')
+      } else {
+        alert('Error al exportar productos')
+      }
     }
   }
 
@@ -268,7 +275,7 @@ export default function ProductsPage() {
     formData.append('mode', importMode)
 
     try {
-      const response = await api.post('/import/products/import?mode=' + importMode, formData, {
+      const response = await api.post('/import/products/import', formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }
@@ -291,10 +298,10 @@ export default function ProductsPage() {
           <h1 className="text-3xl font-bold text-gray-800">💍 Productos/Joyería</h1>
           <div className="flex gap-2">
             <button
-              onClick={handleDownloadTemplate}
-              className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+              onClick={handleExportProducts}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
             >
-              📥 Descargar Plantilla Excel
+              📤 Exportar Productos
             </button>
             <button
               onClick={() => setShowImportModal(true)}
@@ -348,7 +355,7 @@ export default function ProductsPage() {
                   <select
                     value={importMode}
                     onChange={(e) => setImportMode(e.target.value as 'add' | 'replace')}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-1.5"
                   >
                     <option value="add">Agregar nuevos (mantener existentes)</option>
                     <option value="replace">Reemplazar existentes</option>
@@ -368,7 +375,7 @@ export default function ProductsPage() {
                     type="file"
                     accept=".xlsx,.xls"
                     onChange={(e) => setImportFile(e.target.files?.[0] || null)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-1.5"
                   />
                   {importFile && (
                     <p className="text-sm text-green-600 mt-1">
@@ -422,16 +429,16 @@ export default function ProductsPage() {
 
         {/* Add/Edit Form */}
         {showAddForm && (
-          <div className="bg-white rounded-lg shadow-lg p-6">
-            <h2 className="text-xl font-semibold mb-4">
+          <div className="bg-white rounded-lg shadow-lg p-4">
+            <h2 className="text-lg font-semibold mb-3">
               {editingId ? 'Editar Producto' : 'Nuevo Producto'}
             </h2>
-            
-            <div className="grid grid-cols-3 gap-4">
+
+            <div className="grid grid-cols-3 gap-3">
               <div className="col-span-3">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Nombre *</label>
                 <input
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-1.5"
                   value={form.name}
                   onChange={e => setForm({...form, name: e.target.value})}
                   required
@@ -441,7 +448,7 @@ export default function ProductsPage() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Código</label>
                 <input
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-1.5"
                   value={form.codigo}
                   onChange={e => setForm({...form, codigo: e.target.value})}
                 />
@@ -450,7 +457,7 @@ export default function ProductsPage() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Marca</label>
                 <input
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-1.5"
                   value={form.marca}
                   onChange={e => setForm({...form, marca: e.target.value})}
                 />
@@ -459,7 +466,7 @@ export default function ProductsPage() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Modelo</label>
                 <input
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-1.5"
                   value={form.modelo}
                   onChange={e => setForm({...form, modelo: e.target.value})}
                 />
@@ -468,7 +475,7 @@ export default function ProductsPage() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Joya</label>
                 <input
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-1.5"
                   placeholder="Anillo, Collar, Pulsera..."
                   value={form.tipo_joya}
                   onChange={e => setForm({...form, tipo_joya: e.target.value})}
@@ -478,7 +485,7 @@ export default function ProductsPage() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Color</label>
                 <input
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-1.5"
                   value={form.color}
                   onChange={e => setForm({...form, color: e.target.value})}
                 />
@@ -487,7 +494,7 @@ export default function ProductsPage() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Talla</label>
                 <input
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-1.5"
                   value={form.talla}
                   onChange={e => setForm({...form, talla: e.target.value})}
                 />
@@ -496,7 +503,7 @@ export default function ProductsPage() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Quilataje</label>
                 <select
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-1.5"
                   value={form.quilataje}
                   onChange={e => setForm({...form, quilataje: e.target.value})}
                 >
@@ -511,7 +518,7 @@ export default function ProductsPage() {
                 <input
                   type="number"
                   step="0.001"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-1.5"
                   value={form.peso_gramos}
                   onChange={e => setForm({...form, peso_gramos: e.target.value})}
                 />
@@ -522,19 +529,19 @@ export default function ProductsPage() {
                 <input
                   type="number"
                   step="0.01"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-1.5"
                   value={form.descuento_porcentaje}
                   onChange={e => setForm({...form, descuento_porcentaje: e.target.value})}
                 />
               </div>
 
-              <div className="col-span-3 bg-blue-50 p-4 rounded-lg">
-                <div className="grid grid-cols-2 gap-4">
+              <div className="col-span-3 bg-blue-50 p-3 rounded-lg">
+                <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       💰 Precio Calculado
                     </label>
-                    <div className="text-2xl font-bold text-blue-600">
+                    <div className="text-xl font-bold text-blue-600">
                       ${calculatedPrice.toFixed(2)}
                     </div>
                     {form.quilataje && form.peso_gramos && (
@@ -551,7 +558,7 @@ export default function ProductsPage() {
                     <input
                       type="number"
                       step="0.01"
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                      className="w-full border border-gray-300 rounded-lg px-3 py-1.5"
                       placeholder="Dejar vacío para auto-calcular"
                       value={form.precio_manual}
                       onChange={e => setForm({...form, precio_manual: e.target.value})}
@@ -570,7 +577,7 @@ export default function ProductsPage() {
                 <input
                   type="number"
                   step="0.01"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-1.5"
                   value={form.costo}
                   onChange={e => setForm({...form, costo: e.target.value})}
                 />
@@ -580,7 +587,7 @@ export default function ProductsPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Existencia</label>
                 <input
                   type="number"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-1.5"
                   value={form.stock}
                   onChange={e => setForm({...form, stock: e.target.value})}
                 />
@@ -589,7 +596,7 @@ export default function ProductsPage() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Base</label>
                 <input
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-1.5"
                   value={form.base}
                   onChange={e => setForm({...form, base: e.target.value})}
                 />
@@ -598,7 +605,7 @@ export default function ProductsPage() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">SKU</label>
                 <input
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-1.5"
                   value={form.sku}
                   onChange={e => setForm({...form, sku: e.target.value})}
                 />
@@ -607,23 +614,23 @@ export default function ProductsPage() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Código de Barras</label>
                 <input
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-1.5"
                   value={form.barcode}
                   onChange={e => setForm({...form, barcode: e.target.value})}
                 />
               </div>
             </div>
 
-            <div className="mt-6 flex gap-2">
+            <div className="mt-4 flex gap-2">
               <button
                 onClick={() => editingId ? updateProduct(editingId) : add()}
-                className="bg-green-600 text-white px-8 py-3 rounded-lg hover:bg-green-700 font-semibold"
+                className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 font-semibold"
               >
                 {editingId ? 'Actualizar' : 'Crear Producto'}
               </button>
               <button
                 onClick={() => { setShowAddForm(false); resetForm(); setEditingId(null); }}
-                className="bg-gray-300 text-gray-700 px-8 py-3 rounded-lg hover:bg-gray-400"
+                className="bg-gray-300 text-gray-700 px-6 py-2 rounded-lg hover:bg-gray-400"
               >
                 Cancelar
               </button>
