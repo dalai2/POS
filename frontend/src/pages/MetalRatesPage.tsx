@@ -31,7 +31,6 @@ export default function MetalRatesPage() {
       const response = await api.get('/metal-rates');
       setRates(response.data);
     } catch (error: any) {
-      console.error('Error loading metal rates:', error);
       alert('Error al cargar tasas de metal');
     } finally {
       setLoading(false);
@@ -41,17 +40,15 @@ export default function MetalRatesPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      console.log('Submitting metal rate:', { editingRate, formData });
       if (editingRate) {
         // Update existing rate
-        console.log('Updating rate:', editingRate.id, 'with data:', formData);
         await api.put(`/metal-rates/${editingRate.id}?recalculate_prices=true`, {
+          metal_type: formData.metal_type,
           rate_per_gram: parseFloat(formData.rate_per_gram),
         });
         alert('Tasa actualizada. Los precios de productos se han recalculado automáticamente.');
       } else {
         // Create new rate
-        console.log('Creating new rate with data:', formData);
         await api.post('/metal-rates', {
           metal_type: formData.metal_type,
           rate_per_gram: parseFloat(formData.rate_per_gram),
@@ -63,8 +60,6 @@ export default function MetalRatesPage() {
       setEditingRate(null);
       setFormData({ metal_type: '', rate_per_gram: '' });
     } catch (error: any) {
-      console.error('Error saving metal rate:', error);
-      console.error('Error response:', error.response);
       if (error.response?.status === 403) {
         const action = editingRate ? 'editar' : 'crear';
         const detail = error.response?.data?.detail || 'Unknown error';
@@ -92,7 +87,6 @@ export default function MetalRatesPage() {
       loadRates();
       alert('Tasa eliminada exitosamente');
     } catch (error: any) {
-      console.error('Error deleting metal rate:', error);
       if (error.response?.status === 403) {
         alert('No tienes permisos para eliminar tasas de metal. Solo los administradores pueden realizar esta acción.');
       } else {

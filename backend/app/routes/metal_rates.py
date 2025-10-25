@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 from sqlalchemy.orm import Session
 from typing import List
 from datetime import datetime
@@ -20,7 +20,18 @@ class MetalRateCreate(BaseModel):
 
 
 class MetalRateUpdate(BaseModel):
-    rate_per_gram: float
+    metal_type: str | None = None
+    rate_per_gram: float | None = None
+    
+    @model_validator(mode='after')
+    def validate_at_least_one_field(self):
+        # Check if metal_type is provided and not empty string
+        metal_type_provided = self.metal_type is not None and self.metal_type != ''
+        rate_per_gram_provided = self.rate_per_gram is not None
+        
+        if not metal_type_provided and not rate_per_gram_provided:
+            raise ValueError('At least one field must be provided')
+        return self
 
 
 class MetalRateResponse(BaseModel):
@@ -90,7 +101,13 @@ def update_metal_rate(
     if not rate:
         raise HTTPException(status_code=404, detail="Metal rate not found")
     
-    rate.rate_per_gram = data.rate_per_gram
+    # Update metal_type if provided and not empty
+    if data.metal_type is not None and data.metal_type != '':
+        rate.metal_type = data.metal_type
+    
+    # Update rate_per_gram if provided
+    if data.rate_per_gram is not None:
+        rate.rate_per_gram = data.rate_per_gram
     
     # Recalculate prices for all products using this metal type
     if recalculate_prices:
