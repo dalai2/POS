@@ -41,14 +41,17 @@ export default function MetalRatesPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      console.log('Submitting metal rate:', { editingRate, formData });
       if (editingRate) {
         // Update existing rate
+        console.log('Updating rate:', editingRate.id, 'with data:', formData);
         await api.put(`/metal-rates/${editingRate.id}?recalculate_prices=true`, {
           rate_per_gram: parseFloat(formData.rate_per_gram),
         });
         alert('Tasa actualizada. Los precios de productos se han recalculado automáticamente.');
       } else {
         // Create new rate
+        console.log('Creating new rate with data:', formData);
         await api.post('/metal-rates', {
           metal_type: formData.metal_type,
           rate_per_gram: parseFloat(formData.rate_per_gram),
@@ -61,9 +64,11 @@ export default function MetalRatesPage() {
       setFormData({ metal_type: '', rate_per_gram: '' });
     } catch (error: any) {
       console.error('Error saving metal rate:', error);
+      console.error('Error response:', error.response);
       if (error.response?.status === 403) {
         const action = editingRate ? 'editar' : 'crear';
-        alert(`No tienes permisos para ${action} tasas de metal. Solo los administradores pueden realizar esta acción.`);
+        const detail = error.response?.data?.detail || 'Unknown error';
+        alert(`No tienes permisos para ${action} tasas de metal. Solo los administradores pueden realizar esta acción.\n\nDetalle: ${detail}`);
       } else {
         alert(error.response?.data?.detail || 'Error al guardar tasa');
       }
@@ -141,7 +146,6 @@ export default function MetalRatesPage() {
                   className="w-full border border-gray-300 rounded-lg px-3 py-2"
                   placeholder="Ej: 14k, Plata Gold, Oro Italiano..."
                   required
-                  disabled={!!editingRate}
                 />
                 <p className="text-xs text-gray-500 mt-1">
                   Ingrese el tipo de metal (ej: 14k, Plata Gold, Oro Italiano)
@@ -184,7 +188,7 @@ export default function MetalRatesPage() {
 
               {editingRate && (
                 <p className="text-sm text-amber-600">
-                  ⚠️ Al actualizar esta tasa, todos los productos con quilataje "{getMetalTypeLabel(editingRate.metal_type)}" 
+                  ⚠️ Al actualizar esta tasa, todos los productos con quilataje "{editingRate.metal_type}" 
                   sin precio manual serán recalculados automáticamente.
                 </p>
               )}

@@ -232,6 +232,13 @@ export default function SalesPage() {
     <!-- Header -->
     <div class="center info-section">
       <div class="header-title">Matriz Relación de Mercancía</div>
+      <div style="font-size: 8px; margin-top: 3px; line-height: 1.3;">
+        <div>LUNES - SABADO - 10:00AM - 7:00 PM</div>
+        <div>DOMINGO 10:00AM - 3:30PM</div>
+        <div>WHATSAPP 477 662 1788</div>
+        <div>CALLE: HIDALGO #12 - LOCALES 12 23 Y 24</div>
+        <div>ZONA CENTRO LEÓN, GTO.</div>
+      </div>
     </div>
 
     <!-- Sale Info -->
@@ -250,9 +257,8 @@ export default function SalesPage() {
 
     <!-- Client Info -->
     <div class="info-section" style="margin-bottom: 10px;">
-      <div><strong>Tipo C</strong> ${saleType === 'credito' ? 'Crédito' : 'Contado'}</div>
+      <div><strong>Tipo C</strong> ${saleType === 'credito' ? 'Apartado' : 'Contado'}</div>
       <div><strong>Base Oro</strong> 2135.00</div>
-      <div><strong>Base Plata</strong> 19.50</div>
     </div>
 
     <!-- Items Table -->
@@ -292,6 +298,10 @@ export default function SalesPage() {
     <!-- Footer -->
     <div class="footer">
       <div>¡Gracias por su compra!</div>
+      <div style="margin-top: 15px; font-size: 9px; font-weight: bold; border-top: 1px solid #000; padding-top: 8px;">
+        REVISAR SU PRODUCTO AL MOMENTO DE LA COMPRA.<br>
+        NO SE ACEPTAN CAMBIOS NI DEVOLUCIONES EN MERCANCÍA DAÑADA.
+      </div>
     </div>
   </div>
 </body></html>`

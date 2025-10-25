@@ -82,10 +82,10 @@ export default function ReportsPage() {
         });
         setDetailedReport(response.data);
       } else {
-        const response = await api.get('/reports/corte-de-caja', {
-          params: { start_date: startDate, end_date: endDate }
-        });
-        setReport(response.data);
+      const response = await api.get('/reports/corte-de-caja', {
+        params: { start_date: startDate, end_date: endDate }
+      });
+      setReport(response.data);
       }
     } catch (error) {
       console.error('Error generating report:', error);
@@ -96,7 +96,457 @@ export default function ReportsPage() {
   };
 
   const printReport = () => {
-    window.print();
+    const w = window.open('', '_blank');
+    if (!w) return;
+
+    const now = new Date();
+    const formattedDate = now.toLocaleDateString('es-ES', {
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric'
+    });
+    const formattedTime = now.toLocaleTimeString('es-ES', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+
+    let html = '';
+    
+    if (report) {
+      // Summary Report HTML
+      html = `
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Corte de Caja - ${formattedDate}</title>
+<style>
+  @media print {
+    @page {
+      size: A4;
+      margin: 1cm;
+    }
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: Arial, sans-serif;
+      font-size: 11px;
+    }
+  }
+  body {
+    margin: 0;
+    padding: 20px;
+    font-family: Arial, sans-serif;
+    font-size: 11px;
+    color: #333;
+  }
+  .header {
+    text-align: center;
+    border-bottom: 3px solid #000;
+    padding-bottom: 15px;
+    margin-bottom: 20px;
+  }
+  .header h1 {
+    margin: 0;
+    font-size: 22px;
+    font-weight: bold;
+  }
+  .header .date {
+    margin-top: 5px;
+    font-size: 12px;
+  }
+  .section {
+    margin-bottom: 25px;
+    page-break-inside: avoid;
+  }
+  .section-title {
+    font-size: 16px;
+    font-weight: bold;
+    margin-bottom: 10px;
+    border-bottom: 2px solid #666;
+    padding-bottom: 5px;
+  }
+  .row {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid #ddd;
+  }
+  .row.total {
+    font-weight: bold;
+    font-size: 13px;
+    border-top: 2px solid #000;
+    border-bottom: 2px solid #000;
+    margin-top: 10px;
+    padding-top: 10px;
+  }
+  .label {
+    font-weight: 600;
+  }
+  .value {
+    font-weight: bold;
+  }
+  .footer {
+    margin-top: 30px;
+    text-align: center;
+    font-size: 10px;
+    color: #666;
+    border-top: 1px solid #ddd;
+    padding-top: 10px;
+  }
+</style>
+</head>
+<body>
+  <div class="header">
+    <h1>CORTE DE CAJA</h1>
+    <div class="date">${formattedDate} - ${formattedTime}</div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">PERÍODO DEL REPORTE</div>
+    <div class="row">
+      <span class="label">Fecha Inicio:</span>
+      <span class="value">${new Date(report.start_date).toLocaleDateString('es-ES')}</span>
+    </div>
+    <div class="row">
+      <span class="label">Fecha Fin:</span>
+      <span class="value">${new Date(report.end_date).toLocaleDateString('es-ES')}</span>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">VENTAS CONTADO</div>
+    <div class="row">
+      <span>Cantidad de Ventas:</span>
+      <span>${report.ventas_contado_count}</span>
+    </div>
+    <div class="row">
+      <span>Total Ventas Contado:</span>
+      <span>$${report.ventas_contado_total.toFixed(2)}</span>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">VENTAS CRÉDITO</div>
+    <div class="row">
+      <span>Cantidad de Ventas:</span>
+      <span>${report.ventas_credito_count}</span>
+    </div>
+    <div class="row">
+      <span>Total Ventas Crédito:</span>
+      <span>$${report.ventas_credito_total.toFixed(2)}</span>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">INGRESOS POR MÉTODO DE PAGO</div>
+    <div class="row">
+      <span>Efectivo:</span>
+      <span>$${report.efectivo_ventas.toFixed(2)}</span>
+    </div>
+    <div class="row">
+      <span>Tarjeta:</span>
+      <span>$${report.tarjeta_ventas.toFixed(2)}</span>
+    </div>
+    <div class="row">
+      <span>Crédito:</span>
+      <span>$${report.credito_ventas.toFixed(2)}</span>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">ABONOS</div>
+    <div class="row">
+      <span>Abonos en Efectivo:</span>
+      <span>$${report.abonos_efectivo.toFixed(2)}</span>
+    </div>
+    <div class="row">
+      <span>Abonos con Tarjeta:</span>
+      <span>$${report.abonos_tarjeta.toFixed(2)}</span>
+    </div>
+    <div class="row">
+      <span>Total Abonos:</span>
+      <span>$${report.abonos_total.toFixed(2)}</span>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">TOTALES EN CAJA</div>
+    <div class="row">
+      <span>Total Efectivo:</span>
+      <span>$${report.total_efectivo.toFixed(2)}</span>
+    </div>
+    <div class="row">
+      <span>Total Tarjeta:</span>
+      <span>$${report.total_tarjeta.toFixed(2)}</span>
+    </div>
+    <div class="row total">
+      <span>INGRESO TOTAL:</span>
+      <span>$${report.total_revenue.toFixed(2)}</span>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">ANÁLISIS FINANCIERO</div>
+    <div class="row">
+      <span>Costo Total:</span>
+      <span>$${report.total_cost.toFixed(2)}</span>
+    </div>
+    <div class="row">
+      <span>Utilidad Total:</span>
+      <span>$${report.total_profit.toFixed(2)}</span>
+    </div>
+    <div class="row">
+      <span>Margen de Utilidad:</span>
+      <span>${report.profit_margin.toFixed(2)}%</span>
+    </div>
+  </div>
+
+  ${report.returns_count > 0 ? `
+  <div class="section">
+    <div class="section-title">DEVOLUCIONES</div>
+    <div class="row">
+      <span>Cantidad:</span>
+      <span>${report.returns_count}</span>
+    </div>
+    <div class="row">
+      <span>Total:</span>
+      <span>$${report.returns_total.toFixed(2)}</span>
+    </div>
+  </div>
+  ` : ''}
+
+  <div class="footer">
+    Reporte generado el ${formattedDate} a las ${formattedTime}
+  </div>
+</body></html>`;
+    } else if (detailedReport) {
+      // Detailed Report HTML
+      html = `
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Reporte Detallado - ${formattedDate}</title>
+<style>
+  @media print {
+    @page {
+      size: A4;
+      margin: 1cm;
+    }
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: Arial, sans-serif;
+      font-size: 10px;
+    }
+  }
+  body {
+    margin: 0;
+    padding: 20px;
+    font-family: Arial, sans-serif;
+    font-size: 10px;
+    color: #333;
+  }
+  .header {
+    text-align: center;
+    border-bottom: 3px solid #000;
+    padding-bottom: 15px;
+    margin-bottom: 20px;
+  }
+  .header h1 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: bold;
+  }
+  .header .date {
+    margin-top: 5px;
+    font-size: 11px;
+  }
+  .section {
+    margin-bottom: 20px;
+    page-break-inside: avoid;
+  }
+  .section-title {
+    font-size: 14px;
+    font-weight: bold;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #666;
+    padding-bottom: 3px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 15px;
+  }
+  th {
+    background-color: #f0f0f0;
+    font-weight: bold;
+    padding: 6px;
+    text-align: left;
+    border: 1px solid #ddd;
+    font-size: 9px;
+  }
+  td {
+    padding: 5px;
+    border: 1px solid #ddd;
+    font-size: 9px;
+  }
+  .row {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    border-bottom: 1px solid #ddd;
+  }
+  .row.total {
+    font-weight: bold;
+    font-size: 11px;
+    border-top: 2px solid #000;
+    border-bottom: 2px solid #000;
+    margin-top: 8px;
+    padding-top: 8px;
+  }
+  .footer {
+    margin-top: 25px;
+    text-align: center;
+    font-size: 9px;
+    color: #666;
+    border-top: 1px solid #ddd;
+    padding-top: 8px;
+  }
+</style>
+</head>
+<body>
+  <div class="header">
+    <h1>REPORTE DETALLADO DE CORTE DE CAJA</h1>
+    <div class="date">${formattedDate} - ${formattedTime}</div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">RESUMEN GENERAL</div>
+    <div class="row">
+      <span>Período:</span>
+      <span>${new Date(detailedReport.start_date).toLocaleDateString('es-ES')} - ${new Date(detailedReport.end_date).toLocaleDateString('es-ES')}</span>
+    </div>
+    <div class="row">
+      <span>Ventas Válidas:</span>
+      <span>${detailedReport.ventas_validas}</span>
+    </div>
+    <div class="row">
+      <span>Ventas Contado:</span>
+      <span>${detailedReport.contado_count}</span>
+    </div>
+    <div class="row">
+      <span>Ventas Crédito:</span>
+      <span>${detailedReport.credito_count}</span>
+    </div>
+    <div class="row">
+      <span>Total Vendido:</span>
+      <span>$${detailedReport.total_vendido.toFixed(2)}</span>
+    </div>
+    <div class="row">
+      <span>Costo Total:</span>
+      <span>$${detailedReport.costo_total.toFixed(2)}</span>
+    </div>
+    <div class="row total">
+      <span>Utilidad Total:</span>
+      <span>$${detailedReport.utilidad_total.toFixed(2)}</span>
+    </div>
+  </div>
+
+  ${detailedReport.vendedores.length > 0 ? `
+  <div class="section">
+    <div class="section-title">VENTAS POR VENDEDOR</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Vendedor</th>
+          <th>Ventas</th>
+          <th>Contado</th>
+          <th>Crédito</th>
+          <th>Total Contado</th>
+          <th>Total Crédito</th>
+          <th>Utilidad</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${detailedReport.vendedores.map(v => `
+        <tr>
+          <td>${v.vendedor_name}</td>
+          <td>${v.sales_count}</td>
+          <td>${v.contado_count}</td>
+          <td>${v.credito_count}</td>
+          <td>$${v.total_contado.toFixed(2)}</td>
+          <td>$${v.total_credito.toFixed(2)}</td>
+          <td>$${v.total_profit.toFixed(2)}</td>
+        </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  </div>
+  ` : ''}
+
+  ${detailedReport.daily_summaries.length > 0 ? `
+  <div class="section">
+    <div class="section-title">RESUMEN DIARIO</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th>Costo</th>
+          <th>Venta</th>
+          <th>Utilidad</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${detailedReport.daily_summaries.map(d => `
+        <tr>
+          <td>${new Date(d.fecha).toLocaleDateString('es-ES')}</td>
+          <td>$${d.costo.toFixed(2)}</td>
+          <td>$${d.venta.toFixed(2)}</td>
+          <td>$${d.utilidad.toFixed(2)}</td>
+        </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  </div>
+  ` : ''}
+
+  ${detailedReport.sales_details.length > 0 ? `
+  <div class="section">
+    <div class="section-title">DETALLE DE VENTAS</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th>Cliente</th>
+          <th>Piezas</th>
+          <th>Total</th>
+          <th>Estado</th>
+          <th>Tipo</th>
+          <th>Vendedor</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${detailedReport.sales_details.map(s => `
+        <tr>
+          <td>${new Date(s.fecha).toLocaleDateString('es-ES')}</td>
+          <td>${s.cliente}</td>
+          <td>${s.piezas}</td>
+          <td>$${s.total.toFixed(2)}</td>
+          <td>${s.estado}</td>
+          <td>${s.tipo}</td>
+          <td>${s.vendedor}</td>
+        </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  </div>
+  ` : ''}
+
+  <div class="footer">
+    Reporte generado el ${formattedDate} a las ${formattedTime}
+  </div>
+</body></html>`;
+    }
+
+    w.document.write(html);
+    w.document.close();
+    setTimeout(() => w.print(), 100);
   };
 
   return (
