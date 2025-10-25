@@ -155,10 +155,33 @@ export default function SalesPage() {
     // This effect runs when any calculation dependency changes
   }, [subtotal, discountPct, taxRateNum, cashNumCalc, cardNumCalc, saleType])
 
-  const printSaleTicket = (saleData: any, cartItems: CartItem[], subtotal: number, discountAmount: number, taxAmount: number, total: number, paid: number, change: number) => {
+  const getLogoAsBase64 = async (): Promise<string> => {
     try {
+      const response = await fetch('/logo.png?v=' + Date.now())
+      const blob = await response.blob()
+      return new Promise((resolve) => {
+        const reader = new FileReader()
+        reader.onloadend = () => {
+          resolve(reader.result as string)
+        }
+        reader.onerror = () => {
+          resolve('')
+        }
+        reader.readAsDataURL(blob)
+      })
+    } catch (error) {
+      console.error('Error loading logo:', error)
+      return ''
+    }
+  }
+
+  const printSaleTicket = async (saleData: any, cartItems: CartItem[], subtotal: number, discountAmount: number, taxAmount: number, total: number, paid: number, change: number) => {
+    try {
+      const logoBase64 = await getLogoAsBase64()
       const w = window.open('', '_blank')
       if (!w) return
+      
+      await new Promise(resolve => setTimeout(resolve, 100))
 
       const items = cartItems.map((ci, index) => ({
         index: index + 1,
@@ -181,6 +204,7 @@ export default function SalesPage() {
       })
 
       const customerInfo = saleData.customer_name || 'PUBLICO GENERAL'
+      const customerPhoneInfo = saleData.customer_phone || ''
       // Find vendedor name from users list - try vendedor_id first, then user_id as fallback
       const vendedorUserId = saleData.vendedor_id || saleData.user_id
       const vendedorUser = vendedorUserId ? users.find(u => u.id === vendedorUserId) : null
@@ -338,7 +362,7 @@ export default function SalesPage() {
     <div class="header-section">
       <!-- Company Logo -->
       <div class="logo-container">
-        <img src="/logo.png?v=1" alt="Logo" style="max-width: 450px; max-height: 250px; display: block;" onerror="this.style.display='none'" />
+        <img src="${logoBase64}" alt="Logo" style="max-width: 450px; max-height: 250px; display: block;" onerror="this.style.display='none'" />
       </div>
 
       <!-- Header Info -->
@@ -358,7 +382,7 @@ export default function SalesPage() {
       </tr>
       <tr>
         <td><strong>Teléfono:</strong></td>
-        <td></td>
+        <td>${customerPhoneInfo}</td>
       </tr>
       <tr>
         <td><strong>Dirección:</strong></td>
@@ -425,7 +449,20 @@ export default function SalesPage() {
 
       w.document.write(html)
       w.document.close()
-      w.print()
+      
+      // Wait for images to load before printing
+      w.addEventListener('load', () => {
+        setTimeout(() => {
+          w.print()
+        }, 500)
+      })
+      
+      // Fallback timeout
+      setTimeout(() => {
+        if (!w.closed) {
+          w.print()
+        }
+      }, 2000)
     } catch (e) {
       console.error('Error printing ticket:', e)
     }
@@ -651,23 +688,23 @@ export default function SalesPage() {
           </div>
 
           {/* Customer Info */}
-          <div className="bg-amber-50 rounded-lg p-4">
+            <div className="bg-amber-50 rounded-lg p-4">
             <h3 className="font-semibold mb-2">
               {saleType === 'credito' ? 'Información del Cliente' : 'Cliente'}
             </h3>
             <div className="grid grid-cols-2 gap-3">
-              <input
-                className="border border-gray-300 rounded-lg px-3 py-2"
-                placeholder="Nombre *"
-                value={customerName}
-                onChange={e => setCustomerName(e.target.value)}
-              />
-              <input
-                className="border border-gray-300 rounded-lg px-3 py-2"
-                placeholder="Teléfono"
-                value={customerPhone}
-                onChange={e => setCustomerPhone(e.target.value)}
-              />
+                <input
+                  className="border border-gray-300 rounded-lg px-3 py-2"
+                  placeholder="Nombre *"
+                  value={customerName}
+                  onChange={e => setCustomerName(e.target.value)}
+                />
+                <input
+                  className="border border-gray-300 rounded-lg px-3 py-2"
+                  placeholder="Teléfono"
+                  value={customerPhone}
+                  onChange={e => setCustomerPhone(e.target.value)}
+                />
             </div>
           </div>
 

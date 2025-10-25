@@ -44,10 +44,33 @@ export default function SalesHistoryPage() {
     loadUsers()
   }, [])
 
-  const printSaleTicket = (saleData: any) => {
+  const getLogoAsBase64 = async (): Promise<string> => {
     try {
+      const response = await fetch('/logo.png?v=' + Date.now())
+      const blob = await response.blob()
+      return new Promise((resolve) => {
+        const reader = new FileReader()
+        reader.onloadend = () => {
+          resolve(reader.result as string)
+        }
+        reader.onerror = () => {
+          resolve('')
+        }
+        reader.readAsDataURL(blob)
+      })
+    } catch (error) {
+      console.error('Error loading logo:', error)
+      return ''
+    }
+  }
+
+  const printSaleTicket = async (saleData: any) => {
+    try {
+      const logoBase64 = await getLogoAsBase64()
       const w = window.open('', '_blank')
       if (!w) return
+      
+      await new Promise(resolve => setTimeout(resolve, 100))
 
       const items = saleData.items || []
       const date = new Date(saleData.created_at || new Date())
@@ -58,6 +81,7 @@ export default function SalesHistoryPage() {
       })
 
       const customerInfo = saleData.customer_name || 'PUBLICO GENERAL'
+      const customerPhoneInfo = saleData.customer_phone || ''
       // Find vendedor name from users list - try vendedor_id first, then user_id as fallback
       const vendedorUserId = saleData.vendedor_id || saleData.user_id
       const vendedorUser = vendedorUserId ? users.find(u => u.id === vendedorUserId) : null
@@ -220,7 +244,7 @@ export default function SalesHistoryPage() {
     <div class="header-section">
       <!-- Company Logo -->
       <div class="logo-container">
-        <img src="/logo.png?v=1" alt="Logo" style="max-width: 450px; max-height: 250px; display: block;" onerror="this.style.display='none'" />
+        <img src="${logoBase64}" alt="Logo" style="max-width: 450px; max-height: 250px; display: block;" onerror="this.style.display='none'" />
       </div>
 
       <!-- Header Info -->
@@ -240,7 +264,7 @@ export default function SalesHistoryPage() {
       </tr>
       <tr>
         <td><strong>Teléfono:</strong></td>
-        <td></td>
+        <td>${customerPhoneInfo}</td>
       </tr>
       <tr>
         <td><strong>Dirección:</strong></td>
@@ -311,7 +335,20 @@ export default function SalesHistoryPage() {
 
       w.document.write(html)
       w.document.close()
-      w.print()
+      
+      // Wait for images to load before printing
+      w.addEventListener('load', () => {
+        setTimeout(() => {
+          w.print()
+        }, 500)
+      })
+      
+      // Fallback timeout
+      setTimeout(() => {
+        if (!w.closed) {
+          w.print()
+        }
+      }, 2000)
     } catch (e) {
       console.error('Error printing ticket:', e)
     }

@@ -49,6 +49,9 @@ class CorteDeCajaReport(BaseModel):
     # Returns
     returns_count: int
     returns_total: float
+    
+    # Vendors summary
+    vendedores: List[SalesByVendorReport]
 
 
 @router.get("/corte-de-caja", response_model=CorteDeCajaReport)
@@ -158,6 +161,34 @@ def get_corte_de_caja(
     # Calculate profit margin
     profit_margin = (total_profit / total_revenue * 100) if total_revenue > 0 else 0
     
+    # Calculate vendor stats
+    vendor_stats = {}
+    for sale in all_sales:
+        vendedor_id = sale.vendedor_id or 0
+        if vendedor_id not in vendor_stats:
+            vendor = db.query(User).filter(User.id == vendedor_id).first() if vendedor_id > 0 else None
+            vendor_stats[vendedor_id] = {
+                "vendedor_id": vendedor_id,
+                "vendedor_name": vendor.email if vendor else "Mostrador",
+                "sales_count": 0,
+                "contado_count": 0,
+                "credito_count": 0,
+                "total_contado": 0.0,
+                "total_credito": 0.0,
+                "total_profit": 0.0
+            }
+        
+        vendor_stats[vendedor_id]["sales_count"] += 1
+        if sale.tipo_venta == "contado":
+            vendor_stats[vendedor_id]["contado_count"] += 1
+            vendor_stats[vendedor_id]["total_contado"] += float(sale.total)
+        else:
+            vendor_stats[vendedor_id]["credito_count"] += 1
+            vendor_stats[vendedor_id]["total_credito"] += float(sale.total)
+        vendor_stats[vendedor_id]["total_profit"] += float(sale.utilidad or 0)
+    
+    vendedores = list(vendor_stats.values())
+    
     return {
         "start_date": start_date.isoformat(),
         "end_date": end_date.isoformat(),
@@ -178,7 +209,8 @@ def get_corte_de_caja(
         "total_profit": total_profit,
         "profit_margin": profit_margin,
         "returns_count": returns_count,
-        "returns_total": returns_total
+        "returns_total": returns_total,
+        "vendedores": vendedores
     }
 
 

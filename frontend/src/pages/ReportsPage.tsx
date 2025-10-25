@@ -23,6 +23,16 @@ interface CorteDeCajaReport {
   profit_margin: number;
   returns_count: number;
   returns_total: number;
+  vendedores: Array<{
+    vendedor_id: number;
+    vendedor_name: string;
+    sales_count: number;
+    contado_count: number;
+    credito_count: number;
+    total_contado: number;
+    total_credito: number;
+    total_profit: number;
+  }>;
 }
 
 interface DetailedCorteCajaReport {
@@ -313,6 +323,38 @@ export default function ReportsPage() {
   </div>
   ` : ''}
 
+  ${report.vendedores && report.vendedores.length > 0 ? `
+  <div class="section">
+    <div class="section-title">RESUMEN DE VENDEDORES</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Vendedor</th>
+          <th>Ventas</th>
+          <th>Contado</th>
+          <th>Crédito</th>
+          <th>Total Contado</th>
+          <th>Total Crédito</th>
+          <th>Total Venta</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${report.vendedores.map(v => `
+        <tr>
+          <td>${v.vendedor_name}</td>
+          <td>${v.sales_count}</td>
+          <td>${v.contado_count}</td>
+          <td>${v.credito_count}</td>
+          <td>$${v.total_contado.toFixed(2)}</td>
+          <td>$${v.total_credito.toFixed(2)}</td>
+          <td><strong>$${(v.total_contado + v.total_credito).toFixed(2)}</strong></td>
+        </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  </div>
+  ` : ''}
+
   <div class="footer">
     Reporte generado el ${formattedDate} a las ${formattedTime}
   </div>
@@ -460,6 +502,7 @@ export default function ReportsPage() {
           <th>Crédito</th>
           <th>Total Contado</th>
           <th>Total Crédito</th>
+          <th>Total Venta</th>
           <th>Utilidad</th>
         </tr>
       </thead>
@@ -472,6 +515,7 @@ export default function ReportsPage() {
           <td>${v.credito_count}</td>
           <td>$${v.total_contado.toFixed(2)}</td>
           <td>$${v.total_credito.toFixed(2)}</td>
+          <td><strong>$${(v.total_contado + v.total_credito).toFixed(2)}</strong></td>
           <td>$${v.total_profit.toFixed(2)}</td>
         </tr>
         `).join('')}
@@ -785,6 +829,43 @@ export default function ReportsPage() {
               </div>
             )}
 
+            {/* Vendors Summary */}
+            {report.vendedores && report.vendedores.length > 0 && (
+              <div className="mb-8">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4 border-b-2 border-gray-300 pb-2">
+                  RESUMEN DE VENDEDORES
+                </h3>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-2 text-left text-sm font-medium text-gray-500">Vendedor</th>
+                        <th className="px-4 py-2 text-center text-sm font-medium text-gray-500">#Ventas</th>
+                        <th className="px-4 py-2 text-center text-sm font-medium text-gray-500">Contado</th>
+                        <th className="px-4 py-2 text-center text-sm font-medium text-gray-500">Crédito</th>
+                        <th className="px-4 py-2 text-center text-sm font-medium text-gray-500">Total Contado ($)</th>
+                        <th className="px-4 py-2 text-center text-sm font-medium text-gray-500">Total Crédito ($)</th>
+                        <th className="px-4 py-2 text-center text-sm font-medium text-gray-500">Total ($)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white">
+                      {report.vendedores.map((vendedor) => (
+                        <tr key={vendedor.vendedor_id} className="border-t">
+                          <td className="px-4 py-2 text-sm font-medium">{vendedor.vendedor_name}</td>
+                          <td className="px-4 py-2 text-center text-sm">{vendedor.sales_count}</td>
+                          <td className="px-4 py-2 text-center text-sm">{vendedor.contado_count}</td>
+                          <td className="px-4 py-2 text-center text-sm">{vendedor.credito_count}</td>
+                          <td className="px-4 py-2 text-center text-sm font-bold text-green-600">${vendedor.total_contado.toFixed(2)}</td>
+                          <td className="px-4 py-2 text-center text-sm font-bold text-yellow-600">${vendedor.total_credito.toFixed(2)}</td>
+                          <td className="px-4 py-2 text-center text-sm font-bold text-blue-600">${(vendedor.total_contado + vendedor.total_credito).toFixed(2)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
             {/* Print Button */}
             <div className="mt-8 pt-6 border-t-2 border-gray-200 print:hidden">
               <button
@@ -862,7 +943,9 @@ export default function ReportsPage() {
                         <th className="px-4 py-2 text-center text-sm font-medium text-gray-500">#Ventas</th>
                         <th className="px-4 py-2 text-center text-sm font-medium text-gray-500">Contado</th>
                         <th className="px-4 py-2 text-center text-sm font-medium text-gray-500">Crédito</th>
-                        <th className="px-4 py-2 text-center text-sm font-medium text-gray-500">Venta ($)</th>
+                        <th className="px-4 py-2 text-center text-sm font-medium text-gray-500">Total Contado ($)</th>
+                        <th className="px-4 py-2 text-center text-sm font-medium text-gray-500">Total Crédito ($)</th>
+                        <th className="px-4 py-2 text-center text-sm font-medium text-gray-500">Total ($)</th>
                       </tr>
                     </thead>
                     <tbody className="bg-white">
@@ -872,7 +955,9 @@ export default function ReportsPage() {
                           <td className="px-4 py-2 text-center text-sm">{vendedor.sales_count}</td>
                           <td className="px-4 py-2 text-center text-sm">{vendedor.contado_count}</td>
                           <td className="px-4 py-2 text-center text-sm">{vendedor.credito_count}</td>
-                          <td className="px-4 py-2 text-center text-sm font-bold">${vendedor.total_contado + vendedor.total_credito}</td>
+                          <td className="px-4 py-2 text-center text-sm font-bold text-green-600">${vendedor.total_contado.toFixed(2)}</td>
+                          <td className="px-4 py-2 text-center text-sm font-bold text-yellow-600">${vendedor.total_credito.toFixed(2)}</td>
+                          <td className="px-4 py-2 text-center text-sm font-bold text-blue-600">${(vendedor.total_contado + vendedor.total_credito).toFixed(2)}</td>
                         </tr>
                       ))}
                     </tbody>
