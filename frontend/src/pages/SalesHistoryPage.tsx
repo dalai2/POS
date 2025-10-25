@@ -44,30 +44,8 @@ export default function SalesHistoryPage() {
     loadUsers()
   }, [])
 
-  const getLogoAsBase64 = (): Promise<string> => {
-    return new Promise((resolve) => {
-      const img = new Image()
-      img.crossOrigin = 'anonymous'
-      img.onload = () => {
-        const canvas = document.createElement('canvas')
-        canvas.width = img.width
-        canvas.height = img.height
-        const ctx = canvas.getContext('2d')
-        if (ctx) {
-          ctx.drawImage(img, 0, 0)
-          resolve(canvas.toDataURL('image/png'))
-        } else {
-          resolve('')
-        }
-      }
-      img.onerror = () => resolve('')
-      img.src = '/logo.png?v=1'
-    })
-  }
-
-  const printSaleTicket = async (saleData: any) => {
+  const printSaleTicket = (saleData: any) => {
     try {
-      const logoBase64 = await getLogoAsBase64()
       const w = window.open('', '_blank')
       if (!w) return
 
@@ -242,7 +220,7 @@ export default function SalesHistoryPage() {
     <div class="header-section">
       <!-- Company Logo -->
       <div class="logo-container">
-        <img src="${logoBase64}" alt="Logo" style="max-width: 450px; max-height: 250px; display: block;" onerror="this.style.display='none'" />
+        <img src="/logo.png?v=1" alt="Logo" style="max-width: 450px; max-height: 250px; display: block;" onerror="this.style.display='none'" />
       </div>
 
       <!-- Header Info -->
