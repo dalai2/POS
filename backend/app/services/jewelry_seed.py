@@ -164,9 +164,7 @@ def seed_jewelry_demo(db: Session):
                 price=precio_venta,
                 stock=5,
                 active=True,
-                tenant_id=tenant.id,
-                sku=f'SKU-{codigo}',
-                barcode=f'BAR-{codigo}'
+                tenant_id=tenant.id
             )
             db.add(product)
     

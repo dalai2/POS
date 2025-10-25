@@ -19,17 +19,15 @@ router = APIRouter()
 
 class ProductBase(BaseModel):
     name: str
-    sku: Optional[str] = None
     price: condecimal(max_digits=10, decimal_places=2) = 0
     cost_price: condecimal(max_digits=10, decimal_places=2) = 0
     stock: int = 0
     category: Optional[str] = None
-    barcode: Optional[str] = None
     default_discount_pct: condecimal(max_digits=5, decimal_places=2) = 0
     active: bool = True
     
     # Jewelry-specific fields
-    codigo: Optional[str] = None
+    codigo: Optional[str] = None  # Single code field (replaces sku and barcode)
     marca: Optional[str] = None
     modelo: Optional[str] = None
     color: Optional[str] = None
@@ -69,9 +67,8 @@ def list_products(
             query = query.filter(
                 or_(
                     func.lower(Product.name).like(f"%{qn}%"),
-                    func.lower(Product.sku).like(f"%{qn}%"),
+                    func.lower(Product.codigo).like(f"%{qn}%"),
                     func.lower(Product.category).like(f"%{qn}%"),
-                    func.lower(Product.barcode).like(f"%{qn}%"),
                 )
             )
     if active is not None:
@@ -89,12 +86,10 @@ def create_product(
 ):
     product = Product(
         name=data.name,
-        sku=data.sku,
         price=data.price,
         cost_price=data.cost_price,
         stock=data.stock,
         category=data.category,
-        barcode=data.barcode,
         default_discount_pct=data.default_discount_pct,
         active=data.active,
         tenant_id=tenant.id,
@@ -120,10 +115,8 @@ def create_product(
         db.rollback()
         # Friendly messages for unique constraints
         msg = str(e.orig)
-        if "uq_products_tenant_sku" in msg:
-            raise HTTPException(status_code=400, detail="SKU already exists for this tenant")
-        if "uq_products_tenant_barcode" in msg:
-            raise HTTPException(status_code=400, detail="Barcode already exists for this tenant")
+        if "uq_products_tenant_codigo" in msg:
+            raise HTTPException(status_code=400, detail="Código already exists for this tenant")
         raise HTTPException(status_code=400, detail="Invalid product data")
     db.refresh(product)
     return product
@@ -154,12 +147,10 @@ def update_product(
     if not product:
         raise HTTPException(status_code=404, detail="Not found")
     product.name = data.name
-    product.sku = data.sku
     product.price = data.price
     product.cost_price = data.cost_price
     product.stock = data.stock
     product.category = data.category
-    product.barcode = data.barcode
     product.default_discount_pct = data.default_discount_pct
     product.active = data.active
     # Jewelry fields
@@ -181,10 +172,8 @@ def update_product(
     except IntegrityError as e:
         db.rollback()
         msg = str(e.orig)
-        if "uq_products_tenant_sku" in msg:
-            raise HTTPException(status_code=400, detail="SKU already exists for this tenant")
-        if "uq_products_tenant_barcode" in msg:
-            raise HTTPException(status_code=400, detail="Barcode already exists for this tenant")
+        if "uq_products_tenant_codigo" in msg:
+            raise HTTPException(status_code=400, detail="Código already exists for this tenant")
         raise HTTPException(status_code=400, detail="Invalid product data")
     db.refresh(product)
     return product
@@ -195,19 +184,14 @@ def lookup_product(
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(get_tenant),
     user: User = Depends(get_current_user),
-    sku: Optional[str] = Query(None, description="Product SKU"),
-    barcode: Optional[str] = Query(None, description="Product barcode"),
+    codigo: Optional[str] = Query(None, description="Product code"),
 ):
-    if not sku and not barcode:
-        raise HTTPException(status_code=400, detail="Provide either sku or barcode")
-    query = db.query(Product).filter(Product.tenant_id == tenant.id)
-    if sku and barcode:
-        query = query.filter(or_(Product.sku == sku, Product.barcode == barcode))
-    elif sku:
-        query = query.filter(Product.sku == sku)
-    else:
-        query = query.filter(Product.barcode == barcode)
-    product = query.first()
+    if not codigo:
+        raise HTTPException(status_code=400, detail="Provide codigo")
+    product = db.query(Product).filter(
+        Product.tenant_id == tenant.id,
+        Product.codigo == codigo
+    ).first()
     if not product:
         raise HTTPException(status_code=404, detail="Not found")
     return product

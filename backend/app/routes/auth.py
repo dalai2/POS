@@ -25,6 +25,7 @@ class TokenResponse(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
+    role: str | None = None
 
 
 class LoginRequest(BaseModel):
@@ -57,7 +58,7 @@ def register(data: RegisterRequest, db: Session = Depends(get_db)):
 
     access = create_token(str(user.id), settings.access_token_expire_minutes, token_type="access")
     refresh = create_token(str(user.id), settings.refresh_token_expire_minutes, token_type="refresh")
-    return TokenResponse(access_token=access, refresh_token=refresh)
+    return TokenResponse(access_token=access, refresh_token=refresh, role=user.role)
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -67,7 +68,7 @@ def login(data: LoginRequest, db: Session = Depends(get_db), tenant: Tenant = De
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     access = create_token(str(user.id), settings.access_token_expire_minutes, token_type="access")
     refresh = create_token(str(user.id), settings.refresh_token_expire_minutes, token_type="refresh")
-    return TokenResponse(access_token=access, refresh_token=refresh)
+    return TokenResponse(access_token=access, refresh_token=refresh, role=user.role)
 
 
 class RefreshRequest(BaseModel):
@@ -88,7 +89,7 @@ def refresh_token_endpoint(data: RefreshRequest, db: Session = Depends(get_db), 
 
     access = create_token(str(user.id), settings.access_token_expire_minutes, token_type="access")
     refresh = create_token(str(user.id), settings.refresh_token_expire_minutes, token_type="refresh")
-    return TokenResponse(access_token=access, refresh_token=refresh)
+    return TokenResponse(access_token=access, refresh_token=refresh, role=user.role)
 
 
 

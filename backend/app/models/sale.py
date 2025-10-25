@@ -43,7 +43,7 @@ class SaleItem(Base):
     sale_id = Column(Integer, ForeignKey("sales.id", ondelete="CASCADE"), nullable=False, index=True)
     product_id = Column(Integer, ForeignKey("products.id", ondelete="SET NULL"), nullable=True, index=True)
     name = Column(String(255), nullable=False)
-    sku = Column(String(100), nullable=True)
+    codigo = Column(String(100), nullable=True)
     quantity = Column(Integer, nullable=False, default=1)
     unit_price = Column(Numeric(10, 2), nullable=False, default=0)
     discount_pct = Column(Numeric(5, 2), nullable=False, default=0)

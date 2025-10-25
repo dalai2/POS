@@ -30,7 +30,7 @@ class PaymentIn(BaseModel):
 
 class SaleOutItem(BaseModel):
     name: str
-    sku: str | None
+    codigo: str | None
     quantity: int
     unit_price: condecimal(max_digits=10, decimal_places=2)
     discount_pct: condecimal(max_digits=5, decimal_places=2) | None = Decimal("0")
@@ -43,6 +43,7 @@ class SaleOutItem(BaseModel):
 
 class SaleOut(BaseModel):
     id: int
+    user_id: int | None = None
     subtotal: condecimal(max_digits=10, decimal_places=2) | None = None
     discount_amount: condecimal(max_digits=10, decimal_places=2) | None = None
     tax_rate: condecimal(max_digits=5, decimal_places=2) | None = None
@@ -121,7 +122,7 @@ async def create_sale(
             sale_id=sale.id,
             product_id=p.id,
             name=p.name,
-            sku=p.sku,
+            codigo=p.codigo,
             quantity=q,
             unit_price=unit,
             discount_pct=line_disc_pct,
@@ -206,7 +207,7 @@ def return_sale(
             sale_id=ret.id,
             product_id=it.product_id,
             name=it.name,
-            sku=it.sku,
+            codigo=it.codigo,
             quantity=-it.quantity,
             unit_price=it.unit_price,
             total_price=-it.total_price,

@@ -40,8 +40,7 @@ async def import_products(
     - precio_manual (opcional, si se deja vacío se calcula automáticamente)
     - costo
     - stock
-    - sku
-    - barcode
+    - codigo
     """
     
     if not file.filename.endswith(('.xlsx', '.xls')):
@@ -121,8 +120,7 @@ async def import_products(
                     'precio_venta': precio_venta,
                     'price': precio_venta,
                     'stock': int(row.get('stock', 0)) if pd.notna(row.get('stock')) else 0,
-                    'sku': str(row.get('sku', '')).strip() if pd.notna(row.get('sku')) else None,
-                    'barcode': str(row.get('barcode', '')).strip() if pd.notna(row.get('barcode')) else None,
+                    'codigo': str(row.get('codigo', '')).strip() if pd.notna(row.get('codigo')) else None,
                     'active': True,
                     'tenant_id': tenant.id
                 }
@@ -177,8 +175,7 @@ async def export_template():
         'precio_manual': ['', ''],  # Dejar vacío para cálculo automático
         'costo': [100, 80],
         'stock': [5, 10],
-        'sku': ['SKU-AN-001', 'SKU-COL-002'],
-        'barcode': ['BAR-AN-001', 'BAR-COL-002']
+        'codigo': ['AN-001', 'COL-002']
     }
     
     df = pd.DataFrame(data)
@@ -256,8 +253,7 @@ async def export_products(
                 'precio_manual': product.precio_manual or '',
                 'costo': product.costo or product.cost_price or '',
                 'stock': product.stock or '',
-                'sku': product.sku or '',
-                'barcode': product.barcode or ''
+                'codigo': product.codigo or ''
             }
             data.append(row)
 
