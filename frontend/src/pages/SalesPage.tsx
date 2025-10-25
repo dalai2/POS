@@ -162,11 +162,13 @@ export default function SalesPage() {
 
       const items = cartItems.map((ci, index) => ({
         index: index + 1,
+        code: ci.product.code || '',
         name: ci.product.name,
         quantity: ci.quantity,
         unit: 'Pz', // Unidad por defecto
         price: parseFloat(ci.product.price || '0'),
         discount_pct: ci.discount_pct || 0,
+        discount_amount: parseFloat(ci.product.price || '0') * (ci.discount_pct || 0) / 100,
         netPrice: parseFloat(ci.product.price || '0') * (1 - (ci.discount_pct || 0) / 100),
         total: parseFloat(ci.product.price || '0') * ci.quantity * (1 - (ci.discount_pct || 0) / 100)
       }))
@@ -174,12 +176,15 @@ export default function SalesPage() {
       const date = new Date(saleData.created_at || new Date())
       const formattedDate = date.toLocaleDateString('es-ES', {
         day: '2-digit',
-        month: 'short',
+        month: '2-digit',
         year: 'numeric'
-      }).replace('.', '')
+      })
 
-      const customerInfo = saleData.customer_name || 'Cliente Genérico'
-      const vendedorInfo = 'Vendedor 1' // Esto debería venir del backend
+      const customerInfo = saleData.customer_name || 'PUBLICO GENERAL'
+      // Find vendedor name from users list - try vendedor_id first, then user_id as fallback
+      const vendedorUserId = saleData.vendedor_id || saleData.user_id
+      const vendedorUser = vendedorUserId ? users.find(u => u.id === vendedorUserId) : null
+      const vendedorInfo = vendedorUser ? (vendedorUser.email.split('@')[0].toUpperCase()) : 'N/A'
 
       const html = `
 <!DOCTYPE html>
@@ -188,97 +193,206 @@ export default function SalesPage() {
   @media print {
     @page {
       size: A4;
-      margin: 0.5cm;
+      margin: 0;
     }
     body {
       margin: 0;
       padding: 0;
-      font-family: 'Courier New', monospace;
-      font-size: 10px;
-      line-height: 1.2;
+      font-family: Arial, sans-serif;
+      font-size: 12px;
+      height: 100vh;
+    }
+    .gold-line {
+      background: linear-gradient(to right, #000000 0%, #fff0bb 2%, #ffdd55 5%, #ffdd55 30%, #000000 35%, #fff0bb 50%, #ffdd55 65%, #000000 70%, #fff0bb 95%, #000000 100%) !important;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+      color-adjust: exact;
+    }
+    th {
+      background-color: #fff0bb !important;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+      color-adjust: exact;
     }
   }
   body {
-    margin: 0;
-    padding: 5px;
-    font-family: 'Courier New', monospace;
-    font-size: 10px;
-    line-height: 1.2;
+    margin: 0 auto;
+    padding: 10px;
+    font-family: Arial, sans-serif;
+    font-size: 12px;
+    color: #000;
+    width: 210mm;
+    height: 297mm;
+    display: flex;
+    flex-direction: column;
+    page-break-after: avoid;
+  }
+  .gold-line { 
+    background: linear-gradient(to right, #000000 0%, #fff0bb 2%, #ffdd55 5%, #ffdd55 30%, #000000 35%, #fff0bb 50%, #ffdd55 65%, #000000 70%, #fff0bb 95%, #000000 100%) !important; 
+    height: 4px; 
+    margin: 10px 0;
+    border: none;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .logo-container {
+    text-align: left;
+    margin-bottom: 5px;
+  }
+  .header-section {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .header-section .logo-container {
+    flex-shrink: 0;
+  }
+  .header-section .header-info {
+    margin-left: auto;
+    margin-top: 0;
+  }
+  .company-name {
+    font-size: 24px;
+    font-weight: bold;
+    color: #8B7355;
+    margin-bottom: 3px;
+  }
+  .company-subtitle {
+    font-size: 14px;
+    font-weight: normal;
+    color: #8B7355;
+    text-align: center;
+    margin-top: -5px;
+  }
+  .header-info {
+    font-size: 9px;
+    margin-top: 10px;
+    text-align: right;
+  }
+  .header-info div {
+    margin-bottom: 2px;
+  }
+  .customer-info {
+    font-size: 11px;
+    margin-top: 15px;
     width: 100%;
   }
-  .center { text-align: center; }
-  .right { text-align: right; }
-  .left { text-align: left; }
-  .bold { font-weight: bold; }
-  .header-title { font-size: 14px; font-weight: bold; }
-  .header-subtitle { font-size: 12px; }
-  .info-section { margin: 8px 0; }
-  .table-header { font-weight: bold; border-bottom: 1px solid #000; margin: 5px 0; }
+  .customer-info td {
+    padding: 2px 4px;
+    border: 1px solid #ddd;
+  }
+  .customer-info td:first-child {
+    width: 30%;
+    font-weight: bold;
+  }
   table {
     width: 100%;
     border-collapse: collapse;
-    margin: 3px 0;
+    margin: 10px 0;
+  }
+  th {
+    background-color: #fff0bb;
+    padding: 3px 4px;
+    text-align: left;
+    font-size: 10px;
+    font-weight: bold;
   }
   td {
-    padding: 1px 2px;
-    vertical-align: top;
+    padding: 2px 4px;
+    font-size: 10px;
+  }
+  .totals {
+    text-align: right;
+    font-size: 11px;
+    margin-top: 15px;
+  }
+  .footer-info {
+    margin-top: 20px;
     font-size: 9px;
   }
-  .total-row { border-top: 1px solid #000; font-weight: bold; }
-  .footer { text-align: center; margin-top: 10px; font-size: 8px; }
+  .policy {
+    font-weight: bold;
+    text-transform: uppercase;
+    margin-top: 10px;
+  }
+  img { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .container {
+    width: 100%;
+    margin: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    page-break-inside: avoid;
+  }
+  .main-content {
+    flex: 1;
+  }
+  .footer-section {
+    margin-top: auto;
+  }
 </style></head>
 <body>
-  <div style="max-width: 190mm; margin: 0 auto;">
-    <!-- Header -->
-    <div class="center info-section">
-      <div class="header-title">Matriz Relación de Mercancía</div>
-      <div style="font-size: 8px; margin-top: 3px; line-height: 1.3;">
-        <div>LUNES - SABADO - 10:00AM - 7:00 PM</div>
-        <div>DOMINGO 10:00AM - 3:30PM</div>
-        <div>WHATSAPP 477 662 1788</div>
-        <div>CALLE: HIDALGO #12 - LOCALES 12 23 Y 24</div>
-        <div>ZONA CENTRO LEÓN, GTO.</div>
+  <div class="container">
+    <!-- Header Section (Logo + Folio) -->
+    <div class="header-section">
+      <!-- Company Logo -->
+      <div class="logo-container">
+        <img src="/logo.png" alt="Logo" style="max-width: 450px; max-height: 250px; display: block;" onerror="this.style.display='none'" />
+      </div>
+
+      <!-- Header Info -->
+      <div class="header-info">
+        <div><strong>FOLIO :</strong> ${String(saleData.id).padStart(6, '0')}</div>
+        <div><strong>FECHA VENTA :</strong> ${formattedDate}</div>
+        <div>HIDALGO #112 ZONA CENTRO, LOCAL 12, 23 Y 24 C.P: 37000. LEÓN, GTO.</div>
+        <div>WhatsApp: 4776621788</div>
       </div>
     </div>
 
-    <!-- Sale Info -->
-    <div class="info-section" style="display: flex; justify-content: space-between;">
-      <div>
-        <div><strong>Folio</strong> ${saleData.id}</div>
-        <div><strong>Fecha</strong> ${formattedDate}</div>
-      </div>
-      <div style="text-align: right;">
-        <div><strong>Vence</strong> ${formattedDate}</div>
-        <div><strong>Alm</strong> Matriz Almacén</div>
-        <div><strong>Vend</strong> ${vendedorInfo}</div>
-        <div><strong>Estatus</strong> Activo</div>
-      </div>
-    </div>
+    <!-- Customer Info -->
+    <table class="customer-info">
+      <tr>
+        <td><strong>Cliente:</strong></td>
+        <td>${customerInfo}</td>
+      </tr>
+      <tr>
+        <td><strong>Teléfono:</strong></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><strong>Dirección:</strong></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><strong>Vendedor:</strong></td>
+        <td>${vendedorInfo}</td>
+      </tr>
+    </table>
 
-    <!-- Client Info -->
-    <div class="info-section" style="margin-bottom: 10px;">
-      <div><strong>Tipo C</strong> ${saleType === 'credito' ? 'Apartado' : 'Contado'}</div>
-      <div><strong>Base Oro</strong> 2135.00</div>
-    </div>
+    <!-- Golden Line 2 -->
+    <div class="gold-line"></div>
 
     <!-- Items Table -->
     <table>
       <thead>
-        <tr class="table-header">
-          <td style="width: 8%;">Un</td>
-          <td style="width: 8%;">Precio</td>
-          <td style="width: 8%;">% Desc</td>
-          <td style="width: 12%;">$ Neto</td>
-          <td style="width: 12%;">Importe</td>
+        <tr>
+          <th style="width: 5%;">Cant.</th>
+          <th style="width: 10%;">Código</th>
+          <th style="width: 45%;">Descripción</th>
+          <th style="width: 12%;">P.Unitario</th>
+          <th style="width: 10%;">Desc.</th>
+          <th style="width: 12%;">Importe</th>
         </tr>
       </thead>
       <tbody>
         ${items.map(item => `
           <tr>
             <td>${item.quantity}</td>
+            <td>${item.code}</td>
+            <td>${item.name}</td>
             <td>$${item.price.toFixed(2)}</td>
-            <td>${item.discount_pct.toFixed(2)}</td>
-            <td>$${item.netPrice.toFixed(2)}</td>
+            <td>$${item.discount_amount.toFixed(2)}</td>
             <td>$${item.total.toFixed(2)}</td>
           </tr>
         `).join('')}
@@ -286,22 +400,25 @@ export default function SalesPage() {
     </table>
 
     <!-- Totals -->
-    <div style="margin-top: 10px; text-align: right;">
-      <div>Sub Total: $${subtotal.toFixed(2)}</div>
-      ${discountAmount > 0 ? `<div>Descuento: $${discountAmount.toFixed(2)}</div>` : ''}
-      ${taxAmount > 0 ? `<div>I.V.A.: $${taxAmount.toFixed(2)}</div>` : ''}
-      <div style="font-size: 12px; font-weight: bold; border-top: 1px solid #000; padding-top: 3px;">
-        Total: $${total.toFixed(2)}
-      </div>
+    <div class="totals">
+      <div><strong>TOTAL :</strong> $${total.toFixed(2)}</div>
+      <div><strong>ABONOS/ANTICIPO :</strong> $0.00</div>
+      <div><strong>SALDO :</strong> $${total.toFixed(2)}</div>
     </div>
 
-    <!-- Footer -->
-    <div class="footer">
-      <div>¡Gracias por su compra!</div>
-      <div style="margin-top: 15px; font-size: 9px; font-weight: bold; border-top: 1px solid #000; padding-top: 8px;">
-        REVISAR SU PRODUCTO AL MOMENTO DE LA COMPRA.<br>
-        NO SE ACEPTAN CAMBIOS NI DEVOLUCIONES EN MERCANCÍA DAÑADA.
+    <!-- Footer Section -->
+    <div class="footer-section">
+      <!-- Footer -->
+      <div class="footer-info">
+        <div>${items.length} Articulos</div>
+        <div class="policy">
+          SU PIEZA TIENE UNA GARANTÍA DE POR VIDA DE AUTENTICIDAD<br>
+          NO SE ACEPTAN CAMBIOS NI DEVOLUCIONES EN MERCANCÍA DAÑADA
+        </div>
       </div>
+
+      <!-- Golden Line 3 -->
+      <div class="gold-line" style="margin-top: 20px;"></div>
     </div>
   </div>
 </body></html>`
@@ -359,6 +476,11 @@ export default function SalesPage() {
         tipo_venta: saleType
       }
 
+      // Add vendedor_id if selected
+      if (vendedorId) {
+        saleData.vendedor_id = vendedorId
+      }
+
       // Add payments only if there are any
       if (payments && payments.length > 0) {
         saleData.payments = payments
@@ -378,7 +500,7 @@ export default function SalesPage() {
       }
 
       const r = await api.post('/sales/', saleData)
-
+      
       setCart([])
       setCash('')
       setCard('')
@@ -386,9 +508,9 @@ export default function SalesPage() {
       setCustomerName('')
       setCustomerPhone('')
       setCustomerAddress('')
-
+      
       setMsg(`✅ Venta realizada. Folio ${r.data.id}. Total $${r.data.total}`)
-
+      
       // Generar ticket de venta
       if (saleType === 'contado') {
         printSaleTicket(r.data, cart, subtotal, discountAmountCalc, taxAmount, total, paid, change)
@@ -455,7 +577,7 @@ export default function SalesPage() {
         {/* Left: Product Selection */}
         <div className="col-span-5 flex flex-col space-y-4">
           <h1 className="text-2xl font-bold">🛒 Punto de Venta</h1>
-
+          
           {/* Barcode Scanner */}
           <div>
             <label className="block text-sm font-medium mb-1">Escanear Código / SKU</label>
@@ -585,7 +707,7 @@ export default function SalesPage() {
                     const discPct = ci.discount_pct || 0
                     const discAmt = lineSub * (discPct / 100)
                     const lineTotal = lineSub - discAmt
-
+                    
                     return (
                       <tr key={ci.product.id} className="border-t">
                         <td className="px-3 py-2 text-sm">{ci.product.name}</td>

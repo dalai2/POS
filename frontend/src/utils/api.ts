@@ -43,6 +43,7 @@ api.interceptors.response.use(
         const r = await axios.post(`${API_URL}/auth/refresh`, { refresh_token: refresh }, { headers: { 'X-Tenant-ID': tenant } })
         localStorage.setItem('access', r.data.access_token)
         localStorage.setItem('refresh', r.data.refresh_token)
+        if (r.data.role) localStorage.setItem('role', r.data.role)
         pendingQueue.forEach(fn => fn())
         pendingQueue = []
         return api(original)

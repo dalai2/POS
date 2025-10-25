@@ -5,12 +5,10 @@ import Layout from '../components/Layout'
 type Product = {
   id: number
   name: string
-  sku?: string
   price: string
   cost_price?: string
   stock: number
   category?: string
-  barcode?: string
   active?: boolean
   // Jewelry fields
   codigo?: string
@@ -52,6 +50,7 @@ export default function ProductsPage() {
   const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'archived'>('all')
   const [editingId, setEditingId] = useState<number | null>(null)
   const [showAddForm, setShowAddForm] = useState(false)
+  const [userRole, setUserRole] = useState<string>(localStorage.getItem('role') || 'cashier')
   const [showImportModal, setShowImportModal] = useState(false)
   const [importFile, setImportFile] = useState<File | null>(null)
   const [importMode, setImportMode] = useState<'add' | 'replace'>('add')
@@ -73,8 +72,6 @@ export default function ProductsPage() {
     precio_manual: '',
     costo: '',
     stock: '0',
-    sku: '',
-    barcode: '',
   })
 
   const hasSession = () => Boolean(localStorage.getItem('access'))
@@ -130,7 +127,7 @@ export default function ProductsPage() {
     setForm({
       name: '', codigo: '', marca: '', modelo: '', color: '', quilataje: '',
       base: '', tipo_joya: '', talla: '', peso_gramos: '', descuento_porcentaje: '',
-      precio_manual: '', costo: '', stock: '0', sku: '', barcode: ''
+      precio_manual: '', costo: '', stock: '0'
     })
   }
 
@@ -156,8 +153,6 @@ export default function ProductsPage() {
         precio_venta: roundedPrice,
         price: roundedPrice,
         stock: parseInt(form.stock) || 0,
-        sku: form.sku || undefined,
-        barcode: form.barcode || undefined,
         active: true
       })
       resetForm()
@@ -191,8 +186,6 @@ export default function ProductsPage() {
         precio_venta: roundedPrice,
         price: roundedPrice,
         stock: parseInt(form.stock) || 0,
-        sku: form.sku || undefined,
-        barcode: form.barcode || undefined,
         active: true
       })
       setEditingId(null)
@@ -221,8 +214,6 @@ export default function ProductsPage() {
       precio_manual: p.precio_manual || '',
       costo: p.costo || p.cost_price || '',
       stock: String(p.stock),
-      sku: p.sku || '',
-      barcode: p.barcode || '',
     })
     setShowAddForm(true)
   }
@@ -297,24 +288,28 @@ export default function ProductsPage() {
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-bold text-gray-800">💍 Productos/Joyería</h1>
           <div className="flex gap-2">
-            <button
-              onClick={handleExportProducts}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
-            >
-              📤 Exportar Productos
-            </button>
-            <button
-              onClick={() => setShowImportModal(true)}
-              className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700"
-            >
-              📤 Importar Excel
-            </button>
-            <button
-              onClick={() => { setShowAddForm(!showAddForm); resetForm(); setEditingId(null); }}
-              className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
-            >
-              {showAddForm ? 'Cancelar' : '+ Nuevo Producto'}
-            </button>
+            {(userRole === 'owner' || userRole === 'admin') && (
+              <>
+                <button
+                  onClick={handleExportProducts}
+                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                >
+                  📤 Exportar Productos
+                </button>
+                <button
+                  onClick={() => setShowImportModal(true)}
+                  className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700"
+                >
+                  📤 Importar Excel
+                </button>
+                <button
+                  onClick={() => { setShowAddForm(!showAddForm); resetForm(); setEditingId(null); }}
+                  className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
+                >
+                  {showAddForm ? 'Cancelar' : '+ Nuevo Producto'}
+                </button>
+              </>
+            )}
           </div>
         </div>
 
@@ -342,7 +337,7 @@ export default function ProductsPage() {
         </div>
 
         {/* Import Modal */}
-        {showImportModal && (
+        {showImportModal && (userRole === 'owner' || userRole === 'admin') && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full">
               <h2 className="text-xl font-semibold mb-4">Importar Productos desde Excel</h2>
@@ -428,7 +423,7 @@ export default function ProductsPage() {
         )}
 
         {/* Add/Edit Form */}
-        {showAddForm && (
+        {showAddForm && (userRole === 'owner' || userRole === 'admin') && (
           <div className="bg-white rounded-lg shadow-lg p-4">
             <h2 className="text-lg font-semibold mb-3">
               {editingId ? 'Editar Producto' : 'Nuevo Producto'}
@@ -602,23 +597,6 @@ export default function ProductsPage() {
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">SKU</label>
-                <input
-                  className="w-full border border-gray-300 rounded-lg px-3 py-1.5"
-                  value={form.sku}
-                  onChange={e => setForm({...form, sku: e.target.value})}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Código de Barras</label>
-                <input
-                  className="w-full border border-gray-300 rounded-lg px-3 py-1.5"
-                  value={form.barcode}
-                  onChange={e => setForm({...form, barcode: e.target.value})}
-                />
-              </div>
             </div>
 
             <div className="mt-4 flex gap-2">
@@ -682,20 +660,27 @@ export default function ProductsPage() {
                   )}
                 </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm">{p.stock}</td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm">
-                      <button
-                        onClick={() => startEdit(p)}
-                        className="text-blue-600 hover:text-blue-900 mr-3"
-                      >
-                        Editar
-                      </button>
-                      <button
-                        onClick={() => remove(p.id)}
-                        className="text-red-600 hover:text-red-900"
-                      >
-                        Eliminar
-                      </button>
-                </td>
+                    {(userRole === 'owner' || userRole === 'admin') && (
+                      <td className="px-4 py-3 whitespace-nowrap text-sm">
+                        <button
+                          onClick={() => startEdit(p)}
+                          className="text-blue-600 hover:text-blue-900 mr-3"
+                        >
+                          Editar
+                        </button>
+                        <button
+                          onClick={() => remove(p.id)}
+                          className="text-red-600 hover:text-red-900"
+                        >
+                          Eliminar
+                        </button>
+                      </td>
+                    )}
+                    {userRole === 'cashier' && (
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-400">
+                        Solo lectura
+                      </td>
+                    )}
               </tr>
                 ))
               )}
