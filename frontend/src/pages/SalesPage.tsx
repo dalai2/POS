@@ -36,7 +36,7 @@ export default function SalesPage() {
   // Jewelry store fields
   const [saleType, setSaleType] = useState<'contado' | 'credito'>('contado')
   const [vendedorId, setVendedorId] = useState<number | null>(null)
-  const [customerName, setCustomerName] = useState('Cliente Genérico')
+  const [customerName, setCustomerName] = useState('PUBLICO GENERAL')
   const [customerPhone, setCustomerPhone] = useState('')
   const [customerAddress, setCustomerAddress] = useState('')
   
@@ -486,17 +486,14 @@ export default function SalesPage() {
         saleData.payments = payments
       }
 
-      // Add customer info only for credit sales
-      if (saleType === 'credito') {
-        if (customerName.trim()) {
-          saleData.customer_name = customerName.trim()
-        }
-        if (customerPhone.trim()) {
-          saleData.customer_phone = customerPhone.trim()
-        }
-        if (customerAddress.trim()) {
-          saleData.customer_address = customerAddress.trim()
-        }
+      // Add customer info
+      if (customerName.trim()) {
+        saleData.customer_name = customerName.trim()
+      }
+      
+      // Add phone for all sales
+      if (customerPhone.trim()) {
+        saleData.customer_phone = customerPhone.trim()
       }
 
       const r = await api.post('/sales/', saleData)
@@ -653,32 +650,26 @@ export default function SalesPage() {
             </div>
           </div>
 
-          {/* Customer Info (for credit sales) */}
-          {saleType === 'credito' && (
-            <div className="bg-amber-50 rounded-lg p-4">
-              <h3 className="font-semibold mb-2">Información del Cliente</h3>
-              <div className="grid grid-cols-3 gap-3">
-                <input
-                  className="border border-gray-300 rounded-lg px-3 py-2"
-                  placeholder="Nombre *"
-                  value={customerName}
-                  onChange={e => setCustomerName(e.target.value)}
-                />
-                <input
-                  className="border border-gray-300 rounded-lg px-3 py-2"
-                  placeholder="Teléfono"
-                  value={customerPhone}
-                  onChange={e => setCustomerPhone(e.target.value)}
-                />
-                <input
-                  className="border border-gray-300 rounded-lg px-3 py-2"
-                  placeholder="Dirección"
-                  value={customerAddress}
-                  onChange={e => setCustomerAddress(e.target.value)}
-                />
-              </div>
+          {/* Customer Info */}
+          <div className="bg-amber-50 rounded-lg p-4">
+            <h3 className="font-semibold mb-2">
+              {saleType === 'credito' ? 'Información del Cliente' : 'Cliente'}
+            </h3>
+            <div className="grid grid-cols-2 gap-3">
+              <input
+                className="border border-gray-300 rounded-lg px-3 py-2"
+                placeholder="Nombre *"
+                value={customerName}
+                onChange={e => setCustomerName(e.target.value)}
+              />
+              <input
+                className="border border-gray-300 rounded-lg px-3 py-2"
+                placeholder="Teléfono"
+                value={customerPhone}
+                onChange={e => setCustomerPhone(e.target.value)}
+              />
             </div>
-          )}
+          </div>
 
           {/* Cart Items */}
           <div className="">
