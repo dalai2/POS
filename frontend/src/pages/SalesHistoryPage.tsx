@@ -162,7 +162,6 @@ export default function SalesHistoryPage() {
     <!-- Footer -->
     <div class="footer">
       <div>¡Gracias por su compra!</div>
-      <div>JOYERÍA EL DIAMANTE</div>
     </div>
   </div>
 </body></html>`
