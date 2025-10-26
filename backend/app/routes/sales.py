@@ -41,6 +41,11 @@ class SaleOutItem(BaseModel):
         from_attributes = True
 
 
+class PaymentOut(BaseModel):
+    method: str
+    amount: float
+
+
 class SaleOut(BaseModel):
     id: int
     user_id: int | None = None
@@ -64,6 +69,9 @@ class SaleOut(BaseModel):
     customer_address: str | None = None
     amount_paid: condecimal(max_digits=10, decimal_places=2) | None = None
     credit_status: str | None = None
+    
+    # Payment information
+    payments: List[PaymentOut] | None = None
 
     class Config:
         from_attributes = True
@@ -175,7 +183,36 @@ async def create_sale(
 
     db.commit()
     db.refresh(sale)
-    return sale
+    
+    # Get payments for this sale
+    payments_list = []
+    if payments:
+        payments_list = [{"method": p.method, "amount": float(p.amount)} for p in payments]
+    
+    # Convert sale to SaleOut with payments
+    sale_out = SaleOut(
+        id=sale.id,
+        user_id=sale.user_id,
+        subtotal=sale.subtotal,
+        discount_amount=sale.discount_amount,
+        tax_rate=sale.tax_rate,
+        tax_amount=sale.tax_amount,
+        total=sale.total,
+        items=db.query(SaleItem).filter(SaleItem.sale_id == sale.id).all(),
+        created_at=sale.created_at,
+        tipo_venta=sale.tipo_venta,
+        vendedor_id=sale.vendedor_id,
+        utilidad=sale.utilidad,
+        total_cost=sale.total_cost,
+        customer_name=sale.customer_name,
+        customer_phone=sale.customer_phone,
+        customer_address=sale.customer_address,
+        amount_paid=sale.amount_paid,
+        credit_status=sale.credit_status,
+        payments=payments_list
+    )
+    
+    return sale_out
 
 
 @router.post("/{sale_id}/return", response_model=SaleOut)
@@ -231,7 +268,37 @@ def get_sale(
     sale = db.query(Sale).filter(Sale.id == sale_id, Sale.tenant_id == tenant.id).first()
     if not sale:
         raise HTTPException(status_code=404, detail="No encontrado")
-    return sale
+    
+    # Get payments for this sale
+    payments_list = []
+    payments = db.query(Payment).filter(Payment.sale_id == sale.id).all()
+    if payments:
+        payments_list = [{"method": p.method, "amount": float(p.amount)} for p in payments]
+    
+    # Return sale with payments
+    sale_out = SaleOut(
+        id=sale.id,
+        user_id=sale.user_id,
+        subtotal=sale.subtotal,
+        discount_amount=sale.discount_amount,
+        tax_rate=sale.tax_rate,
+        tax_amount=sale.tax_amount,
+        total=sale.total,
+        items=db.query(SaleItem).filter(SaleItem.sale_id == sale.id).all(),
+        created_at=sale.created_at,
+        tipo_venta=sale.tipo_venta,
+        vendedor_id=sale.vendedor_id,
+        utilidad=sale.utilidad,
+        total_cost=sale.total_cost,
+        customer_name=sale.customer_name,
+        customer_phone=sale.customer_phone,
+        customer_address=sale.customer_address,
+        amount_paid=sale.amount_paid,
+        credit_status=sale.credit_status,
+        payments=payments_list
+    )
+    
+    return sale_out
 
 
 class SaleSummary(BaseModel):

@@ -39,6 +39,8 @@ export default function SalesPage() {
   const [customerName, setCustomerName] = useState('PUBLICO GENERAL')
   const [customerPhone, setCustomerPhone] = useState('')
   const [customerAddress, setCustomerAddress] = useState('')
+  const [initialPayment, setInitialPayment] = useState('')
+  const [initialPaymentMethod, setInitialPaymentMethod] = useState('efectivo')
   
   const searchRef = useRef<HTMLInputElement | null>(null)
   const barcodeRef = useRef<HTMLInputElement | null>(null)
@@ -209,6 +211,11 @@ export default function SalesPage() {
       const vendedorUserId = saleData.vendedor_id || saleData.user_id
       const vendedorUser = vendedorUserId ? users.find(u => u.id === vendedorUserId) : null
       const vendedorInfo = vendedorUser ? (vendedorUser.email.split('@')[0].toUpperCase()) : 'N/A'
+      
+      // Get payment information
+      const paymentInfo = saleData.payments || []
+      const efectivoPaid = paymentInfo.filter((p: any) => p.method === 'cash' || p.method === 'efectivo').reduce((sum: number, p: any) => sum + parseFloat(p.amount), 0)
+      const tarjetaPaid = paymentInfo.filter((p: any) => p.method === 'card' || p.method === 'tarjeta').reduce((sum: number, p: any) => sum + parseFloat(p.amount), 0)
 
       const html = `
 <!DOCTYPE html>
@@ -426,6 +433,8 @@ export default function SalesPage() {
     <!-- Totals -->
     <div class="totals">
       <div><strong>TOTAL :</strong> $${total.toFixed(2)}</div>
+      ${efectivoPaid > 0 ? `<div><strong>EFECTIVO :</strong> $${efectivoPaid.toFixed(2)}</div>` : ''}
+      ${tarjetaPaid > 0 ? `<div><strong>TARJETA :</strong> $${tarjetaPaid.toFixed(2)}</div>` : ''}
       <div><strong>ABONOS/ANTICIPO :</strong> $0.00</div>
       <div><strong>SALDO :</strong> $${total.toFixed(2)}</div>
     </div>
@@ -535,6 +544,21 @@ export default function SalesPage() {
 
       const r = await api.post('/sales/', saleData)
       
+      // If it's a credit sale with initial payment, register it
+      if (saleType === 'credito' && initialPayment && parseFloat(initialPayment) > 0) {
+        try {
+          await api.post('/credits/payments', {
+            sale_id: r.data.id,
+            amount: parseFloat(initialPayment),
+            payment_method: initialPaymentMethod,
+            notes: 'Abono inicial'
+          })
+        } catch (paymentError) {
+          console.error('Error registering initial payment:', paymentError)
+          // Continue anyway - the sale was created successfully
+        }
+      }
+      
       setCart([])
       setCash('')
       setCard('')
@@ -542,6 +566,8 @@ export default function SalesPage() {
       setCustomerName('')
       setCustomerPhone('')
       setCustomerAddress('')
+      setInitialPayment('')
+      setInitialPaymentMethod('efectivo')
       
       setMsg(`✅ Venta realizada. Folio ${r.data.id}. Total $${r.data.total}`)
       
@@ -706,6 +732,32 @@ export default function SalesPage() {
                   onChange={e => setCustomerPhone(e.target.value)}
                 />
             </div>
+            {saleType === 'credito' && (
+              <div className="grid grid-cols-2 gap-3 mt-3">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Abono Inicial</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                    placeholder="0.00"
+                    value={initialPayment}
+                    onChange={e => setInitialPayment(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Método de Pago</label>
+                  <select
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                    value={initialPaymentMethod}
+                    onChange={e => setInitialPaymentMethod(e.target.value)}
+                  >
+                    <option value="efectivo">Efectivo</option>
+                    <option value="tarjeta">Tarjeta</option>
+                  </select>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Cart Items */}

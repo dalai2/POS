@@ -72,6 +72,8 @@ interface DetailedCorteCajaReport {
     estado: string;
     tipo: string;
     vendedor: string;
+    efectivo: number;
+    tarjeta: number;
   }>;
 }
 
@@ -560,6 +562,8 @@ export default function ReportsPage() {
           <th>Cliente</th>
           <th>Piezas</th>
           <th>Total</th>
+          <th>Efectivo</th>
+          <th>Tarjeta</th>
           <th>Estado</th>
           <th>Tipo</th>
           <th>Vendedor</th>
@@ -572,6 +576,8 @@ export default function ReportsPage() {
           <td>${s.cliente}</td>
           <td>${s.piezas}</td>
           <td>$${s.total.toFixed(2)}</td>
+          <td>$${s.efectivo.toFixed(2)}</td>
+          <td>$${s.tarjeta.toFixed(2)}</td>
           <td>${s.estado}</td>
           <td>${s.tipo}</td>
           <td>${s.vendedor}</td>
@@ -1007,6 +1013,8 @@ export default function ReportsPage() {
                         <th className="px-2 py-2 text-left text-xs font-medium text-gray-500">Cliente</th>
                         <th className="px-2 py-2 text-center text-xs font-medium text-gray-500">Piezas</th>
                         <th className="px-2 py-2 text-right text-xs font-medium text-gray-500">Total</th>
+                        <th className="px-2 py-2 text-right text-xs font-medium text-gray-500">Efectivo</th>
+                        <th className="px-2 py-2 text-right text-xs font-medium text-gray-500">Tarjeta</th>
                         <th className="px-2 py-2 text-center text-xs font-medium text-gray-500">Estado</th>
                         <th className="px-2 py-2 text-center text-xs font-medium text-gray-500">Tipo</th>
                         <th className="px-2 py-2 text-left text-xs font-medium text-gray-500">Vendedor</th>
@@ -1019,6 +1027,8 @@ export default function ReportsPage() {
                           <td className="px-2 py-2 text-xs">{sale.cliente}</td>
                           <td className="px-2 py-2 text-center text-xs">{sale.piezas}</td>
                           <td className="px-2 py-2 text-right text-xs font-bold">${sale.total.toFixed(2)}</td>
+                          <td className="px-2 py-2 text-right text-xs">${sale.efectivo.toFixed(2)}</td>
+                          <td className="px-2 py-2 text-right text-xs">${sale.tarjeta.toFixed(2)}</td>
                           <td className="px-2 py-2 text-center text-xs">{sale.estado}</td>
                           <td className="px-2 py-2 text-center text-xs">{sale.tipo}</td>
                           <td className="px-2 py-2 text-xs">{sale.vendedor}</td>

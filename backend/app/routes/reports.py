@@ -117,9 +117,9 @@ def get_corte_de_caja(
             ventas_contado_count += 1
             ventas_contado_total += float(sale.total)
             
-            # Get payment method for this sale
-            payment = db.query(Payment).filter(Payment.sale_id == sale.id).first()
-            if payment:
+            # Get all payment methods for this sale
+            payments = db.query(Payment).filter(Payment.sale_id == sale.id).all()
+            for payment in payments:
                 if payment.method == "efectivo" or payment.method == "cash":
                     efectivo_ventas += float(payment.amount)
                 elif payment.method == "tarjeta" or payment.method == "card":
@@ -241,6 +241,8 @@ class SaleDetailReport(BaseModel):
     estado: str
     tipo: str
     vendedor: str
+    efectivo: float = 0.0
+    tarjeta: float = 0.0
 
 
 class DetailedCorteCajaReport(BaseModel):
@@ -422,6 +424,11 @@ def get_detailed_corte_caja(
         daily_stats[sale_date]["venta"] += float(sale.total)
         daily_stats[sale_date]["utilidad"] += float(sale.utilidad or 0)
 
+        # Calculate payment methods for this sale
+        payments = db.query(Payment).filter(Payment.sale_id == sale.id).all()
+        efectivo_amount = sum(float(p.amount) for p in payments if p.method in ['efectivo', 'cash'])
+        tarjeta_amount = sum(float(p.amount) for p in payments if p.method in ['tarjeta', 'card'])
+        
         # Sale details
         sales_details.append({
             "id": sale.id,
@@ -431,7 +438,9 @@ def get_detailed_corte_caja(
             "total": float(sale.total),
             "estado": "Pagada" if sale.tipo_venta == "contado" else "Crédito",
             "tipo": sale.tipo_venta,
-            "vendedor": vendedor
+            "vendedor": vendedor,
+            "efectivo": efectivo_amount,
+            "tarjeta": tarjeta_amount
         })
 
     # Convert vendor_stats to list

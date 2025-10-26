@@ -86,6 +86,11 @@ export default function SalesHistoryPage() {
       const vendedorUserId = saleData.vendedor_id || saleData.user_id
       const vendedorUser = vendedorUserId ? users.find(u => u.id === vendedorUserId) : null
       const vendedorInfo = vendedorUser ? (vendedorUser.email.split('@')[0].toUpperCase()) : 'N/A'
+      
+      // Get payment information
+      const paymentInfo = saleData.payments || []
+      const efectivoPaid = paymentInfo.filter((p: any) => p.method === 'cash' || p.method === 'efectivo').reduce((sum: number, p: any) => sum + parseFloat(p.amount), 0)
+      const tarjetaPaid = paymentInfo.filter((p: any) => p.method === 'card' || p.method === 'tarjeta').reduce((sum: number, p: any) => sum + parseFloat(p.amount), 0)
 
       const subtotal = parseFloat(saleData.subtotal || '0')
       const discountAmount = parseFloat(saleData.discount_amount || '0')
@@ -312,6 +317,8 @@ export default function SalesHistoryPage() {
     <!-- Totals -->
     <div class="totals">
       <div><strong>TOTAL :</strong> $${total.toFixed(2)}</div>
+      ${efectivoPaid > 0 ? `<div><strong>EFECTIVO :</strong> $${efectivoPaid.toFixed(2)}</div>` : ''}
+      ${tarjetaPaid > 0 ? `<div><strong>TARJETA :</strong> $${tarjetaPaid.toFixed(2)}</div>` : ''}
       <div><strong>ABONOS/ANTICIPO :</strong> $0.00</div>
       <div><strong>SALDO :</strong> $${total.toFixed(2)}</div>
     </div>

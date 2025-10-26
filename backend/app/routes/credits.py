@@ -76,9 +76,23 @@ def get_credit_sales(
     # Add payments and balance to each sale
     result = []
     for sale in sales:
-        payments = db.query(CreditPayment).filter(
+        payments_query = db.query(CreditPayment).filter(
             CreditPayment.sale_id == sale.id
         ).order_by(CreditPayment.created_at.desc()).all()
+        
+        # Convert payments to dict format
+        payments = [
+            {
+                "id": p.id,
+                "sale_id": p.sale_id,
+                "amount": float(p.amount),
+                "payment_method": p.payment_method,
+                "user_id": p.user_id,
+                "notes": p.notes,
+                "created_at": p.created_at.isoformat()
+            }
+            for p in payments_query
+        ]
         
         balance = float(sale.total) - float(sale.amount_paid or 0)
         
@@ -146,7 +160,17 @@ def register_payment(
     
     db.commit()
     db.refresh(payment)
-    return payment
+    
+    # Return payment as dict
+    return {
+        "id": payment.id,
+        "sale_id": payment.sale_id,
+        "amount": float(payment.amount),
+        "payment_method": payment.payment_method,
+        "user_id": payment.user_id,
+        "notes": payment.notes,
+        "created_at": payment.created_at.isoformat()
+    }
 
 
 @router.get("/payments/{sale_id}", response_model=List[CreditPaymentResponse])
@@ -166,10 +190,24 @@ def get_sale_payments(
     if not sale:
         raise HTTPException(status_code=404, detail="Sale not found")
     
-    payments = db.query(CreditPayment).filter(
+    payments_query = db.query(CreditPayment).filter(
         CreditPayment.sale_id == sale_id,
         CreditPayment.tenant_id == tenant.id
     ).order_by(CreditPayment.created_at.desc()).all()
+    
+    # Convert payments to dict format
+    payments = [
+        {
+            "id": p.id,
+            "sale_id": p.sale_id,
+            "amount": float(p.amount),
+            "payment_method": p.payment_method,
+            "user_id": p.user_id,
+            "notes": p.notes,
+            "created_at": p.created_at.isoformat()
+        }
+        for p in payments_query
+    ]
     
     return payments
 
