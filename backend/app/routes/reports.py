@@ -16,6 +16,17 @@ from app.models.credit_payment import CreditPayment
 router = APIRouter()
 
 
+class SalesByVendorReport(BaseModel):
+    vendedor_id: int
+    vendedor_name: str
+    sales_count: int
+    contado_count: int
+    credito_count: int
+    total_contado: float
+    total_credito: float
+    total_profit: float
+
+
 class CorteDeCajaReport(BaseModel):
     start_date: str
     end_date: str
@@ -212,17 +223,6 @@ def get_corte_de_caja(
         "returns_total": returns_total,
         "vendedores": vendedores
     }
-
-
-class SalesByVendorReport(BaseModel):
-    vendedor_id: int
-    vendedor_name: str
-    sales_count: int
-    contado_count: int
-    credito_count: int
-    total_contado: float
-    total_credito: float
-    total_profit: float
 
 
 class DailySummaryReport(BaseModel):
