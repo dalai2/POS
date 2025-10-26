@@ -214,8 +214,10 @@ export default function SalesPage() {
       
       // Get payment information
       const paymentInfo = saleData.payments || []
+      console.log('Payment info:', paymentInfo)
       const efectivoPaid = paymentInfo.filter((p: any) => p.method === 'cash' || p.method === 'efectivo').reduce((sum: number, p: any) => sum + parseFloat(p.amount), 0)
       const tarjetaPaid = paymentInfo.filter((p: any) => p.method === 'card' || p.method === 'tarjeta').reduce((sum: number, p: any) => sum + parseFloat(p.amount), 0)
+      console.log('Efectivo paid:', efectivoPaid, 'Tarjeta paid:', tarjetaPaid)
 
       const html = `
 <!DOCTYPE html>
