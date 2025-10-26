@@ -14,22 +14,24 @@ from app.models.credit_payment import CreditPayment
 def seed_jewelry_demo(db: Session):
     """Seed basic data for jewelry store"""
     
-    # Check if Andani tenant exists
-    tenant = db.query(Tenant).filter(Tenant.slug == 'andani').first()
-    if not tenant:
-        tenant = Tenant(name='Andani', slug='andani')
-        db.add(tenant)
-        db.flush()
-        
-        # Create owner user
-        owner = User(
-            email='owner@demo.com',
-            hashed_password=hash_password('secret123'),
-            role='owner',
-            tenant_id=tenant.id
-        )
-        db.add(owner)
-        db.flush()
+    # Always create the Andani tenant
+    print("Creating Andani tenant...")
+    tenant = Tenant(name='Andani', slug='andani')
+    db.add(tenant)
+    db.flush()
+    print(f"Tenant created with ID: {tenant.id}")
+    
+    # Create owner user
+    print("Creating owner user...")
+    owner = User(
+        email='owner@demo.com',
+        hashed_password=hash_password('secret123'),
+        role='owner',
+        tenant_id=tenant.id
+    )
+    db.add(owner)
+    db.flush()
+    print(f"Owner user created with ID: {owner.id}")
     
     # Create metal rates
     metal_rates_data = [
@@ -43,20 +45,16 @@ def seed_jewelry_demo(db: Session):
         ('plata_silver', 12.25),
     ]
     
+    print("Creating metal rates...")
     for metal_type, rate in metal_rates_data:
-        existing = db.query(MetalRate).filter(
-            MetalRate.tenant_id == tenant.id,
-            MetalRate.metal_type == metal_type
-        ).first()
-        
-        if not existing:
-            metal_rate = MetalRate(
-                tenant_id=tenant.id,
-                metal_type=metal_type,
-                rate_per_gram=rate
-            )
-            db.add(metal_rate)
+        metal_rate = MetalRate(
+            tenant_id=tenant.id,
+            metal_type=metal_type,
+            rate_per_gram=rate
+        )
+        db.add(metal_rate)
+        print(f"  - {metal_type}: ${rate}/g")
     
     db.commit()
-    print(f"Basic data seeded for tenant '{tenant.slug}'")
+    print(f"\nBasic data seeded successfully for tenant '{tenant.slug}'")
 

@@ -502,8 +502,11 @@ export default function ProductsPage() {
                   value={form.quilataje}
                   onChange={e => setForm({...form, quilataje: e.target.value})}
                 >
-                  {metalTypes.map(mt => (
-                    <option key={mt.value} value={mt.value}>{mt.label}</option>
+                  <option value="">Sin quilataje</option>
+                  {metalRates.map(mr => (
+                    <option key={mr.id} value={mr.metal_type}>
+                      {mr.metal_type} - ${mr.rate_per_gram}/g
+                    </option>
                   ))}
         </select>
       </div>
