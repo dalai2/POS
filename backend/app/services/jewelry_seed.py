@@ -16,7 +16,7 @@ def seed_jewelry_demo(db: Session):
     
     # Always create the Andani tenant
     print("Creating Andani tenant...")
-    tenant = Tenant(name='Andani', slug='andani')
+    tenant = Tenant(name='andani', slug='andani')
     db.add(tenant)
     db.flush()
     print(f"Tenant created with ID: {tenant.id}")

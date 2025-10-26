@@ -9,7 +9,7 @@ export const api = axios.create({
 
 api.interceptors.request.use((config) => {
   const access = localStorage.getItem('access')
-  let tenant = localStorage.getItem('tenant') || 'demo'
+  let tenant = localStorage.getItem('tenant') || 'andani'
   if (TENANT_FROM_SUBDOMAIN) {
     try {
       const host = window.location.host.split(':')[0]
