@@ -96,6 +96,20 @@ export default function SalesHistoryPage() {
       const discountAmount = parseFloat(saleData.discount_amount || '0')
       const taxAmount = parseFloat(saleData.tax_amount || '0')
       const total = parseFloat(saleData.total || '0')
+      
+      // Calculate abono and saldo based on sale type
+      let abonoAmount = 0
+      let saldoAmount = 0
+      
+      if (saleData.tipo_venta === 'contado') {
+        // For contado sales, show total paid and saldo = 0
+        abonoAmount = efectivoPaid + tarjetaPaid
+        saldoAmount = 0
+      } else {
+        // For credito sales, show total paid and remaining balance
+        abonoAmount = efectivoPaid + tarjetaPaid
+        saldoAmount = total - abonoAmount
+      }
 
       const html = `
 <!DOCTYPE html>
@@ -320,8 +334,8 @@ export default function SalesHistoryPage() {
       <div><strong>TOTAL :</strong> $${total.toFixed(2)}</div>
       ${efectivoPaid > 0 ? `<div><strong>EFECTIVO :</strong> $${efectivoPaid.toFixed(2)}</div>` : ''}
       ${tarjetaPaid > 0 ? `<div><strong>TARJETA :</strong> $${tarjetaPaid.toFixed(2)}</div>` : ''}
-      <div><strong>ABONOS/ANTICIPO :</strong> $0.00</div>
-      <div><strong>SALDO :</strong> $${total.toFixed(2)}</div>
+      <div><strong>ABONOS/ANTICIPO :</strong> $${abonoAmount.toFixed(2)}</div>
+      <div><strong>SALDO :</strong> $${saldoAmount.toFixed(2)}</div>
     </div>
 
     <!-- Footer Section -->

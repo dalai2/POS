@@ -242,9 +242,19 @@ export default function SalesPage() {
       const tarjetaPaid = paymentInfo.filter((p: any) => p.method === 'card' || p.method === 'tarjeta').reduce((sum: number, p: any) => sum + parseFloat(p.amount), 0)
       console.log('Efectivo paid:', efectivoPaid, 'Tarjeta paid:', tarjetaPaid, 'Initial payment:', initialPayment)
       
-      // Calculate abono from initial payment or payments
-      const abonoAmount = initialPayment > 0 ? initialPayment : (efectivoPaid + tarjetaPaid)
-      const saldoAmount = total - abonoAmount
+      // Calculate abono and saldo based on sale type
+      let abonoAmount = 0
+      let saldoAmount = 0
+      
+      if (saleData.tipo_venta === 'contado') {
+        // For contado sales, show total paid and saldo = 0
+        abonoAmount = efectivoPaid + tarjetaPaid
+        saldoAmount = 0
+      } else {
+        // For credito sales, show initial payment and remaining balance
+        abonoAmount = initialPayment > 0 ? initialPayment : (efectivoPaid + tarjetaPaid)
+        saldoAmount = total - abonoAmount
+      }
 
       const html = `
 <!DOCTYPE html>
