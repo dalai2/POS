@@ -28,6 +28,7 @@ export default function CreditsPage() {
   const [credits, setCredits] = useState<CreditSale[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>('');
+  const [searchFilter, setSearchFilter] = useState<string>('');
   const [selectedCredit, setSelectedCredit] = useState<CreditSale | null>(null);
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   const [paymentData, setPaymentData] = useState({
@@ -92,6 +93,15 @@ export default function CreditsPage() {
     setShowPaymentForm(true);
   };
 
+  // Filter credits by search term
+  const filteredCredits = credits.filter(credit => {
+    if (!searchFilter.trim()) return true;
+    const searchLower = searchFilter.toLowerCase();
+    const customerName = (credit.customer_name || '').toLowerCase();
+    const customerPhone = (credit.customer_phone || '').toLowerCase();
+    return customerName.includes(searchLower) || customerPhone.includes(searchLower);
+  });
+
   if (loading) {
     return (
       <Layout>
@@ -109,6 +119,13 @@ export default function CreditsPage() {
           <h1 className="text-3xl font-bold text-gray-800">Gestión de Abonos</h1>
           
           <div className="flex gap-2">
+            <input
+              type="text"
+              placeholder="Buscar por nombre o teléfono..."
+              value={searchFilter}
+              onChange={(e) => setSearchFilter(e.target.value)}
+              className="border border-gray-300 rounded-lg px-4 py-2 min-w-[300px]"
+            />
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
@@ -240,8 +257,14 @@ export default function CreditsPage() {
                       No hay abonos registrados
                     </td>
                   </tr>
+                ) : filteredCredits.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="px-6 py-4 text-center text-gray-500">
+                      No se encontraron resultados para tu búsqueda
+                    </td>
+                  </tr>
                 ) : (
-                  credits.map((credit) => (
+                  filteredCredits.map((credit) => (
                     <tr key={credit.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="font-medium text-gray-900">
@@ -305,21 +328,27 @@ export default function CreditsPage() {
         {/* Summary */}
         <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-sm font-medium text-gray-500">Total Abonos</h3>
+            <h3 className="text-sm font-medium text-gray-500">
+              {searchFilter ? 'Total Abonos (Filtrados)' : 'Total Abonos'}
+            </h3>
             <p className="text-2xl font-bold text-gray-900">
-              ${credits.reduce((sum, c) => sum + c.total, 0).toFixed(2)}
+              ${filteredCredits.reduce((sum, c) => sum + c.total, 0).toFixed(2)}
             </p>
           </div>
           <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-sm font-medium text-gray-500">Total Pagado</h3>
+            <h3 className="text-sm font-medium text-gray-500">
+              {searchFilter ? 'Total Pagado (Filtrado)' : 'Total Pagado'}
+            </h3>
             <p className="text-2xl font-bold text-green-600">
-              ${credits.reduce((sum, c) => sum + c.amount_paid, 0).toFixed(2)}
+              ${filteredCredits.reduce((sum, c) => sum + c.amount_paid, 0).toFixed(2)}
             </p>
           </div>
           <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-sm font-medium text-gray-500">Saldo Pendiente</h3>
+            <h3 className="text-sm font-medium text-gray-500">
+              {searchFilter ? 'Saldo Pendiente (Filtrado)' : 'Saldo Pendiente'}
+            </h3>
             <p className="text-2xl font-bold text-red-600">
-              ${credits.reduce((sum, c) => sum + c.balance, 0).toFixed(2)}
+              ${filteredCredits.reduce((sum, c) => sum + c.balance, 0).toFixed(2)}
             </p>
           </div>
         </div>
