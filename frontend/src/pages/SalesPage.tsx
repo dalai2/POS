@@ -5,6 +5,7 @@ import { api } from '../utils/api'
 type Product = { 
   id: number
   name: string
+  codigo?: string
   sku?: string
   price: string
   cost_price?: string
@@ -41,6 +42,10 @@ export default function SalesPage() {
   const [customerAddress, setCustomerAddress] = useState('')
   const [initialPayment, setInitialPayment] = useState('')
   const [initialPaymentMethod, setInitialPaymentMethod] = useState('efectivo')
+  
+  // Modal de confirmación
+  const [showConfirmModal, setShowConfirmModal] = useState(false)
+  const [productToAdd, setProductToAdd] = useState<Product | null>(null)
   
   const searchRef = useRef<HTMLInputElement | null>(null)
   const barcodeRef = useRef<HTMLInputElement | null>(null)
@@ -96,15 +101,30 @@ export default function SalesPage() {
   }
 
   const addToCart = (p: Product) => {
+    setProductToAdd(p)
+    setShowConfirmModal(true)
+  }
+
+  const confirmAddToCart = () => {
+    if (!productToAdd) return
+    
     setCart(prev => {
-      const idx = prev.findIndex(ci => ci.product.id === p.id)
+      const idx = prev.findIndex(ci => ci.product.id === productToAdd.id)
       if (idx >= 0) {
         const next = [...prev]
         next[idx] = { ...next[idx], quantity: next[idx].quantity + 1 }
         return next
       }
-      return [...prev, { product: p, quantity: 1, discount_pct: 0 }]
+      return [...prev, { product: productToAdd, quantity: 1, discount_pct: 0 }]
     })
+    
+    setShowConfirmModal(false)
+    setProductToAdd(null)
+  }
+
+  const cancelAddToCart = () => {
+    setShowConfirmModal(false)
+    setProductToAdd(null)
   }
 
   const updateQty = (id: number, qty: number) => {
@@ -677,55 +697,8 @@ export default function SalesPage() {
   return (
     <Layout>
       <div className="grid grid-cols-12 gap-6 h-[calc(100vh-100px)]">
-        {/* Left: Product Selection */}
-        <div className="col-span-5 flex flex-col space-y-4">
-          <h1 className="text-2xl font-bold">🛒 Punto de Venta</h1>
-          
-          {/* Barcode Scanner */}
-          <div>
-            <label className="block text-sm font-medium mb-1">Escanear Código / SKU</label>
-            <input
-              ref={barcodeRef}
-              className="w-full border border-gray-300 rounded-lg px-4 py-2"
-              placeholder="Escanee o escriba código..."
-              onKeyDown={e => {
-                if (e.key === 'Enter') {
-                  addByBarcodeOrSku(e.currentTarget.value)
-                }
-              }}
-            />
-          </div>
-
-          {/* Product Search */}
-          <div>
-            <input
-              ref={searchRef}
-              className="w-full border border-gray-300 rounded-lg px-4 py-2"
-              placeholder="Buscar productos..."
-              onChange={e => loadProducts(e.target.value)}
-            />
-          </div>
-
-          {/* Product List */}
-          <div className="flex-1 overflow-y-auto border rounded-lg p-2 bg-gray-50">
-            <div className="grid grid-cols-2 gap-2">
-              {products.map(p => (
-                <button
-                  key={p.id}
-                  onClick={() => addToCart(p)}
-                  className="bg-white border border-gray-300 rounded-lg p-3 hover:bg-blue-50 text-left"
-                >
-                  <div className="font-medium text-sm">{p.name}</div>
-                  <div className="text-green-600 font-bold">${parseFloat(p.price || '0').toFixed(2)}</div>
-                  {p.sku && <div className="text-xs text-gray-500">SKU: {p.sku}</div>}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Right: Cart & Checkout */}
-        <div className="col-span-7 flex flex-col space-y-4">
+        {/* Left: Cart & Checkout */}
+        <div className="col-span-8 flex flex-col space-y-4">
           {/* Sale Type & Vendor */}
           <div className="bg-blue-50 rounded-lg p-4">
             <div className="grid grid-cols-2 gap-4">
@@ -969,7 +942,82 @@ export default function SalesPage() {
             </div>
           )}
         </div>
+
+        {/* Right: Product Selection */}
+        <div className="col-span-4 flex flex-col space-y-4">
+          <h1 className="text-2xl font-bold">🛒 Punto de Venta</h1>
+          {/* Product Search */}
+          <div>
+            <label className="block text-sm font-medium mb-1">Buscar producto</label>
+            <input
+              ref={searchRef}
+              className="w-full border border-gray-300 rounded-lg px-4 py-2"
+              placeholder="Escanear o escribir código"
+              onChange={e => loadProducts(e.target.value)}
+            />
+          </div>
+          {/* Product List */}
+          <div className="flex-1 overflow-y-auto border rounded-lg p-2 bg-gray-50">
+            <div className="grid grid-cols-2 gap-2">
+              {products.map(p => (
+                <button
+                  key={p.id}
+                  onClick={() => addToCart(p)}
+                  className="bg-white border border-gray-300 rounded-lg p-3 hover:bg-blue-50 text-left"
+                >
+                  <div className="font-medium text-sm">{p.name}</div>
+                  <div className="text-green-600 font-bold">${parseFloat(p.price || '0').toFixed(2)}</div>
+                  {p.codigo && <div className="text-xs text-gray-500">Código: {p.codigo}</div>}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
+
+      {/* Modal de Confirmación */}
+      {showConfirmModal && productToAdd && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold mb-4">Confirmar Producto</h3>
+            <div className="mb-4">
+              <p className="text-gray-700 mb-2">
+                <strong>Producto:</strong> {productToAdd.name}
+              </p>
+              <p className="text-gray-700 mb-2">
+                <strong>Precio:</strong> ${parseFloat(productToAdd.price || '0').toFixed(2)}
+              </p>
+              {productToAdd.codigo && (
+                <p className="text-gray-700 mb-2">
+                  <strong>Código:</strong> {productToAdd.codigo}
+                </p>
+              )}
+              {productToAdd.sku && (
+                <p className="text-gray-700">
+                  <strong>SKU:</strong> {productToAdd.sku}
+                </p>
+              )}
+            </div>
+            <p className="text-gray-600 mb-6">
+              ¿Deseas agregar este producto al carrito?
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={cancelAddToCart}
+                className="flex-1 bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmAddToCart}
+                className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700"
+              >
+                Agregar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   )
 }
