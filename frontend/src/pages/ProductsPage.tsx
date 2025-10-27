@@ -264,6 +264,8 @@ export default function ProductsPage() {
     const formData = new FormData()
     formData.append('file', importFile)
     formData.append('mode', importMode)
+    
+    console.log('DEBUG: Import mode =', importMode)
 
     try {
       const response = await api.post('/import/products/import', formData, {

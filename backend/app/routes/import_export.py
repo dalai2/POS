@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Form
 from sqlalchemy.orm import Session
 from typing import Optional
 import pandas as pd
@@ -17,7 +17,7 @@ router = APIRouter()
 @router.post("/products/import")
 async def import_products(
     file: UploadFile = File(...),
-    mode: str = "add",  # "add" or "replace"
+    mode: str = Form("add"),  # "add" or "replace"
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(get_tenant),
     current_user: User = Depends(get_current_user)
@@ -28,7 +28,7 @@ async def import_products(
     
     Excel columns:
     - codigo (required)
-    - name (required)
+    - nombre (required) - also accepts 'name' for compatibility
     - marca
     - modelo
     - color
@@ -40,7 +40,6 @@ async def import_products(
     - precio_manual (opcional, si se deja vacío se calcula automáticamente)
     - costo
     - stock
-    - codigo
     """
     
     if not file.filename.endswith(('.xlsx', '.xls')):
@@ -51,8 +50,12 @@ async def import_products(
         contents = await file.read()
         df = pd.read_excel(BytesIO(contents))
         
-        # Validate required columns
-        required_cols = ['codigo', 'name']
+        # Normalize column names (accept both 'name' and 'nombre')
+        if 'nombre' in df.columns and 'name' not in df.columns:
+            df['name'] = df['nombre']
+        
+        # Validate required columns (only codigo is required)
+        required_cols = ['codigo']
         missing_cols = [col for col in required_cols if col not in df.columns]
         if missing_cols:
             raise HTTPException(
@@ -70,13 +73,27 @@ async def import_products(
         updated = 0
         errors = []
         
+        print(f"DEBUG: Import mode = {mode}")
+        
         for idx, row in df.iterrows():
             try:
-                codigo = str(row['codigo']).strip()
-                name = str(row['name']).strip()
+                codigo_raw = row.get('codigo')
+                # Handle NaN values from pandas
+                if pd.isna(codigo_raw):
+                    errors.append(f"Fila {idx+2}: código es requerido")
+                    continue
                 
-                if not codigo or not name:
-                    errors.append(f"Fila {idx+2}: código y nombre son requeridos")
+                codigo = str(codigo_raw).strip()
+                name_raw = row.get('name')
+                
+                # Name is optional - if empty, leave it blank
+                if pd.isna(name_raw):
+                    name = ""
+                else:
+                    name = str(name_raw).strip()
+                
+                if not codigo:
+                    errors.append(f"Fila {idx+2}: código es requerido")
                     continue
                 
                 # Check if product exists
@@ -84,6 +101,8 @@ async def import_products(
                     Product.tenant_id == tenant.id,
                     Product.codigo == codigo
                 ).first()
+                
+                print(f"DEBUG: Fila {idx+2} - codigo={codigo}, existing={existing is not None}, mode={mode}")
                 
                 # Calculate price
                 quilataje = str(row.get('quilataje', '')).strip() if pd.notna(row.get('quilataje')) else None
@@ -95,7 +114,8 @@ async def import_products(
                 if precio_manual:
                     precio_venta = precio_manual
                 elif quilataje and peso_gramos and quilataje in metal_rates:
-                    base_price = metal_rates[quilataje] * peso_gramos
+                    # Convert Decimal to float to avoid type mismatch
+                    base_price = float(metal_rates[quilataje]) * peso_gramos
                     precio_venta = base_price - (base_price * descuento_pct / 100)
                 else:
                     # Use costo with markup if available
@@ -127,15 +147,19 @@ async def import_products(
                 
                 if existing and mode == 'replace':
                     # Update existing product
+                    print(f"DEBUG: Updating existing product {codigo}")
                     for key, value in product_data.items():
                         if key != 'tenant_id':  # Don't update tenant_id
                             setattr(existing, key, value)
                     updated += 1
                 elif not existing:
                     # Add new product
+                    print(f"DEBUG: Adding new product {codigo}")
                     new_product = Product(**product_data)
                     db.add(new_product)
                     added += 1
+                else:
+                    print(f"DEBUG: Skipping product {codigo} (exists and mode is add)")
                 # If mode is 'add' and product exists, skip it
                 
             except Exception as e:
@@ -163,7 +187,7 @@ async def export_template():
     # Create sample data
     data = {
         'codigo': ['AN-001', 'COL-002'],
-        'name': ['Anillo Oro 14K', 'Collar Plata Gold'],
+        'nombre': ['Anillo Oro 14K', 'Collar Plata Gold'],
         'marca': ['DEMO', 'DEMO'],
         'modelo': ['M-001', 'M-002'],
         'color': ['Amarillo', 'Plata'],
@@ -174,8 +198,7 @@ async def export_template():
         'descuento_porcentaje': [10, 5],
         'precio_manual': ['', ''],  # Dejar vacío para cálculo automático
         'costo': [100, 80],
-        'stock': [5, 10],
-        'codigo': ['AN-001', 'COL-002']
+        'stock': [5, 10]
     }
     
     df = pd.DataFrame(data)
@@ -191,7 +214,7 @@ async def export_template():
         # Add instructions in a second sheet
         instructions = pd.DataFrame({
             'Campo': [
-                'codigo', 'name', 'quilataje', 'peso_gramos', 
+                'codigo', 'nombre', 'quilataje', 'peso_gramos', 
                 'descuento_porcentaje', 'precio_manual', 'costo', 'stock'
             ],
             'Descripción': [
@@ -241,7 +264,7 @@ async def export_products(
         for product in products:
             row = {
                 'codigo': product.codigo or '',
-                'name': product.name,
+                'nombre': product.name,
                 'marca': product.marca or '',
                 'modelo': product.modelo or '',
                 'color': product.color or '',
@@ -252,8 +275,7 @@ async def export_products(
                 'descuento_porcentaje': product.descuento_porcentaje or '',
                 'precio_manual': product.precio_manual or '',
                 'costo': product.costo or product.cost_price or '',
-                'stock': product.stock or '',
-                'codigo': product.codigo or ''
+                'stock': product.stock or ''
             }
             data.append(row)
 
