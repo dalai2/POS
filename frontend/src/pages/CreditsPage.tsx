@@ -47,9 +47,9 @@ export default function CreditsPage() {
       setCredits(response.data);
     } catch (error: any) {
       if (error.response?.status === 403) {
-        alert('No tienes permisos para ver los créditos. Solo los administradores pueden acceder a esta función.');
+        alert('No tienes permisos para ver los abonos. Solo los administradores pueden acceder a esta función.');
       } else {
-        alert('Error al cargar créditos');
+        alert('Error al cargar abonos');
       }
     } finally {
       setLoading(false);
@@ -106,7 +106,7 @@ export default function CreditsPage() {
     <Layout>
       <div className="max-w-7xl mx-auto">
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold text-gray-800">Gestión de Créditos</h1>
+          <h1 className="text-3xl font-bold text-gray-800">Gestión de Abonos</h1>
           
           <div className="flex gap-2">
             <select
@@ -237,7 +237,7 @@ export default function CreditsPage() {
                 {credits.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="px-6 py-4 text-center text-gray-500">
-                      No hay créditos registrados
+                      No hay abonos registrados
                     </td>
                   </tr>
                 ) : (
@@ -305,7 +305,7 @@ export default function CreditsPage() {
         {/* Summary */}
         <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-sm font-medium text-gray-500">Total Créditos</h3>
+            <h3 className="text-sm font-medium text-gray-500">Total Abonos</h3>
             <p className="text-2xl font-bold text-gray-900">
               ${credits.reduce((sum, c) => sum + c.total, 0).toFixed(2)}
             </p>

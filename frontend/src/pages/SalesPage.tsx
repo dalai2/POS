@@ -177,7 +177,7 @@ export default function SalesPage() {
     }
   }
 
-  const printSaleTicket = async (saleData: any, cartItems: CartItem[], subtotal: number, discountAmount: number, taxAmount: number, total: number, paid: number, change: number) => {
+  const printSaleTicket = async (saleData: any, cartItems: CartItem[], subtotal: number, discountAmount: number, taxAmount: number, total: number, paid: number, change: number, initialPayment: number = 0) => {
     try {
       const logoBase64 = await getLogoAsBase64()
       const w = window.open('', '_blank')
@@ -217,7 +217,11 @@ export default function SalesPage() {
       console.log('Payment info:', paymentInfo)
       const efectivoPaid = paymentInfo.filter((p: any) => p.method === 'cash' || p.method === 'efectivo').reduce((sum: number, p: any) => sum + parseFloat(p.amount), 0)
       const tarjetaPaid = paymentInfo.filter((p: any) => p.method === 'card' || p.method === 'tarjeta').reduce((sum: number, p: any) => sum + parseFloat(p.amount), 0)
-      console.log('Efectivo paid:', efectivoPaid, 'Tarjeta paid:', tarjetaPaid)
+      console.log('Efectivo paid:', efectivoPaid, 'Tarjeta paid:', tarjetaPaid, 'Initial payment:', initialPayment)
+      
+      // Calculate abono from initial payment or payments
+      const abonoAmount = initialPayment > 0 ? initialPayment : (efectivoPaid + tarjetaPaid)
+      const saldoAmount = total - abonoAmount
 
       const html = `
 <!DOCTYPE html>
@@ -437,8 +441,8 @@ export default function SalesPage() {
       <div><strong>TOTAL :</strong> $${total.toFixed(2)}</div>
       ${efectivoPaid > 0 ? `<div><strong>EFECTIVO :</strong> $${efectivoPaid.toFixed(2)}</div>` : ''}
       ${tarjetaPaid > 0 ? `<div><strong>TARJETA :</strong> $${tarjetaPaid.toFixed(2)}</div>` : ''}
-      <div><strong>ABONOS/ANTICIPO :</strong> $0.00</div>
-      <div><strong>SALDO :</strong> $${total.toFixed(2)}</div>
+      ${abonoAmount > 0 ? `<div><strong>ABONOS/ANTICIPO :</strong> $${abonoAmount.toFixed(2)}</div>` : ''}
+      ${saldoAmount > 0 ? `<div><strong>SALDO :</strong> $${saldoAmount.toFixed(2)}</div>` : ''}
     </div>
 
     <!-- Footer Section -->
@@ -574,9 +578,8 @@ export default function SalesPage() {
       setMsg(`✅ Venta realizada. Folio ${r.data.id}. Total $${r.data.total}`)
       
       // Generar ticket de venta
-      if (saleType === 'contado') {
-        printSaleTicket(r.data, cart, subtotal, discountAmountCalc, taxAmount, total, paid, change)
-      }
+      const initialPaymentAmount = saleType === 'credito' && initialPayment ? parseFloat(initialPayment) : 0
+      printSaleTicket(r.data, cart, subtotal, discountAmountCalc, taxAmount, total, paid, change, initialPaymentAmount)
     } catch (e: any) {
       setMsg(e?.response?.data?.detail || 'Error al crear venta')
     }
@@ -696,7 +699,7 @@ export default function SalesPage() {
                   className="w-full border border-gray-300 rounded-lg px-3 py-2"
                 >
                   <option value="contado">💵 Contado</option>
-                  <option value="credito">💳 Crédito</option>
+                  <option value="credito">💳 Abonos</option>
                 </select>
               </div>
               <div>
@@ -738,7 +741,7 @@ export default function SalesPage() {
               <div className="grid grid-cols-2 gap-3 mt-3">
                 <div>
                   <label className="block text-sm font-medium mb-1">Abono Inicial</label>
-                  <input
+                <input
                     type="number"
                     step="0.01"
                     className="w-full border border-gray-300 rounded-lg px-3 py-2"
@@ -760,7 +763,7 @@ export default function SalesPage() {
                 </div>
               </div>
             )}
-          </div>
+            </div>
 
           {/* Cart Items */}
           <div className="">
@@ -929,7 +932,7 @@ export default function SalesPage() {
               disabled={cart.length === 0}
               className="w-full bg-green-600 text-white py-4 rounded-lg text-xl font-bold hover:bg-green-700 disabled:bg-gray-400"
             >
-              {saleType === 'credito' ? '💳 Vender a Crédito' : '💵 Cobrar'}
+              {saleType === 'credito' ? '💳 Vender a Abonos' : '💵 Cobrar'}
             </button>
           </div>
 

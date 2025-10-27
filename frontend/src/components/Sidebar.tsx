@@ -10,7 +10,7 @@ export default function Sidebar() {
       <nav className="p-3 text-sm text-slate-700 space-y-1">
         <a className="block px-3 py-2 rounded hover:bg-slate-100" href="/sales">🛒 Punto de Venta</a>
         <a className="block px-3 py-2 rounded hover:bg-slate-100" href="/products">💍 Productos/Joyería</a>
-        <a className="block px-3 py-2 rounded hover:bg-slate-100" href="/credits">💳 Créditos</a>
+        <a className="block px-3 py-2 rounded hover:bg-slate-100" href="/credits">💳 Abonos</a>
         <a className="block px-3 py-2 rounded hover:bg-slate-100" href="/reports">📊 Corte de Caja</a>
         <a className="block px-3 py-2 rounded hover:bg-slate-100" href="/metal-rates">⚖️ Tasas de Metal</a>
         <a className="block px-3 py-2 rounded hover:bg-slate-100" href="/sales/history">📋 Historial</a>
