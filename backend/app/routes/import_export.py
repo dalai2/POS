@@ -29,11 +29,9 @@ async def import_products(
     Excel columns:
     - codigo (required)
     - nombre (required) - also accepts 'name' for compatibility
-    - marca
     - modelo
     - color
     - quilataje (cualquier tipo de metal, ej: 14k, Plata Gold, Oro Italiano)
-    - tipo_joya
     - talla
     - peso_gramos
     - descuento_porcentaje
@@ -188,11 +186,9 @@ async def export_template():
     data = {
         'codigo': ['AN-001', 'COL-002'],
         'nombre': ['Anillo Oro 14K', 'Collar Plata Gold'],
-        'marca': ['DEMO', 'DEMO'],
         'modelo': ['M-001', 'M-002'],
         'color': ['Amarillo', 'Plata'],
         'quilataje': ['14k', 'Plata Gold'],
-        'tipo_joya': ['Anillo', 'Collar'],
         'talla': ['7', ''],
         'peso_gramos': [3.5, 8.0],
         'descuento_porcentaje': [10, 5],
@@ -265,11 +261,9 @@ async def export_products(
             row = {
                 'codigo': product.codigo or '',
                 'nombre': product.name,
-                'marca': product.marca or '',
                 'modelo': product.modelo or '',
                 'color': product.color or '',
                 'quilataje': product.quilataje or '',
-                'tipo_joya': product.tipo_joya or '',
                 'talla': product.talla or '',
                 'peso_gramos': product.peso_gramos or '',
                 'descuento_porcentaje': product.descuento_porcentaje or '',

@@ -452,30 +452,11 @@ export default function ProductsPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Marca</label>
-                <input
-                  className="w-full border border-gray-300 rounded-lg px-3 py-1.5"
-                  value={form.marca}
-                  onChange={e => setForm({...form, marca: e.target.value})}
-                />
-              </div>
-
-              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Modelo</label>
                 <input
                   className="w-full border border-gray-300 rounded-lg px-3 py-1.5"
                   value={form.modelo}
                   onChange={e => setForm({...form, modelo: e.target.value})}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Joya</label>
-                <input
-                  className="w-full border border-gray-300 rounded-lg px-3 py-1.5"
-                  placeholder="Anillo, Collar, Pulsera..."
-                  value={form.tipo_joya}
-                  onChange={e => setForm({...form, tipo_joya: e.target.value})}
                 />
               </div>
 
@@ -628,7 +609,6 @@ export default function ProductsPage() {
               <tr>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Código</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nombre</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tipo</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Quilataje</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Peso (g)</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Precio</th>
@@ -639,7 +619,7 @@ export default function ProductsPage() {
             <tbody className="bg-white divide-y divide-gray-200">
               {products.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-4 text-center text-gray-500">
+                  <td colSpan={7} className="px-6 py-4 text-center text-gray-500">
                     No hay productos
                 </td>
                 </tr>
@@ -649,9 +629,8 @@ export default function ProductsPage() {
                     <td className="px-4 py-3 whitespace-nowrap text-sm">{p.codigo || '-'}</td>
                     <td className="px-4 py-3">
                       <div className="font-medium text-gray-900">{p.name}</div>
-                      <div className="text-xs text-gray-500">{p.marca} {p.modelo}</div>
+                      <div className="text-xs text-gray-500">{p.modelo}</div>
                 </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm">{p.tipo_joya || '-'}</td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm">
                       {p.quilataje ? metalTypes.find(mt => mt.value === p.quilataje)?.label : '-'}
                 </td>
