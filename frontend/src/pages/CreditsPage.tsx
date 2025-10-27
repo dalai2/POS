@@ -225,6 +225,9 @@ export default function CreditsPage() {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Folio
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                     Cliente
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
@@ -253,19 +256,22 @@ export default function CreditsPage() {
               <tbody className="bg-white divide-y divide-gray-200">
                 {credits.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-6 py-4 text-center text-gray-500">
+                    <td colSpan={9} className="px-6 py-4 text-center text-gray-500">
                       No hay abonos registrados
                     </td>
                   </tr>
                 ) : filteredCredits.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-6 py-4 text-center text-gray-500">
+                    <td colSpan={9} className="px-6 py-4 text-center text-gray-500">
                       No se encontraron resultados para tu búsqueda
                     </td>
                   </tr>
                 ) : (
                   filteredCredits.map((credit) => (
                     <tr key={credit.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                        {String(credit.id).padStart(6, '0')}
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="font-medium text-gray-900">
                           {credit.customer_name || 'Sin nombre'}

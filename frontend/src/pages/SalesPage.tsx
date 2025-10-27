@@ -195,7 +195,13 @@ export default function SalesPage() {
         if (ci.product.peso_gramos) {
           // Format weight to avoid unnecessary decimals
           const peso = parseFloat(ci.product.peso_gramos)
-          const pesoFormatted = peso === Math.floor(peso) ? `${peso}g` : `${peso.toFixed(3)}g`
+          let pesoFormatted
+          if (peso === Math.floor(peso)) {
+            pesoFormatted = `${peso}g`
+          } else {
+            // Convert to string and remove trailing zeros, then add 'g'
+            pesoFormatted = peso.toFixed(3).replace(/\.?0+$/, '') + 'g'
+          }
           descParts.push(pesoFormatted)
         }
         if (ci.product.talla) descParts.push(ci.product.talla)
@@ -782,7 +788,7 @@ export default function SalesPage() {
                     <option value="efectivo">Efectivo</option>
                     <option value="tarjeta">Tarjeta</option>
                   </select>
-                </div>
+              </div>
             </div>
           )}
             </div>

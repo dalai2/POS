@@ -13,6 +13,7 @@ from app.models.user import User
 from app.models.product import Product
 from app.models.sale import Sale, SaleItem
 from app.models.payment import Payment
+from app.models.credit_payment import CreditPayment
 
 
 router = APIRouter()
@@ -135,7 +136,12 @@ async def create_sale(
         if p.quilataje: descParts.append(p.quilataje)
         if p.peso_gramos: 
             # Format weight to avoid unnecessary decimals
-            peso_formatted = f"{float(p.peso_gramos):.0f}" if float(p.peso_gramos) == int(float(p.peso_gramos)) else f"{float(p.peso_gramos):.3f}"
+            peso = float(p.peso_gramos)
+            if peso == int(peso):
+                peso_formatted = f"{peso:.0f}"
+            else:
+                # Remove trailing zeros
+                peso_formatted = f"{peso:.3f}".rstrip('0').rstrip('.')
             descParts.append(f"{peso_formatted}g")
         if p.talla: descParts.append(p.talla)
         full_description = '-'.join(descParts) if descParts else p.name
@@ -283,11 +289,17 @@ def get_sale(
     if not sale:
         raise HTTPException(status_code=404, detail="No encontrado")
     
-    # Get payments for this sale
+    # Get payments for this sale (both Payment and CreditPayment)
     payments_list = []
     payments = db.query(Payment).filter(Payment.sale_id == sale.id).all()
     if payments:
         payments_list = [{"method": p.method, "amount": float(p.amount)} for p in payments]
+    
+    # Also get credit payments (abonos)
+    credit_payments = db.query(CreditPayment).filter(CreditPayment.sale_id == sale.id).all()
+    if credit_payments:
+        for cp in credit_payments:
+            payments_list.append({"method": cp.payment_method, "amount": float(cp.amount)})
     
     # Build items with full description
     sale_items = db.query(SaleItem).filter(SaleItem.sale_id == sale.id).all()
@@ -304,7 +316,12 @@ def get_sale(
                 if product.quilataje: descParts.append(product.quilataje)
                 if product.peso_gramos: 
                     # Format weight to avoid unnecessary decimals
-                    peso_formatted = f"{float(product.peso_gramos):.0f}" if float(product.peso_gramos) == int(float(product.peso_gramos)) else f"{float(product.peso_gramos):.3f}"
+                    peso = float(product.peso_gramos)
+                    if peso == int(peso):
+                        peso_formatted = f"{peso:.0f}"
+                    else:
+                        # Remove trailing zeros
+                        peso_formatted = f"{peso:.3f}".rstrip('0').rstrip('.')
                     descParts.append(f"{peso_formatted}g")
                 if product.talla: descParts.append(product.talla)
                 full_description = '-'.join(descParts) if descParts else product.name
