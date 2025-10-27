@@ -14,9 +14,9 @@ from app.models.credit_payment import CreditPayment
 def seed_jewelry_demo(db: Session):
     """Seed basic data for jewelry store"""
     
-    # Always create the andani tenant
-    print("Creating andani tenant...")
-    tenant = Tenant(name='andani', slug='andani')
+    # Always create the brazo tenant
+    print("Creating brazo tenant...")
+    tenant = Tenant(name='brazo', slug='brazo')
     db.add(tenant)
     db.flush()
     print(f"Tenant created with ID: {tenant.id}")
