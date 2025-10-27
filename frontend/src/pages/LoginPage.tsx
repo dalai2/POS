@@ -5,7 +5,7 @@ import { api } from '../utils/api'
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 export default function LoginPage() {
-  const [tenant, setTenant] = useState('brazo')
+  const [tenant, setTenant] = useState('andani')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [message, setMessage] = useState('')

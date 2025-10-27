@@ -47,7 +47,7 @@ def recreate_db():
     print("\nLogin credentials:")
     print("   Email: owner@demo.com")
     print("   Password: secret123")
-    print("   Tenant: brazo")
+    print("   Tenant: andani")
 
 if __name__ == "__main__":
     recreate_db()
