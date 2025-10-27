@@ -476,6 +476,11 @@ export default function SalesPage() {
       <!-- Golden Line 3 -->
       <div class="gold-line" style="margin-top: 20px;"></div>
     </div>
+    
+    <!-- Watermark -->
+    <div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); opacity: 0.2; z-index: 0; pointer-events: none;">
+      <img src="${logoBase64}" alt="Watermark" style="width: 200px; height: auto; filter: grayscale(100%);" />
+    </div>
   </div>
 </body></html>`
 
@@ -765,8 +770,8 @@ export default function SalesPage() {
                     placeholder="0.00"
                     value={initialPayment}
                     onChange={e => setInitialPayment(e.target.value)}
-                  />
-                </div>
+                />
+              </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">Método de Pago</label>
                   <select
@@ -778,8 +783,8 @@ export default function SalesPage() {
                     <option value="tarjeta">Tarjeta</option>
                   </select>
                 </div>
-              </div>
-            )}
+            </div>
+          )}
             </div>
 
           {/* Cart Items */}
@@ -858,15 +863,15 @@ export default function SalesPage() {
               <span className="font-bold">${subtotal.toFixed(2)}</span>
             </div>
 
-            <div>
-              <label className="text-sm">IVA %</label>
-              <input
-                type="number"
-                step="0.01"
-                value={taxRate}
-                onChange={e => setTaxRate(e.target.value)}
-                className="w-full border rounded px-3 py-1"
-              />
+              <div>
+                <label className="text-sm">IVA %</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={taxRate}
+                  onChange={e => setTaxRate(e.target.value)}
+                  className="w-full border rounded px-3 py-1"
+                />
             </div>
 
             {discountAmountCalc > 0 && (

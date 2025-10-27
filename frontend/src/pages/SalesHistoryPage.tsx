@@ -338,6 +338,11 @@ export default function SalesHistoryPage() {
       <!-- Golden Line 3 -->
       <div class="gold-line" style="margin-top: 20px;"></div>
     </div>
+    
+    <!-- Watermark -->
+    <div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); opacity: 0.2; z-index: 0; pointer-events: none;">
+      <img src="${logoBase64}" alt="Watermark" style="width: 200px; height: auto; filter: grayscale(100%);" />
+    </div>
   </div>
 </body></html>`
 
