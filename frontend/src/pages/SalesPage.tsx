@@ -198,6 +198,7 @@ export default function SalesPage() {
           const pesoFormatted = peso === Math.floor(peso) ? `${peso}g` : `${peso.toFixed(3)}g`
           descParts.push(pesoFormatted)
         }
+        if (ci.product.talla) descParts.push(ci.product.talla)
         const description = descParts.length > 0 ? descParts.join('-') : 'Producto sin descripción'
         
         return {

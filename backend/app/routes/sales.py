@@ -137,6 +137,7 @@ async def create_sale(
             # Format weight to avoid unnecessary decimals
             peso_formatted = f"{float(p.peso_gramos):.0f}" if float(p.peso_gramos) == int(float(p.peso_gramos)) else f"{float(p.peso_gramos):.3f}"
             descParts.append(f"{peso_formatted}g")
+        if p.talla: descParts.append(p.talla)
         full_description = '-'.join(descParts) if descParts else p.name
         
         db.add(SaleItem(
@@ -305,6 +306,7 @@ def get_sale(
                     # Format weight to avoid unnecessary decimals
                     peso_formatted = f"{float(product.peso_gramos):.0f}" if float(product.peso_gramos) == int(float(product.peso_gramos)) else f"{float(product.peso_gramos):.3f}"
                     descParts.append(f"{peso_formatted}g")
+                if product.talla: descParts.append(product.talla)
                 full_description = '-'.join(descParts) if descParts else product.name
                 # Create a copy of the item with updated name
                 item_dict = {
