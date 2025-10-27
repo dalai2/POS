@@ -301,11 +301,12 @@ export default function SalesHistoryPage() {
           const unitPrice = parseFloat(item.unit_price || '0')
           const discountPct = parseFloat(item.discount_pct || '0')
           const discountAmount = unitPrice * discountPct / 100
+          
           return `
           <tr>
             <td>${item.quantity}</td>
-            <td>${item.product?.code || ''}</td>
-            <td>${item.product?.name || ''}</td>
+            <td>${item.codigo || ''}</td>
+            <td>${item.name || 'Producto sin descripción'}</td>
             <td>$${unitPrice.toFixed(2)}</td>
             <td>$${discountAmount.toFixed(2)}</td>
             <td>$${(parseFloat(item.total_price || '0')).toFixed(2)}</td>

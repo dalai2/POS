@@ -185,18 +185,34 @@ export default function SalesPage() {
       
       await new Promise(resolve => setTimeout(resolve, 100))
 
-      const items = cartItems.map((ci, index) => ({
-        index: index + 1,
-        code: ci.product.code || '',
-        name: ci.product.name,
-        quantity: ci.quantity,
-        unit: 'Pz', // Unidad por defecto
-        price: parseFloat(ci.product.price || '0'),
-        discount_pct: ci.discount_pct || 0,
-        discount_amount: parseFloat(ci.product.price || '0') * (ci.discount_pct || 0) / 100,
-        netPrice: parseFloat(ci.product.price || '0') * (1 - (ci.discount_pct || 0) / 100),
-        total: parseFloat(ci.product.price || '0') * ci.quantity * (1 - (ci.discount_pct || 0) / 100)
-      }))
+      const items = cartItems.map((ci, index) => {
+        // Build description from multiple fields
+        const descParts = []
+        if (ci.product.name) descParts.push(ci.product.name)
+        if (ci.product.modelo) descParts.push(ci.product.modelo)
+        if (ci.product.color) descParts.push(ci.product.color)
+        if (ci.product.quilataje) descParts.push(ci.product.quilataje)
+        if (ci.product.peso_gramos) {
+          // Format weight to avoid unnecessary decimals
+          const peso = parseFloat(ci.product.peso_gramos)
+          const pesoFormatted = peso === Math.floor(peso) ? `${peso}g` : `${peso.toFixed(3)}g`
+          descParts.push(pesoFormatted)
+        }
+        const description = descParts.length > 0 ? descParts.join('-') : 'Producto sin descripción'
+        
+        return {
+          index: index + 1,
+          code: ci.product.codigo || '',
+          name: description,
+          quantity: ci.quantity,
+          unit: 'Pz', // Unidad por defecto
+          price: parseFloat(ci.product.price || '0'),
+          discount_pct: ci.discount_pct || 0,
+          discount_amount: parseFloat(ci.product.price || '0') * (ci.discount_pct || 0) / 100,
+          netPrice: parseFloat(ci.product.price || '0') * (1 - (ci.discount_pct || 0) / 100),
+          total: parseFloat(ci.product.price || '0') * ci.quantity * (1 - (ci.discount_pct || 0) / 100)
+        }
+      })
 
       const date = new Date(saleData.created_at || new Date())
       const formattedDate = date.toLocaleDateString('es-ES', {
@@ -841,27 +857,15 @@ export default function SalesPage() {
               <span className="font-bold">${subtotal.toFixed(2)}</span>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-sm">Descuento %</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={discount}
-                  onChange={e => setDiscount(e.target.value)}
-                  className="w-full border rounded px-3 py-1"
-                />
-              </div>
-              <div>
-                <label className="text-sm">IVA %</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={taxRate}
-                  onChange={e => setTaxRate(e.target.value)}
-                  className="w-full border rounded px-3 py-1"
-                />
-              </div>
+            <div>
+              <label className="text-sm">IVA %</label>
+              <input
+                type="number"
+                step="0.01"
+                value={taxRate}
+                onChange={e => setTaxRate(e.target.value)}
+                className="w-full border rounded px-3 py-1"
+              />
             </div>
 
             {discountAmountCalc > 0 && (

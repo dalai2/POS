@@ -51,5 +51,6 @@ class SaleItem(Base):
     total_price = Column(Numeric(10, 2), nullable=False, default=0)
 
     sale = relationship("Sale", back_populates="items")
+    product = relationship("Product")
 
 

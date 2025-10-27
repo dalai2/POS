@@ -126,10 +126,23 @@ async def create_sale(
         line_disc_amount = (line_subtotal * line_disc_pct / Decimal('100')).quantize(Decimal('0.01'))
         line_total = (line_subtotal - line_disc_amount).quantize(Decimal('0.01'))
         subtotal += line_total
+        
+        # Build full description from product fields
+        descParts = []
+        if p.name: descParts.append(p.name)
+        if p.modelo: descParts.append(p.modelo)
+        if p.color: descParts.append(p.color)
+        if p.quilataje: descParts.append(p.quilataje)
+        if p.peso_gramos: 
+            # Format weight to avoid unnecessary decimals
+            peso_formatted = f"{float(p.peso_gramos):.0f}" if float(p.peso_gramos) == int(float(p.peso_gramos)) else f"{float(p.peso_gramos):.3f}"
+            descParts.append(f"{peso_formatted}g")
+        full_description = '-'.join(descParts) if descParts else p.name
+        
         db.add(SaleItem(
             sale_id=sale.id,
             product_id=p.id,
-            name=p.name,
+            name=full_description,
             codigo=p.codigo,
             quantity=q,
             unit_price=unit,
@@ -275,6 +288,40 @@ def get_sale(
     if payments:
         payments_list = [{"method": p.method, "amount": float(p.amount)} for p in payments]
     
+    # Build items with full description
+    sale_items = db.query(SaleItem).filter(SaleItem.sale_id == sale.id).all()
+    items_with_description = []
+    for item in sale_items:
+        # If item has product relationship, build full description
+        if item.product_id:
+            product = db.query(Product).filter(Product.id == item.product_id).first()
+            if product:
+                descParts = []
+                if product.name: descParts.append(product.name)
+                if product.modelo: descParts.append(product.modelo)
+                if product.color: descParts.append(product.color)
+                if product.quilataje: descParts.append(product.quilataje)
+                if product.peso_gramos: 
+                    # Format weight to avoid unnecessary decimals
+                    peso_formatted = f"{float(product.peso_gramos):.0f}" if float(product.peso_gramos) == int(float(product.peso_gramos)) else f"{float(product.peso_gramos):.3f}"
+                    descParts.append(f"{peso_formatted}g")
+                full_description = '-'.join(descParts) if descParts else product.name
+                # Create a copy of the item with updated name
+                item_dict = {
+                    "name": full_description,
+                    "codigo": item.codigo,
+                    "quantity": item.quantity,
+                    "unit_price": item.unit_price,
+                    "discount_pct": item.discount_pct,
+                    "discount_amount": item.discount_amount,
+                    "total_price": item.total_price
+                }
+                items_with_description.append(item_dict)
+            else:
+                items_with_description.append(item)
+        else:
+            items_with_description.append(item)
+    
     # Return sale with payments
     sale_out = SaleOut(
         id=sale.id,
@@ -284,7 +331,7 @@ def get_sale(
         tax_rate=sale.tax_rate,
         tax_amount=sale.tax_amount,
         total=sale.total,
-        items=db.query(SaleItem).filter(SaleItem.sale_id == sale.id).all(),
+        items=items_with_description,
         created_at=sale.created_at,
         tipo_venta=sale.tipo_venta,
         vendedor_id=sale.vendedor_id,

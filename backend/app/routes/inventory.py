@@ -5,7 +5,7 @@ from typing import List, Optional
 from datetime import datetime
 
 from app.core.database import get_db
-from app.core.deps import get_tenant, get_current_user
+from app.core.deps import get_tenant, get_current_user, require_admin
 from app.models.tenant import Tenant
 from app.models.user import User
 from app.models.inventory_movement import InventoryMovement
@@ -56,7 +56,7 @@ def create_movement(
     data: InventoryMovementCreate,
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(get_tenant),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_admin)
 ):
     """Create an inventory movement (entrada or salida)"""
     # Verify product exists
