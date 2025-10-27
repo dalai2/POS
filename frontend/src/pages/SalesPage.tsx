@@ -34,7 +34,7 @@ export default function SalesPage() {
   const [taxRate, setTaxRate] = useState('0')
   
   // Jewelry store fields
-  const [saleType, setSaleType] = useState<'contado' | 'credito'>('contado')
+  const [saleType, setSaleType] = useState<'contado' | 'abono'>('contado')
   const [vendedorId, setVendedorId] = useState<number | null>(null)
   const [customerName, setCustomerName] = useState('PUBLICO GENERAL')
   const [customerPhone, setCustomerPhone] = useState('')
@@ -251,7 +251,7 @@ export default function SalesPage() {
         abonoAmount = efectivoPaid + tarjetaPaid
         saldoAmount = 0
       } else {
-        // For credito sales, show initial payment and remaining balance
+        // For abono sales, show initial payment and remaining balance
         abonoAmount = initialPayment > 0 ? initialPayment : (efectivoPaid + tarjetaPaid)
         saldoAmount = total - abonoAmount
       }
@@ -529,13 +529,13 @@ export default function SalesPage() {
       }
 
       // Validate sale type specific requirements
-      if (saleType === 'credito' && !vendedorId) {
-        setMsg('Por favor seleccione un vendedor para ventas a crédito')
+      if (saleType === 'abono' && !vendedorId) {
+        setMsg('Por favor seleccione un vendedor para ventas a abono')
         return
       }
 
-      if (saleType === 'credito' && !customerName.trim()) {
-        setMsg('Por favor ingrese el nombre del cliente para venta a crédito')
+      if (saleType === 'abono' && !customerName.trim()) {
+        setMsg('Por favor ingrese el nombre del cliente para venta a abono')
         return
       }
 
@@ -588,8 +588,8 @@ export default function SalesPage() {
 
       const r = await api.post('/sales/', saleData)
       
-      // If it's a credit sale with initial payment, register it
-      if (saleType === 'credito' && initialPayment && parseFloat(initialPayment) > 0) {
+      // If it's an abono sale with initial payment, register it
+      if (saleType === 'abono' && initialPayment && parseFloat(initialPayment) > 0) {
         try {
           await api.post('/credits/payments', {
             sale_id: r.data.id,
@@ -616,7 +616,7 @@ export default function SalesPage() {
       setMsg(`✅ Venta realizada. Folio ${r.data.id}. Total $${r.data.total}`)
       
       // Generar ticket de venta
-      const initialPaymentAmount = saleType === 'credito' && initialPayment ? parseFloat(initialPayment) : 0
+      const initialPaymentAmount = saleType === 'abono' && initialPayment ? parseFloat(initialPayment) : 0
       printSaleTicket(r.data, cart, subtotal, discountAmountCalc, taxAmount, total, paid, change, initialPaymentAmount)
     } catch (e: any) {
       setMsg(e?.response?.data?.detail || 'Error al crear venta')
@@ -759,7 +759,7 @@ export default function SalesPage() {
           {/* Customer Info */}
             <div className="bg-amber-50 rounded-lg p-4">
             <h3 className="font-semibold mb-2">
-              {saleType === 'credito' ? 'Información del Cliente' : 'Cliente'}
+              {saleType === 'abono' ? 'Información del Cliente' : 'Cliente'}
             </h3>
             <div className="grid grid-cols-2 gap-3">
                 <input
@@ -775,7 +775,7 @@ export default function SalesPage() {
                   onChange={e => setCustomerPhone(e.target.value)}
                 />
             </div>
-            {saleType === 'credito' && (
+            {saleType === 'abono' && (
               <div className="grid grid-cols-2 gap-3 mt-3">
                 <div>
                   <label className="block text-sm font-medium mb-1">Abono Inicial</label>
@@ -958,7 +958,7 @@ export default function SalesPage() {
               disabled={cart.length === 0}
               className="w-full bg-green-600 text-white py-4 rounded-lg text-xl font-bold hover:bg-green-700 disabled:bg-gray-400"
             >
-              {saleType === 'credito' ? '💳 Vender a Abonos' : '💵 Cobrar'}
+              {saleType === 'abono' ? '💳 Vender a Abonos' : '💵 Cobrar'}
             </button>
           </div>
 

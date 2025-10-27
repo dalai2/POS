@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import Layout from '../components/Layout'
 import { api } from '../utils/api'
 
-type Sale = { id: number; total: string; created_at: string; user_id?: number | null; vendedor_id?: number | null }
+type Sale = { id: number; total: string; created_at: string; user_id?: number | null; vendedor_id?: number | null; tipo_venta?: string; user?: { email: string } }
 type User = { id: number; email: string }
 
 export default function SalesHistoryPage() {
@@ -29,13 +29,14 @@ export default function SalesHistoryPage() {
       const qs = new URLSearchParams()
       if (dateFrom) qs.set('date_from', new Date(dateFrom).toISOString())
       if (dateTo) qs.set('date_to', new Date(dateTo).toISOString())
-      if (userId) qs.set('user_id', userId)
+      if (userId && userId.trim() && !isNaN(Number(userId))) qs.set('user_id', userId)
       qs.set('skip', String(nextPage * pageSize))
       qs.set('limit', String(pageSize))
       const r = await api.get(`/sales?${qs.toString()}`)
       setSales(r.data)
     } catch (e: any) {
-      setMsg(e?.response?.data?.detail || 'Error cargando ventas')
+      const errorMsg = e?.response?.data?.detail || e?.message || 'Error cargando ventas'
+      setMsg(typeof errorMsg === 'string' ? errorMsg : 'Error cargando ventas')
     }
   }
 
@@ -106,7 +107,7 @@ export default function SalesHistoryPage() {
         abonoAmount = efectivoPaid + tarjetaPaid
         saldoAmount = 0
       } else {
-        // For credito sales, show total paid and remaining balance
+        // For abono sales, show total paid and remaining balance
         abonoAmount = efectivoPaid + tarjetaPaid
         saldoAmount = total - abonoAmount
       }
@@ -404,28 +405,54 @@ export default function SalesHistoryPage() {
             <input className="input" type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} />
           </div>
           <div>
-            <div className="text-xs text-slate-600">Usuario (ID)</div>
-            <input className="input" value={userId} onChange={e => setUserId(e.target.value)} />
+            <div className="text-xs text-slate-600">Usuario</div>
+            <select className="input" value={userId} onChange={e => setUserId(e.target.value)}>
+              <option value="">Todos los usuarios</option>
+              {users.map(user => (
+                <option key={user.id} value={user.id.toString()}>
+                  {user.email.split('@')[0]} (ID: {user.id})
+                </option>
+              ))}
+            </select>
           </div>
           <button className="btn" onClick={() => { setPage(0); load(0) }}>Filtrar</button>
           <button className="btn" onClick={async () => {
+            try {
             const qs = new URLSearchParams()
             if (dateFrom) qs.set('date_from', new Date(dateFrom).toISOString())
             if (dateTo) qs.set('date_to', new Date(dateTo).toISOString())
-            if (userId) qs.set('user_id', userId)
-            const url = `/sales/export?${qs.toString()}`
-            const host = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-            window.open(`${host}${url}`, '_blank')
+            if (userId && userId.trim() && !isNaN(Number(userId))) qs.set('user_id', userId)
+              
+              const response = await api.get(`/sales/export?${qs.toString()}`, {
+                responseType: 'blob'
+              })
+              
+              // Create blob and download
+              const blob = new Blob([response.data], { type: 'text/csv' })
+              const url = window.URL.createObjectURL(blob)
+              const link = document.createElement('a')
+              link.href = url
+              link.download = 'ventas.csv'
+              document.body.appendChild(link)
+              link.click()
+              document.body.removeChild(link)
+              window.URL.revokeObjectURL(url)
+            } catch (e: any) {
+              const errorMsg = e?.response?.data?.detail || e?.message || 'Error al exportar CSV'
+              setMsg(typeof errorMsg === 'string' ? errorMsg : 'Error al exportar CSV')
+            }
           }}>Exportar CSV</button>
         </div>
         <table className="w-full text-left">
-          <thead><tr><th className="p-2">Folio</th><th className="p-2">Fecha</th><th className="p-2">Total</th><th className="p-2">Acciones</th></tr></thead>
+          <thead><tr><th className="p-2">Folio</th><th className="p-2">Fecha</th><th className="p-2">Total</th><th className="p-2">Tipo</th><th className="p-2">Usuario</th><th className="p-2">Acciones</th></tr></thead>
           <tbody>
             {sales.map(s => (
               <tr key={s.id} className="border-t">
                 <td className="p-2">{s.id}</td>
                 <td className="p-2">{new Date(s.created_at).toLocaleString()}</td>
                 <td className="p-2">${Number(s.total).toFixed(2)}</td>
+                <td className="p-2">{s.tipo_venta === 'credito' ? 'abono' : (s.tipo_venta || 'contado')}</td>
+                <td className="p-2">{s.user?.email ? s.user.email.split('@')[0] : 'N/A'}</td>
                 <td className="p-2 flex gap-2">
                   <button className="btn" onClick={() => ticket(s.id)}>Ticket</button>
                   <button className="btn" onClick={async () => { if (!confirm('¿Devolver venta completa?')) return; try { await api.post(`/sales/${s.id}/return`); await load(0); setMsg('Venta devuelta exitosamente') } catch (e:any) { setMsg(e?.response?.data?.detail || 'Error al devolver venta') } }}>Devolver</button>

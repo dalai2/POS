@@ -172,7 +172,7 @@ async def create_sale(
     if tipo_venta is not None:
         sale.tipo_venta = tipo_venta
         # Set credit status for credit sales
-        if tipo_venta == "credito":
+        if tipo_venta == "abono":
             sale.credit_status = "pendiente"
     if vendedor_id is not None:
         sale.vendedor_id = vendedor_id
@@ -278,6 +278,54 @@ def return_sale(
     return ret
 
 
+@router.get("/export")
+def export_sales_csv(
+    date_from: str | None = None,
+    date_to: str | None = None,
+    user_id: int | None = None,
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_tenant),
+    user: User = Depends(get_current_user),
+):
+    q = db.query(Sale).filter(Sale.tenant_id == tenant.id)
+    if user_id is not None:
+        q = q.filter(Sale.user_id == user_id)
+    if date_from:
+        try:
+            df = datetime.fromisoformat(date_from)
+            q = q.filter(Sale.created_at >= df)
+        except Exception:
+            pass
+    if date_to:
+        try:
+            dt = datetime.fromisoformat(date_to)
+            q = q.filter(Sale.created_at <= dt)
+        except Exception:
+            pass
+    q = q.order_by(Sale.created_at.desc())
+
+    import csv
+    from io import StringIO
+
+    buf = StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["id", "created_at", "user_id", "total", "tipo_venta"]) 
+    for s in q.all():
+        writer.writerow([
+            s.id,
+            s.created_at.isoformat() if s.created_at else "",
+            s.user_id or "",
+            f"{s.total}",
+            "abono" if s.tipo_venta == "credito" else (s.tipo_venta or ""),
+        ])
+    csv_data = buf.getvalue()
+    headers = {
+        "Content-Disposition": "attachment; filename=ventas.csv",
+        "Content-Type": "text/csv; charset=utf-8",
+    }
+    return Response(content=csv_data, media_type="text/csv", headers=headers)
+
+
 @router.get("/{sale_id}", response_model=SaleOut)
 def get_sale(
     sale_id: int,
@@ -372,6 +420,8 @@ class SaleSummary(BaseModel):
     total: condecimal(max_digits=10, decimal_places=2)
     created_at: datetime | None = None
     user_id: int | None = None
+    tipo_venta: str | None = None
+    user: dict | None = None
 
     class Config:
         from_attributes = True
@@ -404,53 +454,27 @@ def list_sales(
         except Exception:
             pass
     q = q.order_by(Sale.created_at.desc())
-    return q.offset(skip).limit(min(200, max(1, limit))).all()
+    sales = q.offset(skip).limit(min(200, max(1, limit))).all()
+    
+    # Build response with user information
+    result = []
+    for sale in sales:
+        user_info = None
+        if sale.user_id:
+            user = db.query(User).filter(User.id == sale.user_id).first()
+            if user:
+                user_info = {"email": user.email}
+        
+        result.append({
+            "id": sale.id,
+            "total": sale.total,
+            "created_at": sale.created_at,
+            "user_id": sale.user_id,
+            "tipo_venta": "abono" if sale.tipo_venta == "credito" else sale.tipo_venta,
+            "user": user_info
+        })
+    
+    return result
 
-
-@router.get("/export")
-def export_sales_csv(
-    date_from: str | None = None,
-    date_to: str | None = None,
-    user_id: int | None = None,
-    db: Session = Depends(get_db),
-    tenant: Tenant = Depends(get_tenant),
-    user: User = Depends(get_current_user),
-):
-    q = db.query(Sale).filter(Sale.tenant_id == tenant.id)
-    if user_id is not None:
-        q = q.filter(Sale.user_id == user_id)
-    if date_from:
-        try:
-            df = datetime.fromisoformat(date_from)
-            q = q.filter(Sale.created_at >= df)
-        except Exception:
-            pass
-    if date_to:
-        try:
-            dt = datetime.fromisoformat(date_to)
-            q = q.filter(Sale.created_at <= dt)
-        except Exception:
-            pass
-    q = q.order_by(Sale.created_at.desc())
-
-    import csv
-    from io import StringIO
-
-    buf = StringIO()
-    writer = csv.writer(buf)
-    writer.writerow(["id", "created_at", "user_id", "total"]) 
-    for s in q.all():
-        writer.writerow([
-            s.id,
-            s.created_at.isoformat() if s.created_at else "",
-            s.user_id or "",
-            f"{s.total}",
-        ])
-    csv_data = buf.getvalue()
-    headers = {
-        "Content-Disposition": "attachment; filename=ventas.csv",
-        "Content-Type": "text/csv; charset=utf-8",
-    }
-    return Response(content=csv_data, media_type="text/csv", headers=headers)
 
 
