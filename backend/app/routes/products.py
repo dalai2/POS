@@ -69,6 +69,8 @@ def list_products(
                     func.lower(Product.name).like(f"%{qn}%"),
                     func.lower(Product.codigo).like(f"%{qn}%"),
                     func.lower(Product.category).like(f"%{qn}%"),
+                    func.lower(Product.modelo).like(f"%{qn}%"),
+                    func.lower(Product.talla).like(f"%{qn}%"),
                 )
             )
     if active is not None:

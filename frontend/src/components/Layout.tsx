@@ -11,20 +11,23 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex">
+    <div className="min-h-screen flex" style={{ backgroundColor: '#f0f7f7', fontFamily: 'Poppins, sans-serif' }}>
       <Sidebar />
       <div className="flex-1">
-        <header className="border-b bg-white/80 backdrop-blur sticky top-0 z-10">
+        <header className="border-b sticky top-0 z-10" style={{ backgroundColor: 'white', borderColor: '#f0f7f7' }}>
           <div className="px-6 py-3 flex items-center justify-between">
             <Brand />
             <div className="flex items-center gap-4">
-              <nav className="text-sm text-slate-600 flex gap-4">
-                <a className="hover:text-slate-900" href="/products">Productos</a>
-                <a className="hover:text-slate-900" href="/sales">Ventas</a>
+              <nav className="text-sm flex gap-4" style={{ color: '#2e4354' }}>
+                <a className="hover:opacity-80 transition-opacity" href="/products">Productos</a>
+                <a className="hover:opacity-80 transition-opacity" href="/sales">Ventas</a>
               </nav>
               <button
                 onClick={handleLogout}
-                className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 text-sm font-medium"
+                className="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                style={{ backgroundColor: '#2e4354', color: 'white' }}
+                onMouseEnter={(e) => e.target.style.backgroundColor = '#1e2d3a'}
+                onMouseLeave={(e) => e.target.style.backgroundColor = '#2e4354'}
               >
                 Cerrar Sesión
               </button>

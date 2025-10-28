@@ -2,8 +2,35 @@
 @tailwind components;
 @tailwind utilities;
 
-.input { @apply border rounded px-3 py-2 w-full; }
-.btn { @apply bg-blue-600 text-white rounded px-4 py-2; }
+/* Aplicar Poppins como fuente por defecto */
+* {
+  font-family: 'Poppins', sans-serif;
+}
+
+/* Variables CSS para los colores del branding */
+:root {
+  --velant-primary: #2e4354;
+  --velant-secondary: #f0f7f7;
+  --velant-text: #2e4354;
+  --velant-white: #ffffff;
+  --velant-black: #000000;
+}
+
+.input { 
+  @apply border rounded px-3 py-2 w-full; 
+  border-color: var(--velant-primary);
+  color: var(--velant-text);
+}
+
+.btn { 
+  @apply text-white rounded px-4 py-2 font-medium; 
+  background-color: var(--velant-primary);
+  transition: background-color 0.2s ease;
+}
+
+.btn:hover {
+  background-color: #1e2d3a;
+}
 
 
 

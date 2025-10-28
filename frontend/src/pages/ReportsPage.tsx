@@ -15,6 +15,13 @@ interface CorteDeCajaReport {
   abonos_efectivo: number;
   abonos_tarjeta: number;
   abonos_total: number;
+  pedidos_count: number;
+  pedidos_total: number;
+  pedidos_anticipos: number;
+  pedidos_saldo: number;
+  pedidos_efectivo: number;
+  pedidos_tarjeta: number;
+  pedidos_pagos_total: number;
   total_efectivo: number;
   total_tarjeta: number;
   total_revenue: number;
@@ -276,6 +283,38 @@ export default function ReportsPage() {
     <div class="row">
       <span>Total Abonos:</span>
       <span>$${report.abonos_total.toFixed(2)}</span>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">PEDIDOS</div>
+    <div class="row">
+      <span>Cantidad de Pedidos:</span>
+      <span>${report.pedidos_count}</span>
+    </div>
+    <div class="row">
+      <span>Total Pedidos:</span>
+      <span>$${report.pedidos_total.toFixed(2)}</span>
+    </div>
+    <div class="row">
+      <span>Anticipos Pagados:</span>
+      <span>$${report.pedidos_anticipos.toFixed(2)}</span>
+    </div>
+    <div class="row">
+      <span>Saldo Pendiente:</span>
+      <span>$${report.pedidos_saldo.toFixed(2)}</span>
+    </div>
+    <div class="row">
+      <span>Pagos Pedidos Efectivo:</span>
+      <span>$${report.pedidos_efectivo.toFixed(2)}</span>
+    </div>
+    <div class="row">
+      <span>Pagos Pedidos Tarjeta:</span>
+      <span>$${report.pedidos_tarjeta.toFixed(2)}</span>
+    </div>
+    <div class="row">
+      <span>Total Pagos Pedidos:</span>
+      <span>$${report.pedidos_pagos_total.toFixed(2)}</span>
     </div>
   </div>
 
@@ -757,6 +796,57 @@ export default function ReportsPage() {
                   <span className="font-semibold">Total Abonos</span>
                   <span className="text-xl font-bold text-blue-800">
                     ${report.abonos_total.toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Orders (Pedidos) */}
+            <div className="mb-8">
+              <h3 className="text-lg font-semibold text-gray-800 mb-4 border-b-2 border-gray-300 pb-2">
+                PEDIDOS ESPECIALES
+              </h3>
+              <div className="space-y-3">
+                <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                  <span className="font-medium">Cantidad de Pedidos</span>
+                  <span className="text-lg font-bold text-purple-600">
+                    {report.pedidos_count}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                  <span className="font-medium">Total Pedidos</span>
+                  <span className="text-lg font-bold text-purple-600">
+                    ${report.pedidos_total.toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                  <span className="font-medium">Anticipos Pagados</span>
+                  <span className="text-lg font-bold text-green-600">
+                    ${report.pedidos_anticipos.toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                  <span className="font-medium">Saldo Pendiente</span>
+                  <span className="text-lg font-bold text-orange-600">
+                    ${report.pedidos_saldo.toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                  <span className="font-medium">Pagos Pedidos Efectivo</span>
+                  <span className="text-lg font-bold text-green-600">
+                    ${report.pedidos_efectivo.toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                  <span className="font-medium">Pagos Pedidos Tarjeta</span>
+                  <span className="text-lg font-bold text-blue-600">
+                    ${report.pedidos_tarjeta.toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center p-3 bg-purple-100 rounded-lg">
+                  <span className="font-semibold">Total Pagos Pedidos</span>
+                  <span className="text-xl font-bold text-purple-800">
+                    ${report.pedidos_pagos_total.toFixed(2)}
                   </span>
                 </div>
               </div>

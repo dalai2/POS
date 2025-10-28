@@ -14,6 +14,7 @@ from app.routes.credits import router as credits_router
 from app.routes.reports import router as reports_router
 from app.routes.import_export import router as import_export_router
 from app.routes.init import router as init_router
+from app.routes.productos_pedido import router as productos_pedido_router
 from app.core.database import SessionLocal, init_db
 from app.services.seed import seed_demo
 
@@ -42,7 +43,8 @@ def create_app() -> FastAPI:
     app.include_router(inventory_router, prefix="/inventory", tags=["inventory"])
     app.include_router(credits_router, prefix="/credits", tags=["credits"])
     app.include_router(reports_router, prefix="/reports", tags=["reports"])
-    app.include_router(import_export_router, prefix="/import", tags=["import-export"]) 
+    app.include_router(import_export_router, prefix="/import", tags=["import-export"])
+    app.include_router(productos_pedido_router, prefix="/productos-pedido", tags=["productos-pedido"]) 
 
     return app
 

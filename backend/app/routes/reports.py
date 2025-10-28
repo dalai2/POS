@@ -12,6 +12,7 @@ from app.models.user import User
 from app.models.sale import Sale
 from app.models.payment import Payment
 from app.models.credit_payment import CreditPayment
+from app.models.producto_pedido import Pedido, PagoPedido
 
 router = APIRouter()
 
@@ -153,6 +154,42 @@ def get_corte_de_caja(
     
     abonos_total = abonos_efectivo + abonos_tarjeta
     
+    # Get pedidos (orders) in date range
+    pedidos_query = db.query(Pedido).filter(
+        Pedido.tenant_id == tenant.id,
+        Pedido.created_at >= start_datetime,
+        Pedido.created_at <= end_datetime
+    )
+    
+    all_pedidos = pedidos_query.all()
+    
+    # Initialize pedidos counters
+    pedidos_count = len(all_pedidos)
+    pedidos_total = sum(float(p.total) for p in all_pedidos)
+    pedidos_anticipos = sum(float(p.anticipo_pagado) for p in all_pedidos)
+    pedidos_saldo = sum(float(p.saldo_pendiente) for p in all_pedidos)
+    
+    # Get pagos de pedidos (order payments) in date range
+    pagos_pedidos_query = db.query(PagoPedido).join(Pedido).filter(
+        Pedido.tenant_id == tenant.id,
+        PagoPedido.created_at >= start_datetime,
+        PagoPedido.created_at <= end_datetime
+    )
+    
+    pagos_pedidos = pagos_pedidos_query.all()
+    
+    # Count pedidos payments by method
+    pedidos_efectivo = 0.0
+    pedidos_tarjeta = 0.0
+    
+    for pago in pagos_pedidos:
+        if pago.metodo_pago == "efectivo":
+            pedidos_efectivo += float(pago.monto)
+        elif pago.metodo_pago == "tarjeta":
+            pedidos_tarjeta += float(pago.monto)
+    
+    pedidos_pagos_total = pedidos_efectivo + pedidos_tarjeta
+    
     # Get returns
     returns = db.query(Sale).filter(
         Sale.tenant_id == tenant.id,
@@ -165,8 +202,8 @@ def get_corte_de_caja(
     returns_total = sum(float(r.total) for r in returns)
     
     # Calculate totals
-    total_efectivo = efectivo_ventas + abonos_efectivo
-    total_tarjeta = tarjeta_ventas + abonos_tarjeta
+    total_efectivo = efectivo_ventas + abonos_efectivo + pedidos_efectivo
+    total_tarjeta = tarjeta_ventas + abonos_tarjeta + pedidos_tarjeta
     total_revenue = total_efectivo + total_tarjeta + credito_ventas - returns_total
     
     # Calculate profit margin
@@ -213,6 +250,13 @@ def get_corte_de_caja(
         "abonos_efectivo": abonos_efectivo,
         "abonos_tarjeta": abonos_tarjeta,
         "abonos_total": abonos_total,
+        "pedidos_count": pedidos_count,
+        "pedidos_total": pedidos_total,
+        "pedidos_anticipos": pedidos_anticipos,
+        "pedidos_saldo": pedidos_saldo,
+        "pedidos_efectivo": pedidos_efectivo,
+        "pedidos_tarjeta": pedidos_tarjeta,
+        "pedidos_pagos_total": pedidos_pagos_total,
         "total_efectivo": total_efectivo,
         "total_tarjeta": total_tarjeta,
         "total_revenue": total_revenue,

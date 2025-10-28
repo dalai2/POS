@@ -12,6 +12,8 @@ import SalesHistoryPage from './pages/SalesHistoryPage'
 import MetalRatesPage from './pages/MetalRatesPage'
 import CreditsPage from './pages/CreditsPage'
 import ReportsPage from './pages/ReportsPage'
+import PedidosPage from './pages/PedidosPage'
+import GestionPedidosPage from './pages/GestionPedidosPage'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
@@ -23,6 +25,8 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         <Route path="/users" element={<UsersPage />} />
         <Route path="/billing" element={<BillingPage />} />
         <Route path="/sales" element={<SalesPage />} />
+        <Route path="/pedidos" element={<PedidosPage />} />
+        <Route path="/gestion-pedidos" element={<GestionPedidosPage />} />
         <Route path="/sales/history" element={<SalesHistoryPage />} />
         <Route path="/metal-rates" element={<MetalRatesPage />} />
         <Route path="/credits" element={<CreditsPage />} />

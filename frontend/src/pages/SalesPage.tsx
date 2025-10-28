@@ -6,6 +6,8 @@ type Product = {
   id: number
   name: string
   codigo?: string
+  modelo?: string
+  talla?: string
   sku?: string
   price: string
   cost_price?: string
@@ -952,7 +954,7 @@ export default function SalesPage() {
             <input
               ref={searchRef}
               className="w-full border border-gray-300 rounded-lg px-4 py-2"
-              placeholder="Escanear o escribir código"
+              placeholder="Buscar por nombre, código, modelo o talla"
               onChange={e => loadProducts(e.target.value)}
             />
           </div>
@@ -1015,8 +1017,8 @@ export default function SalesPage() {
                 Agregar
               </button>
             </div>
-          </div>
         </div>
+      </div>
       )}
     </Layout>
   )

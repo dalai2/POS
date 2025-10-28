@@ -9,6 +9,7 @@ from app.models.product import Product
 from app.models.metal_rate import MetalRate
 from app.models.sale import Sale, SaleItem
 from app.models.credit_payment import CreditPayment
+from app.models.producto_pedido import ProductoPedido
 
 
 def seed_jewelry_demo(db: Session):
