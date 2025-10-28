@@ -1,0 +1,11 @@
+node_modules
+frontend
+.git
+.gitignore
+README.md
+*.md
+dev.db
+.env
+.env.local
+.env.production
+.env.development
