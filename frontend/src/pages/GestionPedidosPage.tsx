@@ -211,7 +211,7 @@ export default function GestionPedidosPage() {
       if (pedido.producto?.color) descParts.push(pedido.producto.color)
       if (pedido.producto?.quilataje) descParts.push(pedido.producto.quilataje)
       if (pedido.producto?.peso_gramos) {
-        const peso = typeof pedido.producto.peso_gramos === 'number' ? pedido.producto.peso_gramos : parseFloat(pedido.producto.peso_gramos.toString())
+        const peso = typeof pedido.producto.peso_gramos === 'number' ? pedido.producto.peso_gramos : parseFloat(String(pedido.producto.peso_gramos))
         let pesoFormatted
         if (peso === Math.floor(peso)) {
           pesoFormatted = `${peso}g`
