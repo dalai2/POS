@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+import os
 
 from app.core.config import settings
 from app.routes.auth import router as auth_router
@@ -51,12 +52,13 @@ def create_app() -> FastAPI:
 
 app = create_app()
 
-# Optional dev seed
-try:
-    init_db()
-    with SessionLocal() as db:
-        seed_demo(db)
-except Exception:
-    pass
+# Only seed in development or when explicitly requested
+if settings.env == "dev" or os.getenv("FORCE_SEED") == "true":
+    try:
+        init_db()
+        with SessionLocal() as db:
+            seed_demo(db)
+    except Exception:
+        pass
 
 
