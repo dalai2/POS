@@ -1139,7 +1139,7 @@ export default function ReportsPage() {
         )}
 
         {/* Print Styles */}
-        <style jsx>{`
+        <style>{`
           @media print {
             .print\\:hidden { display: none !important; }
             body { margin: 0; padding: 10mm; }

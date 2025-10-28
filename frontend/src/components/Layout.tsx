@@ -26,8 +26,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 onClick={handleLogout}
                 className="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
                 style={{ backgroundColor: '#2e4354', color: 'white' }}
-                onMouseEnter={(e) => e.target.style.backgroundColor = '#1e2d3a'}
-                onMouseLeave={(e) => e.target.style.backgroundColor = '#2e4354'}
+                onMouseEnter={(e) => (e.target as HTMLElement).style.backgroundColor = '#1e2d3a'}
+                onMouseLeave={(e) => (e.target as HTMLElement).style.backgroundColor = '#2e4354'}
               >
                 Cerrar Sesión
               </button>

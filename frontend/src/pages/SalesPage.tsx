@@ -13,6 +13,9 @@ type Product = {
   cost_price?: string
   costo?: string
   active?: boolean
+  peso_gramos?: number
+  color?: string
+  quilataje?: string
 }
 
 type CartItem = { 
@@ -571,7 +574,7 @@ export default function SalesPage() {
       const items = cart.map(ci => ({
         product_id: ci.product.id,
         quantity: ci.quantity,
-        discount_pct: parseFloat(ci.discount_pct || 0) || 0
+        discount_pct: typeof ci.discount_pct === 'number' ? ci.discount_pct : parseFloat(ci.discount_pct?.toString() || '0') || 0
       }))
 
       let payments = null

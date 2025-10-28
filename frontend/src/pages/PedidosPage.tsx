@@ -689,16 +689,16 @@ export default function PedidosPage() {
             <h3 className="text-lg font-semibold mb-4">Confirmar Producto sobre Pedido</h3>
             <div className="mb-4">
               <p className="text-gray-700 mb-2">
-                <strong>Producto:</strong> {productoToAdd.nombre}
+                <strong>Producto:</strong> {productoToAdd.name}
               </p>
               <p className="text-gray-700 mb-2">
-                <strong>Precio:</strong> ${productoToAdd.precio}
+                <strong>Precio:</strong> ${productoToAdd.price}
               </p>
               <p className="text-gray-700 mb-2">
-                <strong>Tiempo de entrega:</strong> {productoToAdd.tiempo_entrega_dias} días
+                <strong>Tiempo de entrega:</strong> A convenir
               </p>
               <p className="text-gray-700 mb-2">
-                <strong>Anticipo:</strong> {productoToAdd.anticipo_porcentaje}%
+                <strong>Anticipo:</strong> {productoToAdd.anticipo_sugerido || 0}%
               </p>
               {productoToAdd.modelo && (
                 <p className="text-gray-700">
