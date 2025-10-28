@@ -30,6 +30,8 @@ type Pedido = {
     price: number
     disponible: boolean
     anticipo_sugerido?: number
+    peso_gramos?: number
+    codigo?: string
   }
 }
 
