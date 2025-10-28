@@ -219,7 +219,7 @@ export default function SalesPage() {
         if (ci.product.quilataje) descParts.push(ci.product.quilataje)
         if (ci.product.peso_gramos) {
           // Format weight to avoid unnecessary decimals
-          const peso = typeof ci.product.peso_gramos === 'number' ? ci.product.peso_gramos : parseFloat(String(ci.product.peso_gramos))
+          const peso = Number(ci.product.peso_gramos) || 0
           let pesoFormatted
           if (peso === Math.floor(peso)) {
             pesoFormatted = `${peso}g`
@@ -574,7 +574,7 @@ export default function SalesPage() {
       const items = cart.map(ci => ({
         product_id: ci.product.id,
         quantity: ci.quantity,
-        discount_pct: typeof ci.discount_pct === 'number' ? ci.discount_pct : (ci.discount_pct ? parseFloat(String(ci.discount_pct)) : 0)
+        discount_pct: Number(ci.discount_pct) || 0
       }))
 
       let payments = null
