@@ -6,7 +6,7 @@ from typing import Optional, List
 from datetime import datetime, date
 
 from app.core.database import get_db
-from app.core.deps import get_tenant, get_current_user
+from app.core.deps import get_tenant, get_current_user, require_admin
 from app.models.tenant import Tenant
 from app.models.user import User
 from app.models.sale import Sale
@@ -72,7 +72,7 @@ def get_corte_de_caja(
     end_date: Optional[date] = None,
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(get_tenant),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_admin)
 ):
     """
     Generate a corte de caja (cash cut) report showing:
@@ -289,6 +289,18 @@ class SaleDetailReport(BaseModel):
     tarjeta: float = 0.0
 
 
+class PedidoDetailReport(BaseModel):
+    id: int
+    fecha: str
+    cliente: str
+    producto: str
+    cantidad: int
+    total: float
+    anticipo: float
+    saldo: float
+    estado: str
+    vendedor: str
+
 class DetailedCorteCajaReport(BaseModel):
     start_date: str
     end_date: str
@@ -303,6 +315,12 @@ class DetailedCorteCajaReport(BaseModel):
     utilidad_total: float
     piezas_vendidas: int
     pendiente_credito: float
+    
+    # Pedidos
+    pedidos_count: int
+    pedidos_total: float
+    pedidos_anticipos: float
+    pedidos_saldo: float
 
     # Vendedores
     vendedores: List[SalesByVendorReport]
@@ -312,6 +330,9 @@ class DetailedCorteCajaReport(BaseModel):
 
     # Detalle de ventas
     sales_details: List[SaleDetailReport]
+    
+    # Detalle de pedidos
+    pedidos_details: List[PedidoDetailReport]
 
 
 @router.get("/sales-by-vendor", response_model=list[SalesByVendorReport])
@@ -367,7 +388,7 @@ def get_detailed_corte_caja(
     end_date: Optional[date] = None,
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(get_tenant),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_admin)
 ):
     """
     Generate a detailed corte de caja report with individual sales details,
@@ -392,6 +413,14 @@ def get_detailed_corte_caja(
     )
 
     all_sales = sales_query.all()
+    
+    # Get all pedidos in date range
+    pedidos_query = db.query(Pedido).filter(
+        Pedido.tenant_id == tenant.id,
+        Pedido.created_at >= start_datetime,
+        Pedido.created_at <= end_datetime
+    )
+    all_pedidos = pedidos_query.all()
 
     # Initialize counters for summary
     ventas_validas = len(all_sales)
@@ -402,11 +431,18 @@ def get_detailed_corte_caja(
     utilidad_total = 0.0
     piezas_vendidas = 0
     pendiente_credito = 0.0
+    
+    # Pedidos counters
+    pedidos_count = len(all_pedidos)
+    pedidos_total = 0.0
+    pedidos_anticipos = 0.0
+    pedidos_saldo = 0.0
 
     # Group sales by vendedor for vendor stats
     vendor_stats = {}
     daily_stats = {}
     sales_details = []
+    pedidos_details = []
 
     for sale in all_sales:
         # Update summary counters
@@ -487,6 +523,37 @@ def get_detailed_corte_caja(
             "tarjeta": tarjeta_amount
         })
 
+    # Process pedidos
+    from app.models.producto_pedido import ProductoPedido
+    for pedido in all_pedidos:
+        pedidos_total += float(pedido.total)
+        pedidos_anticipos += float(pedido.anticipo_pagado)
+        pedidos_saldo += float(pedido.saldo_pendiente)
+        
+        # Get vendedor
+        vendedor = "Unknown"
+        if pedido.user_id:
+            vendor = db.query(User).filter(User.id == pedido.user_id).first()
+            vendedor = vendor.email if vendor else "Unknown"
+        
+        # Get producto name
+        producto = db.query(ProductoPedido).filter(ProductoPedido.id == pedido.producto_pedido_id).first()
+        producto_name = producto.name if producto else "Producto desconocido"
+        
+        # Pedido details
+        pedidos_details.append({
+            "id": pedido.id,
+            "fecha": pedido.created_at.strftime("%Y-%m-%d %H:%M"),
+            "cliente": pedido.cliente_nombre,
+            "producto": producto_name,
+            "cantidad": pedido.cantidad,
+            "total": float(pedido.total),
+            "anticipo": float(pedido.anticipo_pagado),
+            "saldo": float(pedido.saldo_pendiente),
+            "estado": pedido.estado,
+            "vendedor": vendedor
+        })
+
     # Convert vendor_stats to list
     vendedores = list(vendor_stats.values())
     daily_summaries = list(daily_stats.values())
@@ -503,8 +570,13 @@ def get_detailed_corte_caja(
         "utilidad_total": utilidad_total,
         "piezas_vendidas": piezas_vendidas,
         "pendiente_credito": pendiente_credito,
+        "pedidos_count": pedidos_count,
+        "pedidos_total": pedidos_total,
+        "pedidos_anticipos": pedidos_anticipos,
+        "pedidos_saldo": pedidos_saldo,
         "vendedores": vendedores,
         "daily_summaries": daily_summaries,
-        "sales_details": sales_details
+        "sales_details": sales_details,
+        "pedidos_details": pedidos_details
     }
 

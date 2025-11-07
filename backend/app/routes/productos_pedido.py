@@ -91,6 +91,7 @@ class PedidoUpdate(BaseModel):
 class PedidoOut(BaseModel):
     id: int
     producto_pedido_id: int
+    user_id: int
     cliente_nombre: str
     cliente_telefono: Optional[str] = None
     cliente_email: Optional[str] = None
@@ -109,6 +110,8 @@ class PedidoOut(BaseModel):
     
     # Información del producto
     producto: Optional[ProductoPedidoOut] = None
+    # Información del vendedor
+    vendedor_email: Optional[str] = None
     
     class Config:
         from_attributes = True
@@ -249,6 +252,8 @@ def list_pedidos(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
 ):
+    from datetime import datetime, timedelta
+    
     query = db.query(Pedido).filter(Pedido.tenant_id == tenant.id)
     
     if estado:
@@ -256,13 +261,32 @@ def list_pedidos(
     
     pedidos = query.offset(skip).limit(limit).all()
     
-    # Agregar información del producto a cada pedido
+    # Verificar y actualizar estado vencido (75 días = 2 meses + 15 días)
+    fecha_limite = datetime.utcnow() - timedelta(days=75)
+    for pedido in pedidos:
+        # Si tiene saldo pendiente, no está entregado/cancelado, y han pasado 75 días
+        if (float(pedido.saldo_pendiente) > 0 and 
+            pedido.estado not in ['entregado', 'cancelado', 'vencido'] and
+            pedido.created_at.replace(tzinfo=None) < fecha_limite):
+            pedido.estado = 'vencido'
+            db.add(pedido)
+    
+    # Commit cambios de estados
+    db.commit()
+    
+    # Agregar información del producto y vendedor a cada pedido
+    from app.models.user import User
     for pedido in pedidos:
         producto = db.query(ProductoPedido).filter(
             ProductoPedido.id == pedido.producto_pedido_id,
             ProductoPedido.tenant_id == tenant.id
         ).first()
         pedido.producto = producto
+        
+        # Agregar información del vendedor
+        vendedor = db.query(User).filter(User.id == pedido.user_id).first()
+        if vendedor:
+            pedido.vendedor_email = vendedor.email
     
     return pedidos
 
@@ -338,6 +362,7 @@ def registrar_pago_pedido(
     tenant: Tenant = Depends(get_tenant),
     user: User = Depends(get_current_user),
 ):
+    from datetime import datetime, timedelta
     pedido = db.query(Pedido).filter(
         Pedido.id == pedido_id,
         Pedido.tenant_id == tenant.id
@@ -346,19 +371,25 @@ def registrar_pago_pedido(
     if not pedido:
         raise HTTPException(status_code=404, detail="Pedido no encontrado")
     
+    # Verificar si está vencido (no permitir pagos en pedidos vencidos sin cambiar estado)
+    if pedido.estado == 'vencido':
+        raise HTTPException(status_code=400, detail="No se pueden registrar pagos en pedidos vencidos. Cambie el estado primero.")
+    
     # Crear el pago
+    from decimal import Decimal
     db_pago = PagoPedido(
         pedido_id=pedido_id,
         **pago.dict()
     )
     db.add(db_pago)
     
-    # Actualizar el pedido
+    # Actualizar el pedido (convertir a Decimal para evitar errores de tipo)
+    monto_decimal = Decimal(str(pago.monto))
     if pago.tipo_pago == "anticipo":
-        pedido.anticipo_pagado += pago.monto
-        pedido.saldo_pendiente -= pago.monto
+        pedido.anticipo_pagado += monto_decimal
+        pedido.saldo_pendiente -= monto_decimal
     elif pago.tipo_pago == "saldo":
-        pedido.saldo_pendiente -= pago.monto
+        pedido.saldo_pendiente -= monto_decimal
     
     # Si el saldo pendiente es 0 o menos, marcar como entregado
     if pedido.saldo_pendiente <= 0:

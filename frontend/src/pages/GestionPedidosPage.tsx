@@ -5,6 +5,7 @@ import { api } from '../utils/api'
 type Pedido = {
   id: number
   producto_pedido_id: number
+  user_id: number
   cliente_nombre: string
   cliente_telefono?: string
   cliente_email?: string
@@ -20,6 +21,7 @@ type Pedido = {
   notas_internas?: string
   created_at: string
   updated_at?: string
+  vendedor_email?: string
   producto: {
     id: number
     name: string
@@ -123,21 +125,35 @@ export default function GestionPedidosPage() {
   }
 
   const registrarPago = async () => {
-    if (!pedidoSeleccionado || !montoPago) return
+    if (!pedidoSeleccionado || !montoPago) {
+      setMsg('⚠️ Por favor ingrese un monto válido')
+      return
+    }
+    
+    const montoNum = parseFloat(montoPago)
+    if (isNaN(montoNum) || montoNum <= 0) {
+      setMsg('⚠️ El monto debe ser mayor a 0')
+      return
+    }
     
     try {
       const response = await api.post(`/productos-pedido/pedidos/${pedidoSeleccionado.id}/pagos`, {
-        monto: parseFloat(montoPago),
+        monto: montoNum,
         metodo_pago: metodoPago,
-        tipo_pago: tipoPago
+        tipo_pago: 'saldo'
       })
       
-      setMsg('✅ Pago registrado correctamente')
+      setMsg('✅ Abono registrado correctamente')
       setShowPagoModal(false)
+      setMontoPago('')
+      setMetodoPago('efectivo')
+      
+      // Recargar pedidos para obtener los datos actualizados
+      await loadPedidos()
       
       // Actualizar solo la fila específica con los nuevos datos del pago
-      const nuevoAnticipo = pedidoSeleccionado.anticipo_pagado + parseFloat(montoPago)
-      const nuevoSaldo = pedidoSeleccionado.saldo_pendiente - parseFloat(montoPago)
+      const nuevoAnticipo = pedidoSeleccionado.anticipo_pagado + montoNum
+      const nuevoSaldo = pedidoSeleccionado.saldo_pendiente - montoNum
       
       setPedidos(prevPedidos => 
         prevPedidos.map(p => 
@@ -153,7 +169,7 @@ export default function GestionPedidosPage() {
       
       setTimeout(() => setMsg(''), 3000)
     } catch (e: any) {
-      setMsg(e?.response?.data?.detail || 'Error registrando pago')
+      setMsg(e?.response?.data?.detail || 'Error registrando abono')
     }
   }
 
@@ -427,7 +443,7 @@ export default function GestionPedidosPage() {
           <th style="width: 5%;">Cant.</th>
           <th style="width: 10%;">Código</th>
           <th style="width: 45%;">Descripción</th>
-          <th style="width: 12%;">P.Unitario</th>
+          <th style="width: 12%;">Precio x gramo</th>
           <th style="width: 10%;">Desc.</th>
           <th style="width: 12%;">Importe</th>
         </tr>
@@ -499,8 +515,10 @@ export default function GestionPedidosPage() {
       case 'pendiente': return 'bg-yellow-100 text-yellow-800'
       case 'confirmado': return 'bg-blue-100 text-blue-800'
       case 'en_proceso': return 'bg-orange-100 text-orange-800'
+      case 'listo': return 'bg-cyan-100 text-cyan-800'
       case 'entregado': return 'bg-green-100 text-green-800'
       case 'cancelado': return 'bg-red-100 text-red-800'
+      case 'vencido': return 'bg-purple-100 text-purple-800'
       default: return 'bg-gray-100 text-gray-800'
     }
   }
@@ -510,10 +528,34 @@ export default function GestionPedidosPage() {
       case 'pendiente': return 'Pendiente'
       case 'confirmado': return 'Confirmado'
       case 'en_proceso': return 'En Proceso'
+      case 'listo': return 'Listo'
       case 'entregado': return 'Entregado'
       case 'cancelado': return 'Cancelado'
+      case 'vencido': return 'Vencido'
       default: return estado
     }
+  }
+
+  const getDiasDesdeCreacion = (fechaCreacion: string) => {
+    const hoy = new Date()
+    const fecha = new Date(fechaCreacion)
+    const diferencia = Math.floor((hoy.getTime() - fecha.getTime()) / (1000 * 60 * 60 * 24))
+    return diferencia
+  }
+
+  const getAlertaVencimiento = (dias: number, saldoPendiente: number, estado: string) => {
+    if (estado === 'entregado' || estado === 'cancelado' || saldoPendiente <= 0) return null
+    
+    const DIAS_VENCIMIENTO = 75 // 2 meses + 15 días
+    
+    if (dias >= DIAS_VENCIMIENTO) {
+      return { texto: '¡VENCIDO!', color: 'text-red-700 font-bold' }
+    } else if (dias >= DIAS_VENCIMIENTO - 7) {
+      return { texto: `Vence en ${DIAS_VENCIMIENTO - dias} días`, color: 'text-orange-600 font-semibold' }
+    } else if (dias >= DIAS_VENCIMIENTO - 15) {
+      return { texto: `${dias} días`, color: 'text-yellow-600' }
+    }
+    return { texto: `${dias} días`, color: 'text-gray-500' }
   }
 
   useEffect(() => {
@@ -553,8 +595,10 @@ export default function GestionPedidosPage() {
                 <option value="pendiente">Pendiente</option>
                 <option value="confirmado">Confirmado</option>
                 <option value="en_proceso">En Proceso</option>
+                <option value="listo">Listo</option>
                 <option value="entregado">Entregado</option>
                 <option value="cancelado">Cancelado</option>
+                <option value="vencido">Vencido</option>
               </select>
             </div>
             <div>
@@ -586,10 +630,12 @@ export default function GestionPedidosPage() {
                   <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">ID</th>
                   <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Cliente</th>
                   <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Producto</th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Vendedor</th>
                   <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Cantidad</th>
                   <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Total</th>
                   <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Anticipo</th>
                   <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Saldo</th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Días</th>
                   <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Estado</th>
                   <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Acciones</th>
                 </tr>
@@ -597,7 +643,7 @@ export default function GestionPedidosPage() {
               <tbody className="divide-y divide-gray-200">
                 {pedidos.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="px-4 py-8 text-center text-gray-500">
+                    <td colSpan={11} className="px-4 py-8 text-center text-gray-500">
                       No hay pedidos registrados
                     </td>
                   </tr>
@@ -607,7 +653,17 @@ export default function GestionPedidosPage() {
                       <td className="px-4 py-3 text-sm font-medium">#{p.id}</td>
                       <td className="px-4 py-3 text-sm">
                         <div>
-                          <div className="font-medium">{p.cliente_nombre}</div>
+                          <div className="font-medium">
+                            {p.cliente_nombre}
+                            {p.notas_cliente && (
+                              <span 
+                                className="ml-2 text-yellow-600 cursor-help" 
+                                title={`Nota: ${p.notas_cliente}`}
+                              >
+                                📝
+                              </span>
+                            )}
+                          </div>
                           {p.cliente_telefono && (
                             <div className="text-gray-500">{p.cliente_telefono}</div>
                           )}
@@ -623,10 +679,26 @@ export default function GestionPedidosPage() {
                           </div>
                         </div>
                       </td>
+                      <td className="px-4 py-3 text-sm">
+                        <div className="text-xs text-gray-600">
+                          {p.vendedor_email || '-'}
+                        </div>
+                      </td>
                       <td className="px-4 py-3 text-sm">{p.cantidad}</td>
                       <td className="px-4 py-3 text-sm font-medium">${p.total.toFixed(2)}</td>
                       <td className="px-4 py-3 text-sm text-blue-600">${p.anticipo_pagado.toFixed(2)}</td>
                       <td className="px-4 py-3 text-sm text-green-600">${p.saldo_pendiente.toFixed(2)}</td>
+                      <td className="px-4 py-3 text-sm">
+                        {(() => {
+                          const dias = getDiasDesdeCreacion(p.created_at)
+                          const alerta = getAlertaVencimiento(dias, p.saldo_pendiente, p.estado)
+                          return alerta ? (
+                            <span className={alerta.color}>{alerta.texto}</span>
+                          ) : (
+                            <span className="text-gray-500">{dias} días</span>
+                          )
+                        })()}
+                      </td>
                       <td className="px-4 py-3 text-sm">
                         {(userRole === 'admin' || userRole === 'owner') ? (
                           <select
@@ -640,6 +712,7 @@ export default function GestionPedidosPage() {
                             <option value="listo">Listo</option>
                             <option value="entregado">Entregado</option>
                             <option value="cancelado">Cancelado</option>
+                            <option value="vencido">Vencido</option>
                           </select>
                         ) : (
                           <span className={`px-2 py-1 rounded-full text-xs font-medium ${getEstadoColor(p.estado)}`}>
@@ -661,7 +734,7 @@ export default function GestionPedidosPage() {
                               onClick={() => abrirModalPago(p)}
                               className="text-purple-600 hover:text-purple-800 text-xs"
                             >
-                              Pagar
+                              Abonos
                             </button>
                           )}
                         </div>
@@ -682,21 +755,27 @@ export default function GestionPedidosPage() {
         )}
       </div>
 
-      {/* Modal de Pago */}
+      {/* Modal de Abono */}
       {showPagoModal && pedidoSeleccionado && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold mb-4">Registrar Pago</h3>
-            <div className="mb-4">
-              <p className="text-gray-700 mb-2">
+            <h3 className="text-lg font-semibold mb-4">Registrar Abono</h3>
+            <div className="mb-4 space-y-2">
+              <p className="text-gray-700">
                 <strong>Cliente:</strong> {pedidoSeleccionado.cliente_nombre}
               </p>
-              <p className="text-gray-700 mb-2">
+              <p className="text-gray-700">
                 <strong>Producto:</strong> {pedidoSeleccionado.producto.name}
               </p>
-              <p className="text-gray-700 mb-2">
+              <p className="text-gray-700">
                 <strong>Saldo pendiente:</strong> ${pedidoSeleccionado.saldo_pendiente.toFixed(2)}
               </p>
+              {pedidoSeleccionado.notas_cliente && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mt-2">
+                  <p className="text-sm font-medium text-yellow-800 mb-1">📝 Nota del cliente:</p>
+                  <p className="text-sm text-yellow-900">{pedidoSeleccionado.notas_cliente}</p>
+                </div>
+              )}
             </div>
             
             <div className="space-y-4">
@@ -712,7 +791,7 @@ export default function GestionPedidosPage() {
               </div>
               
               <div>
-                <label className="block text-sm font-medium mb-1">Método de pago</label>
+                <label className="block text-sm font-medium mb-1">Método de abono</label>
                 <select
                   className="w-full border border-gray-300 rounded-lg px-3 py-2"
                   value={metodoPago}
@@ -724,18 +803,6 @@ export default function GestionPedidosPage() {
                 </select>
               </div>
               
-              <div>
-                <label className="block text-sm font-medium mb-1">Tipo de pago</label>
-                <select
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                  value={tipoPago}
-                  onChange={e => setTipoPago(e.target.value)}
-                >
-                  <option value="saldo">Saldo pendiente</option>
-                  <option value="anticipo">Anticipo adicional</option>
-                  <option value="total">Pago total</option>
-                </select>
-              </div>
             </div>
             
             <div className="flex gap-3 mt-6">
@@ -749,7 +816,7 @@ export default function GestionPedidosPage() {
                 onClick={registrarPago}
                 className="flex-1 bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700"
               >
-                Registrar Pago
+                Registrar Abono
               </button>
             </div>
           </div>

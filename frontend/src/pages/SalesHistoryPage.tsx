@@ -306,25 +306,28 @@ export default function SalesHistoryPage() {
           <th style="width: 5%;">Cant.</th>
           <th style="width: 10%;">Código</th>
           <th style="width: 45%;">Descripción</th>
-          <th style="width: 12%;">P.Unitario</th>
-          <th style="width: 10%;">Desc.</th>
+          <th style="width: 12%;">Precio x gramo</th>
+          <th style="width: 10%;">Desc%</th>
           <th style="width: 12%;">Importe</th>
         </tr>
       </thead>
       <tbody>
         ${items.map((item: any) => {
-          const unitPrice = parseFloat(item.unit_price || '0')
+          const precioConDescuento = parseFloat(item.unit_price || '0')
           const discountPct = parseFloat(item.discount_pct || '0')
-          const discountAmount = unitPrice * discountPct / 100
+          const quantity = parseInt(item.quantity || '1')
+          // Si hay descuento, calcular precio original
+          const precioOriginal = discountPct > 0 && discountPct < 100 ? precioConDescuento / (1 - discountPct / 100) : precioConDescuento
+          const importe = precioConDescuento * quantity
           
           return `
           <tr>
-            <td>${item.quantity}</td>
+            <td>${quantity}</td>
             <td>${item.codigo || ''}</td>
             <td>${item.name || 'Producto sin descripción'}</td>
-            <td>$${unitPrice.toFixed(2)}</td>
-            <td>$${discountAmount.toFixed(2)}</td>
-            <td>$${(parseFloat(item.total_price || '0')).toFixed(2)}</td>
+            <td>$${precioOriginal.toFixed(2)}</td>
+            <td>${discountPct > 0 ? discountPct.toFixed(1) + '%' : '-'}</td>
+            <td>$${importe.toFixed(2)}</td>
           </tr>
         `}).join('')}
       </tbody>
@@ -335,8 +338,8 @@ export default function SalesHistoryPage() {
       <div><strong>TOTAL :</strong> $${total.toFixed(2)}</div>
       ${efectivoPaid > 0 ? `<div><strong>EFECTIVO :</strong> $${efectivoPaid.toFixed(2)}</div>` : ''}
       ${tarjetaPaid > 0 ? `<div><strong>TARJETA :</strong> $${tarjetaPaid.toFixed(2)}</div>` : ''}
-      <div><strong>ABONOS/ANTICIPO :</strong> $${abonoAmount.toFixed(2)}</div>
-      <div><strong>SALDO :</strong> $${saldoAmount.toFixed(2)}</div>
+      ${abonoAmount > 0 ? `<div><strong>ABONOS/ANTICIPO :</strong> $${abonoAmount.toFixed(2)}</div>` : ''}
+      ${saldoAmount > 0 ? `<div><strong>SALDO :</strong> $${saldoAmount.toFixed(2)}</div>` : ''}
     </div>
 
     <!-- Footer Section -->

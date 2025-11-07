@@ -60,6 +60,8 @@ def get_credit_sales(
     current_user: User = Depends(require_admin)
 ):
     """Get all credit sales with optional filters"""
+    from datetime import datetime, timedelta
+    
     query = db.query(Sale).filter(
         Sale.tenant_id == tenant.id,
         Sale.tipo_venta == "credito"
@@ -72,6 +74,20 @@ def get_credit_sales(
         query = query.filter(Sale.vendedor_id == vendedor_id)
 
     sales = query.order_by(Sale.created_at.desc()).all()
+    
+    # Verificar y actualizar estado vencido (75 días = 2 meses + 15 días)
+    fecha_limite = datetime.utcnow() - timedelta(days=75)
+    for sale in sales:
+        balance = float(sale.total) - float(sale.amount_paid or 0)
+        # Si tiene balance pendiente, no está pagado/cancelado, y han pasado 75 días
+        if (balance > 0 and 
+            sale.credit_status not in ['paid', 'cancelled', 'vencido'] and
+            sale.created_at.replace(tzinfo=None) < fecha_limite):
+            sale.credit_status = 'vencido'
+            db.add(sale)
+    
+    # Commit cambios de estados
+    db.commit()
 
     # Add payments and balance to each sale
     result = []
@@ -129,6 +145,9 @@ def register_payment(
     
     if not sale:
         raise HTTPException(status_code=404, detail="Credit sale not found")
+    
+    # Verificar si está vencido (permitir pagos en ventas vencidas)
+    # El estado cambiará a "paid" automáticamente cuando se pague completo
     
     # Calculate remaining balance
     balance = float(sale.total) - float(sale.amount_paid or 0)

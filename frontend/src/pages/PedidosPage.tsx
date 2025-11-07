@@ -7,10 +7,10 @@ type ProductoPedido = {
   name: string
   price: number
   cost_price?: number
-  category?: string
+  milimetros?: string
   default_discount_pct?: number
   // Campos específicos de joyería
-  codigo?: string
+  codigo: string  // Requerido
   marca?: string
   modelo?: string
   color?: string
@@ -36,11 +36,24 @@ type User = {
   email: string
 }
 
+type MetalRate = {
+  id: number
+  metal_type: string
+  rate_per_gram: number
+}
+
 export default function PedidosPage() {
   const [productos, setProductos] = useState<ProductoPedido[]>([])
+  const [allProductos, setAllProductos] = useState<ProductoPedido[]>([])
+  const [metalRates, setMetalRates] = useState<MetalRate[]>([])
   const [users, setUsers] = useState<User[]>([])
   const [cart, setCart] = useState<PedidoItem[]>([])
   const [msg, setMsg] = useState('')
+  
+  // Filtros
+  const [quilatajeFilter, setQuilatajeFilter] = useState('')
+  const [modeloFilter, setModeloFilter] = useState('')
+  const [tallaFilter, setTallaFilter] = useState('')
   
   // Información del cliente
   const [clienteNombre, setClienteNombre] = useState('')
@@ -69,7 +82,7 @@ export default function PedidosPage() {
     name: '',
     price: '',
     cost_price: '',
-    category: '',
+    milimetros: '',
     default_discount_pct: '',
     // Campos específicos de joyería
     codigo: '',
@@ -122,7 +135,46 @@ export default function PedidosPage() {
     setUserRole(localStorage.getItem('role') || '')
     loadProductos()
     loadUsers()
+    loadMetalRates()
   }, [])
+  
+  useEffect(() => {
+    applyLocalFilters(allProductos)
+  }, [quilatajeFilter, modeloFilter, tallaFilter])
+
+  const loadMetalRates = async () => {
+    try {
+      const r = await api.get('/metal-rates')
+      setMetalRates(r.data || [])
+    } catch (e) {
+      console.error('Error loading metal rates:', e)
+    }
+  }
+  
+  const applyLocalFilters = (productList: ProductoPedido[]) => {
+    let filtered = productList
+
+    // Filtrar por quilataje
+    if (quilatajeFilter) {
+      filtered = filtered.filter(p => p.quilataje === quilatajeFilter)
+    }
+
+    // Filtrar por modelo
+    if (modeloFilter.trim()) {
+      filtered = filtered.filter(p => 
+        p.modelo && p.modelo.toLowerCase().includes(modeloFilter.toLowerCase())
+      )
+    }
+
+    // Filtrar por talla
+    if (tallaFilter.trim()) {
+      filtered = filtered.filter(p => 
+        p.talla && p.talla.toLowerCase().includes(tallaFilter.toLowerCase())
+      )
+    }
+
+    setProductos(filtered)
+  }
 
   const loadProductos = async (q = '') => {
     const qs = new URLSearchParams()
@@ -131,7 +183,8 @@ export default function PedidosPage() {
     if (q) qs.set('q', q)
     try {
       const r = await api.get(`/productos-pedido/?${qs.toString()}`)
-      setProductos(r.data)
+      setAllProductos(r.data)
+      applyLocalFilters(r.data)
     } catch (e: any) {
       setMsg(e?.response?.data?.detail || 'Error cargando productos')
     }
@@ -210,15 +263,15 @@ export default function PedidosPage() {
   }
 
   const createProduct = async () => {
-    if (!newProduct.name.trim() || !newProduct.price) {
-      setMsg('El nombre y precio son requeridos')
+    if (!newProduct.codigo.trim()) {
+      setMsg('El código es requerido')
       return
     }
 
     try {
       const productData = {
         name: newProduct.name,
-        codigo: newProduct.codigo || null,
+        codigo: newProduct.codigo,  // Ahora es requerido
         marca: newProduct.marca || null,
         modelo: newProduct.modelo || null,
         color: newProduct.color || null,
@@ -230,7 +283,7 @@ export default function PedidosPage() {
         price: parseFloat(newProduct.price),
         cost_price: newProduct.cost_price ? parseFloat(newProduct.cost_price) : null,
         precio_manual: newProduct.precio_manual ? parseFloat(newProduct.precio_manual) : null,
-        category: newProduct.category || null,
+        milimetros: newProduct.milimetros || null,
         default_discount_pct: newProduct.default_discount_pct ? parseFloat(newProduct.default_discount_pct) : null,
         anticipo_sugerido: newProduct.anticipo_sugerido ? parseFloat(newProduct.anticipo_sugerido) : null,
         disponible: newProduct.disponible
@@ -262,7 +315,7 @@ export default function PedidosPage() {
         price: '',
         cost_price: '',
         precio_manual: '',
-        category: '',
+        milimetros: '',
         default_discount_pct: '',
         anticipo_sugerido: '',
         disponible: true
@@ -283,7 +336,7 @@ export default function PedidosPage() {
       name: product.name,
       price: product.price.toString(),
       cost_price: product.cost_price?.toString() || '',
-      category: product.category || '',
+      milimetros: product.milimetros || '',
       default_discount_pct: product.default_discount_pct?.toString() || '',
       codigo: product.codigo || '',
       marca: product.marca || '',
@@ -312,6 +365,36 @@ export default function PedidosPage() {
     } catch (error) {
       console.error('Error deleting product:', error)
       setMsg('Error al eliminar el producto')
+    }
+  }
+
+  const calcularPrecioPorTasa = async () => {
+    if (!newProduct.quilataje || !newProduct.peso_gramos) {
+      setMsg('⚠️ Para calcular automáticamente necesitas quilataje y peso en gramos')
+      setTimeout(() => setMsg(''), 3000)
+      return
+    }
+
+    try {
+      const response = await api.get('/productos-pedido/calcular-precio/', {
+        params: {
+          quilataje: newProduct.quilataje,
+          peso_gramos: parseFloat(newProduct.peso_gramos)
+        }
+      })
+      
+      const costoCalculado = response.data.costo_calculado
+      setNewProduct({
+        ...newProduct,
+        cost_price: costoCalculado.toString()
+      })
+      
+      setMsg(`✅ Costo calculado: $${costoCalculado.toFixed(2)} (Tasa: $${response.data.tasa_por_gramo}/g × ${response.data.peso_gramos}g)`)
+      setTimeout(() => setMsg(''), 5000)
+      
+    } catch (error: any) {
+      setMsg(error?.response?.data?.detail || 'Error calculando precio')
+      setTimeout(() => setMsg(''), 3000)
     }
   }
 
@@ -421,9 +504,9 @@ export default function PedidosPage() {
 
   return (
     <Layout>
-      <div className="grid grid-cols-12 gap-6 h-[calc(100vh-100px)]">
+      <div className="grid grid-cols-12 gap-6">
         {/* Left: Cart & Checkout */}
-        <div className="col-span-8 flex flex-col space-y-4">
+        <div className="col-span-8 space-y-4">
           {/* Header */}
           <div className="bg-purple-50 rounded-lg p-4">
             <h1 className="text-2xl font-bold text-purple-800">📋 Productos sobre Pedido</h1>
@@ -471,7 +554,7 @@ export default function PedidosPage() {
           </div>
 
           {/* Cart */}
-          <div className="flex-1 bg-white border rounded-lg p-4">
+          <div className="bg-white border rounded-lg p-4">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold">Carrito de Pedidos</h3>
               {cart.length > 0 && (
@@ -489,7 +572,7 @@ export default function PedidosPage() {
                 No hay productos en el carrito
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-3 max-h-64 overflow-y-auto">
                 {cart.map(ci => (
                   <div key={ci.producto.id} className="flex items-center justify-between bg-gray-50 p-3 rounded-lg">
                     <div className="flex-1">
@@ -604,7 +687,29 @@ export default function PedidosPage() {
               )}
               {(userRole === 'admin' || userRole === 'owner') && (
                 <button
-                  onClick={() => setShowCreateProductModal(true)}
+                  onClick={() => {
+                    setEditingProduct(null)
+                    setNewProduct({
+                      name: '',
+                      price: '',
+                      cost_price: '',
+                      milimetros: '',
+                      default_discount_pct: '',
+                      codigo: '',
+                      marca: '',
+                      modelo: '',
+                      color: '',
+                      quilataje: '',
+                      base: '',
+                      tipo_joya: '',
+                      talla: '',
+                      peso_gramos: '',
+                      precio_manual: '',
+                      anticipo_sugerido: '',
+                      disponible: true
+                    })
+                    setShowCreateProductModal(true)
+                  }}
                   className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700"
                 >
                   + Crear Producto
@@ -613,15 +718,70 @@ export default function PedidosPage() {
             </div>
           </div>
           
-          {/* Product Search */}
-          <div>
-            <label className="block text-sm font-medium mb-1">Buscar producto</label>
-            <input
-              ref={searchRef}
-              className="w-full border border-gray-300 rounded-lg px-4 py-2"
-              placeholder="Buscar por nombre, modelo o color"
-              onChange={e => loadProductos(e.target.value)}
-            />
+          {/* Product Search and Filters */}
+          <div className="space-y-3">
+            {/* Main search bar */}
+            <div>
+              <label className="block text-sm font-medium mb-1">Buscar producto</label>
+              <input
+                ref={searchRef}
+                className="w-full border border-gray-300 rounded-lg px-4 py-2"
+                placeholder="Buscar por nombre, código, modelo, color..."
+                onChange={e => loadProductos(e.target.value)}
+              />
+            </div>
+
+            {/* Specific filters */}
+            <div className="grid grid-cols-4 gap-2">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Quilataje</label>
+                <select
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                  value={quilatajeFilter}
+                  onChange={e => setQuilatajeFilter(e.target.value)}
+                >
+                  <option value="">Todos</option>
+                  {metalRates.map(mr => (
+                    <option key={mr.id} value={mr.metal_type}>
+                      {mr.metal_type}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Modelo</label>
+                <input
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                  placeholder="Filtrar por modelo..."
+                  value={modeloFilter}
+                  onChange={e => setModeloFilter(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Talla</label>
+                <input
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                  placeholder="Filtrar por talla..."
+                  value={tallaFilter}
+                  onChange={e => setTallaFilter(e.target.value)}
+                />
+              </div>
+
+              <div className="flex items-end">
+                <button
+                  className="w-full bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 text-sm"
+                  onClick={() => {
+                    setQuilatajeFilter('')
+                    setModeloFilter('')
+                    setTallaFilter('')
+                  }}
+                >
+                  🔄 Limpiar
+                </button>
+              </div>
+            </div>
           </div>
           
           {/* Product List */}
@@ -737,42 +897,53 @@ export default function PedidosPage() {
             <div className="space-y-3">
               <input
                 className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                placeholder="Nombre del producto *"
+                placeholder="Nombre del producto"
                 value={newProduct.name}
                 onChange={e => setNewProduct({...newProduct, name: e.target.value})}
               />
               <div className="grid grid-cols-2 gap-3">
                 <input
                   className="border border-gray-300 rounded-lg px-3 py-2"
-                  placeholder="Código"
+                  placeholder="Código *"
                   value={newProduct.codigo}
                   onChange={e => setNewProduct({...newProduct, codigo: e.target.value})}
+                  required
                 />
                 <input
                   className="border border-gray-300 rounded-lg px-3 py-2"
-                  placeholder="Precio *"
+                  placeholder="Precio"
                   type="number"
                   step="0.01"
                   value={newProduct.price}
                   onChange={e => setNewProduct({...newProduct, price: e.target.value})}
                 />
+                <div className="relative">
+                  <input
+                    className="border border-gray-300 rounded-lg px-3 py-2 w-full"
+                    placeholder="Costo"
+                    type="number"
+                    step="0.01"
+                    value={newProduct.cost_price}
+                    onChange={e => setNewProduct({...newProduct, cost_price: e.target.value})}
+                  />
+                  <button
+                    type="button"
+                    onClick={calcularPrecioPorTasa}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600"
+                    title="Calcular costo basado en quilataje y peso"
+                  >
+                    🧮
+                  </button>
+                </div>
                 <input
                   className="border border-gray-300 rounded-lg px-3 py-2"
-                  placeholder="Costo"
-                  type="number"
-                  step="0.01"
-                  value={newProduct.cost_price}
-                  onChange={e => setNewProduct({...newProduct, cost_price: e.target.value})}
+                  placeholder="Peso"
+                  value={newProduct.milimetros}
+                  onChange={e => setNewProduct({...newProduct, milimetros: e.target.value})}
                 />
                 <input
                   className="border border-gray-300 rounded-lg px-3 py-2"
-                  placeholder="Categoría"
-                  value={newProduct.category}
-                  onChange={e => setNewProduct({...newProduct, category: e.target.value})}
-                />
-                <input
-                  className="border border-gray-300 rounded-lg px-3 py-2"
-                  placeholder="Marca"
+                  placeholder="Nombre"
                   value={newProduct.marca}
                   onChange={e => setNewProduct({...newProduct, marca: e.target.value})}
                 />
@@ -788,12 +959,20 @@ export default function PedidosPage() {
                   value={newProduct.color}
                   onChange={e => setNewProduct({...newProduct, color: e.target.value})}
                 />
-                <input
+                <select
                   className="border border-gray-300 rounded-lg px-3 py-2"
-                  placeholder="Quilataje"
                   value={newProduct.quilataje}
                   onChange={e => setNewProduct({...newProduct, quilataje: e.target.value})}
-                />
+                >
+                  <option value="">Seleccionar quilataje</option>
+                  <option value="10k">10k</option>
+                  <option value="14k">14k</option>
+                  <option value="18k">18k</option>
+                  <option value="oro_italiano">Oro Italiano</option>
+                  <option value="plata_gold">Plata Gold</option>
+                  <option value="plata_silver">Plata Silver</option>
+                  <option value="925">925 (Plata Sterling)</option>
+                </select>
                 <input
                   className="border border-gray-300 rounded-lg px-3 py-2"
                   placeholder="Talla"
@@ -808,6 +987,9 @@ export default function PedidosPage() {
                   value={newProduct.anticipo_sugerido}
                   onChange={e => setNewProduct({...newProduct, anticipo_sugerido: e.target.value})}
                 />
+              </div>
+              <div className="text-xs text-blue-600 bg-blue-50 p-2 rounded">
+                💡 <strong>Cálculo automático de costo:</strong> Ingresa quilataje y peso en gramos, luego presiona el botón 🧮 en el campo "Costo"
               </div>
               <div className="flex items-center space-x-2">
                 <input
@@ -892,7 +1074,7 @@ export default function PedidosPage() {
                 <h4 className="font-medium text-blue-800 mb-2 mt-3">Columnas opcionales:</h4>
                 <ul className="text-sm text-blue-700 space-y-1">
                   <li>• codigo, marca, modelo, color, quilataje</li>
-                  <li>• talla, categoria, anticipo_sugerido</li>
+                  <li>• talla, milimetros, anticipo_sugerido</li>
                 </ul>
               </div>
             </div>

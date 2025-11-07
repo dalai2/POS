@@ -54,6 +54,10 @@ interface DetailedCorteCajaReport {
   utilidad_total: number;
   piezas_vendidas: number;
   pendiente_credito: number;
+  pedidos_count: number;
+  pedidos_total: number;
+  pedidos_anticipos: number;
+  pedidos_saldo: number;
   vendedores: Array<{
     vendedor_id: number;
     vendedor_name: string;
@@ -82,6 +86,18 @@ interface DetailedCorteCajaReport {
     efectivo: number;
     tarjeta: number;
   }>;
+  pedidos_details: Array<{
+    id: number;
+    fecha: string;
+    cliente: string;
+    producto: string;
+    cantidad: number;
+    total: number;
+    anticipo: number;
+    saldo: number;
+    estado: string;
+    vendedor: string;
+  }>;
 }
 
 export default function ReportsPage() {
@@ -90,22 +106,31 @@ export default function ReportsPage() {
   const [detailedReport, setDetailedReport] = useState<DetailedCorteCajaReport | null>(null);
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
-  const [reportType, setReportType] = useState<'summary' | 'detailed'>('summary');
+  const [reportType, setReportType] = useState<'summary' | 'detailed'>('detailed');
+  const userRole = localStorage.getItem('role') || '';
+
+  // Verificar permisos
+  if (userRole !== 'admin' && userRole !== 'owner') {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <h2 className="text-2xl font-bold text-red-600 mb-2">⛔ Acceso Denegado</h2>
+            <p className="text-gray-600">No tienes permisos para ver los reportes.</p>
+            <p className="text-gray-600">Solo administradores y dueños pueden acceder.</p>
+          </div>
+        </div>
+      </Layout>
+    )
+  }
 
   const generateReport = async () => {
     setLoading(true);
     try {
-      if (reportType === 'detailed') {
         const response = await api.get('/reports/detailed-corte-caja', {
           params: { start_date: startDate, end_date: endDate }
         });
         setDetailedReport(response.data);
-      } else {
-      const response = await api.get('/reports/corte-de-caja', {
-        params: { start_date: startDate, end_date: endDate }
-      });
-      setReport(response.data);
-      }
     } catch (error) {
       console.error('Error generating report:', error);
       alert('Error al generar reporte');
@@ -529,6 +554,22 @@ export default function ReportsPage() {
       <span>Utilidad Total:</span>
       <span>$${detailedReport.utilidad_total.toFixed(2)}</span>
     </div>
+    <div class="row" style="border-top: 2px solid #ddd; margin-top: 10px; padding-top: 10px;">
+      <span style="font-weight: bold;">Pedidos:</span>
+      <span>${detailedReport.pedidos_count}</span>
+    </div>
+    <div class="row">
+      <span>Total Pedidos:</span>
+      <span>$${detailedReport.pedidos_total.toFixed(2)}</span>
+    </div>
+    <div class="row">
+      <span>Anticipos:</span>
+      <span style="color: green;">$${detailedReport.pedidos_anticipos.toFixed(2)}</span>
+    </div>
+    <div class="row">
+      <span>Saldo Pendiente:</span>
+      <span style="color: orange;">$${detailedReport.pedidos_saldo.toFixed(2)}</span>
+    </div>
   </div>
 
   ${detailedReport.vendedores.length > 0 ? `
@@ -627,6 +668,42 @@ export default function ReportsPage() {
   </div>
   ` : ''}
 
+  ${detailedReport.pedidos_details && detailedReport.pedidos_details.length > 0 ? `
+  <div class="section">
+    <div class="section-title">DETALLE DE PEDIDOS</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th>Cliente</th>
+          <th>Producto</th>
+          <th>Cant</th>
+          <th>Total</th>
+          <th>Anticipo</th>
+          <th>Saldo</th>
+          <th>Estado</th>
+          <th>Vendedor</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${detailedReport.pedidos_details.map(p => `
+        <tr>
+          <td>${new Date(p.fecha).toLocaleDateString('es-ES')}</td>
+          <td>${p.cliente}</td>
+          <td>${p.producto}</td>
+          <td>${p.cantidad}</td>
+          <td>$${p.total.toFixed(2)}</td>
+          <td style="color: green;">$${p.anticipo.toFixed(2)}</td>
+          <td style="color: orange;">$${p.saldo.toFixed(2)}</td>
+          <td>${p.estado}</td>
+          <td>${p.vendedor}</td>
+        </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  </div>
+  ` : ''}
+
   <div class="footer">
     Reporte generado el ${formattedDate} a las ${formattedTime}
   </div>
@@ -646,19 +723,6 @@ export default function ReportsPage() {
         {/* Date Selection */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-6 print:hidden">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Tipo de Reporte
-              </label>
-              <select
-                value={reportType}
-                onChange={(e) => setReportType(e.target.value as 'summary' | 'detailed')}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2"
-              >
-                <option value="summary">Resumen</option>
-                <option value="detailed">Detallado</option>
-              </select>
-            </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1021,8 +1085,31 @@ export default function ReportsPage() {
                   <p className="text-2xl font-bold text-purple-700">{detailedReport.piezas_vendidas}</p>
                 </div>
                 <div className="text-center p-3 bg-orange-100 rounded">
-                  <p className="text-sm text-gray-600">Pendiente crédito</p>
+                  <p className="text-sm text-gray-600">Abonos</p>
                   <p className="text-2xl font-bold text-orange-700">${detailedReport.pendiente_credito.toFixed(2)}</p>
+                </div>
+              </div>
+              
+              {/* Pedidos */}
+              <div className="mt-6 pt-6 border-t-2 border-gray-200">
+                <h4 className="text-lg font-bold text-gray-800 mb-3">Pedidos</h4>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="text-center p-3 bg-indigo-100 rounded">
+                    <p className="text-sm text-gray-600">Total Pedidos</p>
+                    <p className="text-2xl font-bold text-indigo-700">{detailedReport.pedidos_count}</p>
+                  </div>
+                  <div className="text-center p-3 bg-blue-100 rounded">
+                    <p className="text-sm text-gray-600">Total ($)</p>
+                    <p className="text-2xl font-bold text-blue-700">${detailedReport.pedidos_total.toFixed(2)}</p>
+                  </div>
+                  <div className="text-center p-3 bg-green-100 rounded">
+                    <p className="text-sm text-gray-600">Anticipos ($)</p>
+                    <p className="text-2xl font-bold text-green-700">${detailedReport.pedidos_anticipos.toFixed(2)}</p>
+                  </div>
+                  <div className="text-center p-3 bg-orange-100 rounded">
+                    <p className="text-sm text-gray-600">Saldo ($)</p>
+                    <p className="text-2xl font-bold text-orange-700">${detailedReport.pedidos_saldo.toFixed(2)}</p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1122,6 +1209,45 @@ export default function ReportsPage() {
                           <td className="px-2 py-2 text-center text-xs">{sale.estado}</td>
                           <td className="px-2 py-2 text-center text-xs">{sale.tipo}</td>
                           <td className="px-2 py-2 text-xs">{sale.vendedor}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+            
+            {/* Detalle de Pedidos */}
+            {detailedReport.pedidos_details && detailedReport.pedidos_details.length > 0 && (
+              <div className="p-6 border-b-2 border-gray-300">
+                <h3 className="text-xl font-bold text-gray-800 mb-4">Detalle de Pedidos</h3>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-2 py-2 text-left text-xs font-medium text-gray-500">Fecha</th>
+                        <th className="px-2 py-2 text-left text-xs font-medium text-gray-500">Cliente</th>
+                        <th className="px-2 py-2 text-left text-xs font-medium text-gray-500">Producto</th>
+                        <th className="px-2 py-2 text-center text-xs font-medium text-gray-500">Cant</th>
+                        <th className="px-2 py-2 text-right text-xs font-medium text-gray-500">Total</th>
+                        <th className="px-2 py-2 text-right text-xs font-medium text-gray-500">Anticipo</th>
+                        <th className="px-2 py-2 text-right text-xs font-medium text-gray-500">Saldo</th>
+                        <th className="px-2 py-2 text-center text-xs font-medium text-gray-500">Estado</th>
+                        <th className="px-2 py-2 text-left text-xs font-medium text-gray-500">Vendedor</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white">
+                      {detailedReport.pedidos_details.map((pedido) => (
+                        <tr key={pedido.id} className="border-t">
+                          <td className="px-2 py-2 text-xs">{new Date(pedido.fecha).toLocaleString()}</td>
+                          <td className="px-2 py-2 text-xs">{pedido.cliente}</td>
+                          <td className="px-2 py-2 text-xs">{pedido.producto}</td>
+                          <td className="px-2 py-2 text-center text-xs">{pedido.cantidad}</td>
+                          <td className="px-2 py-2 text-right text-xs font-bold">${pedido.total.toFixed(2)}</td>
+                          <td className="px-2 py-2 text-right text-xs text-green-600">${pedido.anticipo.toFixed(2)}</td>
+                          <td className="px-2 py-2 text-right text-xs text-orange-600">${pedido.saldo.toFixed(2)}</td>
+                          <td className="px-2 py-2 text-center text-xs">{pedido.estado}</td>
+                          <td className="px-2 py-2 text-xs">{pedido.vendedor}</td>
                         </tr>
                       ))}
                     </tbody>

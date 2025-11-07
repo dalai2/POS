@@ -44,10 +44,14 @@ const metalTypes = [
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([])
+  const [allProducts, setAllProducts] = useState<Product[]>([])
   const [metalRates, setMetalRates] = useState<MetalRate[]>([])
   const [message, setMessage] = useState('')
   const [query, setQuery] = useState('')
   const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'archived'>('all')
+  const [tallaFilter, setTallaFilter] = useState('')
+  const [modeloFilter, setModeloFilter] = useState('')
+  const [quilatajeFilter, setQuilatajeFilter] = useState('')
   const [editingId, setEditingId] = useState<number | null>(null)
   const [showAddForm, setShowAddForm] = useState(false)
   const [userRole, setUserRole] = useState<string>(localStorage.getItem('role') || 'cashier')
@@ -94,17 +98,47 @@ export default function ProductsPage() {
     }
   }
 
+  const applyLocalFilters = (productList: Product[]) => {
+    let filtered = productList
+
+    // Filtrar por talla
+    if (tallaFilter.trim()) {
+      filtered = filtered.filter(p => 
+        p.talla && p.talla.toLowerCase().includes(tallaFilter.toLowerCase())
+      )
+    }
+
+    // Filtrar por modelo
+    if (modeloFilter.trim()) {
+      filtered = filtered.filter(p => 
+        p.modelo && p.modelo.toLowerCase().includes(modeloFilter.toLowerCase())
+      )
+    }
+
+    // Filtrar por quilataje
+    if (quilatajeFilter) {
+      filtered = filtered.filter(p => p.quilataje === quilatajeFilter)
+    }
+
+    setProducts(filtered)
+  }
+
   const load = async () => {
     try {
       const qs = new URLSearchParams()
       if (query.trim()) qs.set('q', query.trim())
       if (activeFilter !== 'all') qs.set('active', String(activeFilter === 'active'))
       const res = await api.get(`/products/?${qs.toString()}`)
-      setProducts(res.data)
+      setAllProducts(res.data)
+      applyLocalFilters(res.data)
     } catch (e: any) {
       setMessage(e?.response?.data?.detail || 'Error loading products')
     }
   }
+
+  useEffect(() => {
+    applyLocalFilters(allProducts)
+  }, [tallaFilter, modeloFilter, quilatajeFilter])
 
   const calculatePrice = (quilataje: string, pesoGramos: string, descuento: string): number => {
     if (!quilataje || !pesoGramos) return 0
@@ -315,27 +349,82 @@ export default function ProductsPage() {
           </div>
         </div>
 
-        {/* Search */}
-        <div className="flex gap-2">
-        <input
-            className="flex-1 border border-gray-300 rounded-lg px-4 py-2"
-            placeholder="Buscar por nombre, código, SKU..."
-          value={query}
-          onChange={e => setQuery(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') load() }}
-          />
-          <button className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700" onClick={load}>
-            Buscar
-          </button>
-          <select
-            className="border border-gray-300 rounded-lg px-4 py-2"
-            value={activeFilter}
-            onChange={e => { setActiveFilter(e.target.value as any); load(); }}
-          >
-            <option value="all">Todos</option>
-            <option value="active">Activos</option>
-            <option value="archived">Archivados</option>
-          </select>
+        {/* Search and Filters */}
+        <div className="space-y-3">
+          {/* Main search bar */}
+          <div className="flex gap-2">
+            <input
+              className="flex-1 border border-gray-300 rounded-lg px-4 py-2"
+              placeholder="Buscar por nombre, código, modelo, color..."
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') load() }}
+            />
+            <button className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700" onClick={load}>
+              🔍 Buscar
+            </button>
+            <select
+              className="border border-gray-300 rounded-lg px-4 py-2"
+              value={activeFilter}
+              onChange={e => { setActiveFilter(e.target.value as any); load(); }}
+            >
+              <option value="all">Todos</option>
+              <option value="active">Activos</option>
+              <option value="archived">Archivados</option>
+            </select>
+          </div>
+
+          {/* Specific filters */}
+          <div className="grid grid-cols-4 gap-2">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Quilataje</label>
+              <select
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                value={quilatajeFilter}
+                onChange={e => setQuilatajeFilter(e.target.value)}
+              >
+                <option value="">Todos</option>
+                {metalRates.map(mr => (
+                  <option key={mr.id} value={mr.metal_type}>
+                    {mr.metal_type}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Modelo</label>
+              <input
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                placeholder="Filtrar por modelo..."
+                value={modeloFilter}
+                onChange={e => setModeloFilter(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Talla</label>
+              <input
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                placeholder="Filtrar por talla..."
+                value={tallaFilter}
+                onChange={e => setTallaFilter(e.target.value)}
+              />
+            </div>
+
+            <div className="flex items-end">
+              <button
+                className="w-full bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 text-sm"
+                onClick={() => {
+                  setTallaFilter('')
+                  setModeloFilter('')
+                  setQuilatajeFilter('')
+                }}
+              >
+                🔄 Limpiar Filtros
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Import Modal */}
@@ -488,11 +577,11 @@ export default function ProductsPage() {
                   <option value="">Sin quilataje</option>
                   {metalRates.map(mr => (
                     <option key={mr.id} value={mr.metal_type}>
-                      {mr.metal_type} - ${mr.rate_per_gram}/g
+                      {mr.metal_type} - ${mr.rate_per_gram.toFixed(2)}/g
                     </option>
                   ))}
-        </select>
-      </div>
+                </select>
+              </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Peso (gramos)</label>
@@ -565,12 +654,15 @@ export default function ProductsPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Existencia</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Existencia {userRole === 'cashier' && <span className="text-xs text-red-500">(Solo admin/owner)</span>}
+                </label>
                 <input
                   type="number"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-1.5"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-1.5 disabled:bg-gray-100 disabled:cursor-not-allowed"
                   value={form.stock}
                   onChange={e => setForm({...form, stock: e.target.value})}
+                  disabled={userRole === 'cashier'}
                 />
               </div>
 
@@ -632,7 +724,14 @@ export default function ProductsPage() {
                       <div className="text-xs text-gray-500">{p.modelo}</div>
                 </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm">
-                      {p.quilataje ? metalTypes.find(mt => mt.value === p.quilataje)?.label : '-'}
+                      {p.quilataje ? (
+                        <div>
+                          <div>{p.quilataje}</div>
+                          <div className="text-xs text-gray-500">
+                            ${metalRates.find(r => r.metal_type === p.quilataje)?.rate_per_gram.toFixed(2) || '0.00'}/g
+                          </div>
+                        </div>
+                      ) : '-'}
                 </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm">{p.peso_gramos || '-'}</td>
                     <td className="px-4 py-3 whitespace-nowrap">
