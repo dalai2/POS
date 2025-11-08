@@ -69,16 +69,35 @@ SELECT
     COUNT(*) FILTER (WHERE disponible IS NULL) as disponible_null
 FROM productos_pedido;
 
+-- 8. Verificar si la columna tipo existe en tasas_metal_pedido
+SELECT 
+    CASE 
+        WHEN EXISTS (
+            SELECT 1 
+            FROM information_schema.columns 
+            WHERE table_name = 'tasas_metal_pedido' 
+            AND column_name = 'tipo'
+        ) 
+        THEN 'Columna tipo YA EXISTE' 
+        ELSE 'Columna tipo NO EXISTE - NECESITA MIGRACIÓN'
+    END as status_tipo_tasas;
+
 -- =====================================================
 -- RESULTADOS ESPERADOS:
 -- =====================================================
 -- 
--- Si todo está bien, deberías ver:
--- - category: "NO EXISTE - NECESITA MIGRACIÓN"
--- - name: is_nullable = 'YES' (necesita cambiar a 'NO')
--- - price: is_nullable = 'YES', column_default = NULL (necesita cambios)
--- - cost_price: is_nullable = 'YES', column_default = NULL (necesita cambios)
--- - disponible: column_default = NULL (necesita 'true')
+-- Si todo está bien ANTES DE MIGRAR, deberías ver:
+-- - category: "NO EXISTE - NECESITA MIGRACIÓN" (o "YA EXISTE")
+-- - Columnas originales: name, tipo_joya, price
+--
+-- Si todo está bien DESPUÉS DE MIGRAR, deberías ver:
+-- - category: "YA EXISTE"
+-- - Columnas renombradas: nombre, name (antes tipo_joya), precio
+-- - nombre: is_nullable = 'NO'
+-- - precio: is_nullable = 'NO', column_default = 0
+-- - cost_price: is_nullable = 'NO'
+-- - disponible: column_default = 'true'
+-- - tipo en tasas_metal_pedido: "YA EXISTE"
 -- - Sin registros NULL que causen problemas
 -- 
 -- =====================================================

@@ -14,6 +14,7 @@ from app.models.product import Product
 from app.models.sale import Sale, SaleItem
 from app.models.payment import Payment
 from app.models.credit_payment import CreditPayment
+from app.routes.status_history import create_status_history
 
 
 router = APIRouter()
@@ -197,12 +198,29 @@ async def create_sale(
             paid += amt
             db.add(Payment(sale_id=sale.id, method=p.method, amount=amt))
 
+    # Update amount_paid for the sale
+    sale.amount_paid = paid
+
     # For contado sales, verify payment is sufficient only if payments were provided
     if sale.tipo_venta == "contado" and payments and paid < sale.total:
         raise HTTPException(status_code=400, detail=f"Pago insuficiente: {paid} < {sale.total}")
 
     db.commit()
     db.refresh(sale)
+    
+    # Registrar estado inicial para ventas a crédito
+    if sale.credit_status:  # Si tiene credit_status, es una venta a crédito
+        create_status_history(
+            db=db,
+            tenant_id=tenant.id,
+            entity_type="sale",
+            entity_id=sale.id,
+            old_status=None,  # Estado inicial
+            new_status=sale.credit_status,
+            user_id=user.id,
+            user_email=user.email,
+            notes=f"Venta a crédito creada - Monto inicial pagado: ${float(sale.amount_paid or 0):.2f}"
+        )
     
     # Get payments for this sale
     payments_list = []

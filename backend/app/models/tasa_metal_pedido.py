@@ -14,12 +14,16 @@ class TasaMetalPedido(Base):
     # Metal type: "10k", "14k", "18k", "oro_italiano", "plata_gold", "plata_silver"
     metal_type = Column(String(50), nullable=False, index=True)
     
+    # Type: "costo" or "precio"
+    tipo = Column(String(20), nullable=False, default="precio", index=True)
+    
     # Rate per gram in currency (for custom orders/pedidos)
     rate_per_gram = Column(Numeric(10, 2), nullable=False)
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
 
 
 

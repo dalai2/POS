@@ -11,25 +11,26 @@ from ..core.deps import get_db, get_tenant, get_current_user
 from ..models.producto_pedido import ProductoPedido, Pedido, PagoPedido
 from ..models.tenant import Tenant
 from ..models.user import User
+from ..routes.status_history import create_status_history
 
 router = APIRouter()
 
 # Pydantic Models
 class ProductoPedidoBase(BaseModel):
-    name: str
-    price: float
+    modelo: str  # Renombrado de "name"
+    nombre: Optional[str] = None  # Renombrado de "tipo_joya"
+    precio: float  # Renombrado de "price"
     cost_price: Optional[float] = None
     category: Optional[str] = None
     default_discount_pct: Optional[float] = None
     # Campos específicos de joyería
     codigo: Optional[str] = None
     marca: Optional[str] = None
-    modelo: Optional[str] = None
     color: Optional[str] = None
     quilataje: Optional[str] = None
     base: Optional[str] = None
-    tipo_joya: Optional[str] = None
     talla: Optional[str] = None
+    peso: Optional[str] = None
     peso_gramos: Optional[float] = None
     precio_manual: Optional[float] = None
     # Campos específicos para pedidos
@@ -40,20 +41,20 @@ class ProductoPedidoCreate(ProductoPedidoBase):
     pass
 
 class ProductoPedidoUpdate(BaseModel):
-    name: Optional[str] = None
-    price: Optional[float] = None
+    modelo: Optional[str] = None  # Renombrado de "name"
+    nombre: Optional[str] = None  # Renombrado de "tipo_joya"
+    precio: Optional[float] = None  # Renombrado de "price"
     cost_price: Optional[float] = None
     category: Optional[str] = None
     default_discount_pct: Optional[float] = None
     # Campos específicos de joyería
     codigo: Optional[str] = None
     marca: Optional[str] = None
-    modelo: Optional[str] = None
     color: Optional[str] = None
     quilataje: Optional[str] = None
     base: Optional[str] = None
-    tipo_joya: Optional[str] = None
     talla: Optional[str] = None
+    peso: Optional[str] = None
     peso_gramos: Optional[float] = None
     precio_manual: Optional[float] = None
     # Campos específicos para pedidos
@@ -80,7 +81,7 @@ class PedidoBase(BaseModel):
     notas_cliente: Optional[str] = None
 
 class PedidoCreate(PedidoBase):
-    pass
+    user_id: Optional[int] = None  # Vendedor que realiza el pedido
 
 class PedidoUpdate(BaseModel):
     estado: Optional[str] = None
@@ -139,7 +140,7 @@ def list_productos_pedido(
     user: User = Depends(get_current_user),
     q: Optional[str] = Query(None, description="Search by name, modelo, color"),
     skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=200),
+    limit: int = Query(50, ge=1, le=2000),
     activo: Optional[bool] = Query(None),
 ):
     query = db.query(ProductoPedido).filter(ProductoPedido.tenant_id == tenant.id)
@@ -149,14 +150,13 @@ def list_productos_pedido(
         if qn:
             query = query.filter(
                 or_(
-                    func.lower(ProductoPedido.name).like(f"%{qn}%"),
-                    func.lower(ProductoPedido.codigo).like(f"%{qn}%"),
-                    func.lower(ProductoPedido.marca).like(f"%{qn}%"),
-                    func.lower(ProductoPedido.modelo).like(f"%{qn}%"),
-                    func.lower(ProductoPedido.color).like(f"%{qn}%"),
-                    func.lower(ProductoPedido.quilataje).like(f"%{qn}%"),
-                    func.lower(ProductoPedido.tipo_joya).like(f"%{qn}%"),
-                    func.lower(ProductoPedido.talla).like(f"%{qn}%"),
+                    func.lower(func.coalesce(ProductoPedido.modelo, '')).like(f"%{qn}%"),
+                    func.lower(func.coalesce(ProductoPedido.nombre, '')).like(f"%{qn}%"),
+                    func.lower(func.coalesce(ProductoPedido.codigo, '')).like(f"%{qn}%"),
+                    func.lower(func.coalesce(ProductoPedido.marca, '')).like(f"%{qn}%"),
+                    func.lower(func.coalesce(ProductoPedido.color, '')).like(f"%{qn}%"),
+                    func.lower(func.coalesce(ProductoPedido.quilataje, '')).like(f"%{qn}%"),
+                    func.lower(func.coalesce(ProductoPedido.talla, '')).like(f"%{qn}%"),
                 )
             )
     
@@ -264,9 +264,9 @@ def list_pedidos(
     # Verificar y actualizar estado vencido (75 días = 2 meses + 15 días)
     fecha_limite = datetime.utcnow() - timedelta(days=75)
     for pedido in pedidos:
-        # Si tiene saldo pendiente, no está entregado/cancelado, y han pasado 75 días
+        # Si tiene saldo pendiente, no está pagado/entregado/cancelado, y han pasado 75 días
         if (float(pedido.saldo_pendiente) > 0 and 
-            pedido.estado not in ['entregado', 'cancelado', 'vencido'] and
+            pedido.estado not in ['pagado', 'entregado', 'cancelado', 'vencido'] and
             pedido.created_at.replace(tzinfo=None) < fecha_limite):
             pedido.estado = 'vencido'
             db.add(pedido)
@@ -309,24 +309,49 @@ def create_pedido(
         raise HTTPException(status_code=404, detail="Producto no disponible")
     
     # Calcular totales
-    precio_unitario = float(producto.price)
+    precio_unitario = float(producto.precio)
     total = precio_unitario * pedido.cantidad
     
     # Anticipo flexible - no hay validación estricta
     saldo_pendiente = total - pedido.anticipo_pagado
     
+    # Usar el user_id proporcionado o el usuario autenticado
+    vendedor_id = pedido.user_id if pedido.user_id else user.id
+    
+    # Si se proporciona user_id, verificar que el usuario existe
+    if pedido.user_id:
+        vendedor = db.query(User).filter(
+            User.id == pedido.user_id,
+            User.tenant_id == tenant.id
+        ).first()
+        if not vendedor:
+            raise HTTPException(status_code=404, detail="Vendedor no encontrado")
+    
     db_pedido = Pedido(
         tenant_id=tenant.id,
-        user_id=user.id,
+        user_id=vendedor_id,
         precio_unitario=precio_unitario,
         total=total,
         saldo_pendiente=saldo_pendiente,
-        **pedido.dict()
+        **pedido.dict(exclude={'user_id'})
     )
     
     db.add(db_pedido)
     db.commit()
     db.refresh(db_pedido)
+    
+    # Registrar estado inicial en el historial
+    create_status_history(
+        db=db,
+        tenant_id=tenant.id,
+        entity_type="pedido",
+        entity_id=db_pedido.id,
+        old_status=None,  # Estado inicial
+        new_status=db_pedido.estado,
+        user_id=user.id,
+        user_email=user.email,
+        notes=f"Pedido creado con estado inicial: {db_pedido.estado}"
+    )
     
     return db_pedido
 
@@ -346,13 +371,81 @@ def update_pedido(
     if not pedido:
         raise HTTPException(status_code=404, detail="Pedido no encontrado")
     
+    # Guardar estado anterior si se va a actualizar el estado
+    old_estado = pedido.estado if 'estado' in pedido_update.dict(exclude_unset=True) else None
+    
     update_data = pedido_update.dict(exclude_unset=True)
     for field, value in update_data.items():
         setattr(pedido, field, value)
     
     db.commit()
     db.refresh(pedido)
+    
+    # Registrar cambio de estado si cambió
+    if old_estado is not None and old_estado != pedido.estado:
+        create_status_history(
+            db=db,
+            tenant_id=tenant.id,
+            entity_type="pedido",
+            entity_id=pedido.id,
+            old_status=old_estado,
+            new_status=pedido.estado,
+            user_id=user.id,
+            user_email=user.email,
+            notes=f"Estado cambiado manualmente de {old_estado} a {pedido.estado}"
+        )
     return pedido
+
+@router.get("/pedidos/{pedido_id}/pagos")
+def get_pagos_pedido(
+    pedido_id: int,
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_tenant),
+    user: User = Depends(get_current_user),
+):
+    """Obtener todos los pagos de un pedido (anticipo inicial + abonos posteriores)"""
+    pedido = db.query(Pedido).filter(
+        Pedido.id == pedido_id,
+        Pedido.tenant_id == tenant.id
+    ).first()
+    
+    if not pedido:
+        raise HTTPException(status_code=404, detail="Pedido no encontrado")
+    
+    # Obtener abonos posteriores de PagoPedido
+    pagos_posteriores = db.query(PagoPedido).filter(
+        PagoPedido.pedido_id == pedido_id
+    ).order_by(PagoPedido.created_at.asc()).all()
+    
+    # Crear lista de pagos combinados
+    pagos = []
+    
+    # Agregar anticipo inicial si existe (similar a como funciona en apartados)
+    if float(pedido.anticipo_pagado) > 0:
+        pagos.append({
+            "id": -pedido.id,  # ID negativo para identificar el anticipo
+            "pedido_id": pedido.id,
+            "monto": float(pedido.anticipo_pagado),
+            "metodo_pago": "efectivo",  # Por defecto
+            "notas": "Anticipo inicial",
+            "created_at": pedido.created_at.isoformat()
+        })
+    
+    # Agregar abonos posteriores
+    for p in pagos_posteriores:
+        pagos.append({
+            "id": p.id,
+            "pedido_id": p.pedido_id,
+            "monto": float(p.monto),
+            "metodo_pago": p.metodo_pago,
+            "notas": "Abono",
+            "created_at": p.created_at.isoformat()
+        })
+    
+    # Ordenar por fecha (más antiguos primero)
+    pagos.sort(key=lambda x: x["created_at"])
+    
+    return pagos
 
 @router.post("/pedidos/{pedido_id}/pagos", response_model=PagoPedidoOut)
 def registrar_pago_pedido(
@@ -391,13 +484,28 @@ def registrar_pago_pedido(
     elif pago.tipo_pago == "saldo":
         pedido.saldo_pendiente -= monto_decimal
     
-    # Si el saldo pendiente es 0 o menos, marcar como entregado
+    # Si el saldo pendiente es 0 o menos, marcar como pagado
+    old_estado = pedido.estado
     if pedido.saldo_pendiente <= 0:
-        pedido.estado = "entregado"
-        pedido.fecha_entrega_real = datetime.now()
+        pedido.estado = "pagado"
     
     db.commit()
     db.refresh(db_pago)
+    
+    # Registrar cambio de estado si cambió
+    if old_estado != pedido.estado:
+        create_status_history(
+            db=db,
+            tenant_id=tenant.id,
+            entity_type="pedido",
+            entity_id=pedido.id,
+            old_status=old_estado,
+            new_status=pedido.estado,
+            user_id=user.id,
+            user_email=user.email,
+            notes=f"Pago de ${pago.monto:.2f} - Pedido completamente pagado"
+        )
+    
     return db_pago
 
 # Import/Export endpoints
@@ -422,21 +530,22 @@ def import_productos_pedido(
         
         # Mapear nombres de columnas
         column_mapping = {
-            'nombre': 'name',
-            'name': 'name',
+            'modelo': 'modelo',
+            'name': 'modelo',  # Compatibilidad con archivos viejos
+            'nombre': 'nombre',
+            'tipo de joya': 'nombre',
+            'tipo_joya': 'nombre',
             'codigo': 'codigo',
             'marca': 'marca',
-            'modelo': 'modelo',
             'color': 'color',
             'quilataje': 'quilataje',
             'base': 'base',
-            'tipo de joya': 'tipo_joya',
-            'tipo_joya': 'tipo_joya',
             'talla': 'talla',
-            'peso': 'peso_gramos',
+            'peso': 'peso',
+            'peso en gramos': 'peso_gramos',
             'peso_gramos': 'peso_gramos',
-            'precio': 'price',
-            'price': 'price',
+            'precio': 'precio',
+            'price': 'precio',  # Compatibilidad con archivos viejos
             'costo': 'cost_price',
             'cost_price': 'cost_price',
             'precio_manual': 'precio_manual',
@@ -452,7 +561,7 @@ def import_productos_pedido(
         df = df.rename(columns=column_mapping)
         
         # Validar columnas requeridas
-        required_cols = ['name', 'price']
+        required_cols = ['modelo', 'precio']
         missing_cols = [col for col in required_cols if col not in df.columns]
         if missing_cols:
             raise HTTPException(
@@ -484,22 +593,22 @@ def import_productos_pedido(
             if not existing_product:
                 existing_product = db.query(ProductoPedido).filter(
                     ProductoPedido.tenant_id == tenant.id,
-                    ProductoPedido.name == str(row['name']).strip()
+                    ProductoPedido.modelo == str(row['modelo']).strip()
                 ).first()
             
             # Preparar datos del producto
             producto_data = {
                 'tenant_id': tenant.id,
-                'name': str(row['name']).strip(),
-                'price': float(row['price']),
+                'modelo': str(row['modelo']).strip(),
+                'precio': float(row['precio']),
+                'nombre': str(row['nombre']).strip() if 'nombre' in df.columns and not pd.isna(row.get('nombre')) else None,
                 'codigo': str(row['codigo']).strip() if 'codigo' in df.columns and not pd.isna(row.get('codigo')) else None,
                 'marca': str(row['marca']).strip() if 'marca' in df.columns and not pd.isna(row.get('marca')) else None,
-                'modelo': str(row['modelo']).strip() if 'modelo' in df.columns and not pd.isna(row.get('modelo')) else None,
                 'color': str(row['color']).strip() if 'color' in df.columns and not pd.isna(row.get('color')) else None,
                 'quilataje': str(row['quilataje']).strip() if 'quilataje' in df.columns and not pd.isna(row.get('quilataje')) else None,
                 'base': str(row['base']).strip() if 'base' in df.columns and not pd.isna(row.get('base')) else None,
-                'tipo_joya': str(row['tipo_joya']).strip() if 'tipo_joya' in df.columns and not pd.isna(row.get('tipo_joya')) else None,
                 'talla': str(row['talla']).strip() if 'talla' in df.columns and not pd.isna(row.get('talla')) else None,
+                'peso': str(row['peso']).strip() if 'peso' in df.columns and not pd.isna(row.get('peso')) else None,
                 'peso_gramos': float(row['peso_gramos']) if 'peso_gramos' in df.columns and not pd.isna(row.get('peso_gramos')) else None,
                 'cost_price': float(row['cost_price']) if 'cost_price' in df.columns and not pd.isna(row.get('cost_price')) else None,
                 'precio_manual': float(row['precio_manual']) if 'precio_manual' in df.columns and not pd.isna(row.get('precio_manual')) else None,
@@ -548,17 +657,17 @@ def export_productos_pedido(
         data = []
         for p in productos:
             data.append({
-                'name': p.name,
+                'modelo': p.modelo,
+                'nombre': p.nombre,
                 'codigo': p.codigo,
                 'marca': p.marca,
-                'modelo': p.modelo,
                 'color': p.color,
                 'quilataje': p.quilataje,
                 'base': p.base,
-                'tipo_joya': p.tipo_joya,
                 'talla': p.talla,
+                'peso': p.peso,
                 'peso_gramos': p.peso_gramos,
-                'price': p.price,
+                'precio': p.precio,
                 'cost_price': p.cost_price,
                 'precio_manual': p.precio_manual,
                 'category': p.category,

@@ -4,20 +4,20 @@ import { api } from '../utils/api'
 
 type ProductoPedido = { 
   id: number
-  name: string
-  price: number
+  modelo: string  // Renombrado de "name"
+  nombre?: string  // Renombrado de "tipo_joya"
+  precio: number  // Renombrado de "price"
   cost_price?: number
   milimetros?: string
   default_discount_pct?: number
   // Campos específicos de joyería
   codigo: string  // Requerido
   marca?: string
-  modelo?: string
   color?: string
   quilataje?: string
   base?: string
-  tipo_joya?: string
   talla?: string
+  peso?: string
   peso_gramos?: number
   precio_manual?: number
   // Campos específicos para pedidos
@@ -39,6 +39,7 @@ type User = {
 type MetalRate = {
   id: number
   metal_type: string
+  tipo: string
   rate_per_gram: number
 }
 
@@ -46,6 +47,7 @@ export default function PedidosPage() {
   const [productos, setProductos] = useState<ProductoPedido[]>([])
   const [allProductos, setAllProductos] = useState<ProductoPedido[]>([])
   const [metalRates, setMetalRates] = useState<MetalRate[]>([])
+  const [metalRatesPedido, setMetalRatesPedido] = useState<MetalRate[]>([])
   const [users, setUsers] = useState<User[]>([])
   const [cart, setCart] = useState<PedidoItem[]>([])
   const [msg, setMsg] = useState('')
@@ -60,6 +62,9 @@ export default function PedidosPage() {
   const [clienteTelefono, setClienteTelefono] = useState('')
   const [clienteEmail, setClienteEmail] = useState('')
   const [notasCliente, setNotasCliente] = useState('')
+  
+  // Vendedor
+  const [vendedorId, setVendedorId] = useState('')
   
   // Anticipo flexible
   const [anticipoPagado, setAnticipoPagado] = useState('')
@@ -79,20 +84,20 @@ export default function PedidosPage() {
   const [userRole, setUserRole] = useState<string>('')
   
   const [newProduct, setNewProduct] = useState({
-    name: '',
-    price: '',
+    modelo: '',
+    nombre: '',
+    precio: '',
     cost_price: '',
     milimetros: '',
     default_discount_pct: '',
     // Campos específicos de joyería
     codigo: '',
     marca: '',
-    modelo: '',
     color: '',
     quilataje: '',
     base: '',
-    tipo_joya: '',
     talla: '',
+    peso: '',
     peso_gramos: '',
     precio_manual: '',
     // Campos específicos para pedidos
@@ -142,10 +147,53 @@ export default function PedidosPage() {
     applyLocalFilters(allProductos)
   }, [quilatajeFilter, modeloFilter, tallaFilter])
 
+  // Calcular precio y costo automáticamente cuando cambie quilataje o peso
+  useEffect(() => {
+    if (!newProduct.quilataje || !newProduct.peso_gramos) {
+      return
+    }
+
+    const peso = parseFloat(newProduct.peso_gramos.toString())
+    if (isNaN(peso) || peso <= 0) return
+
+    // Buscar tasa de precio para el quilataje seleccionado
+    const tasaPrecio = metalRatesPedido.find(
+      r => r.tipo === 'precio' && r.metal_type === newProduct.quilataje
+    )
+
+    // Buscar tasa de costo para el quilataje seleccionado
+    const tasaCosto = metalRatesPedido.find(
+      r => r.tipo === 'costo' && r.metal_type === newProduct.quilataje
+    )
+
+    const updates: any = {}
+    
+    if (tasaPrecio) {
+      const precioCalculado = peso * tasaPrecio.rate_per_gram
+      updates.precio = precioCalculado.toFixed(2)
+    }
+    
+    if (tasaCosto) {
+      const costoCalculado = peso * tasaCosto.rate_per_gram
+      updates.cost_price = costoCalculado.toFixed(2)
+    }
+
+    if (Object.keys(updates).length > 0) {
+      setNewProduct(prev => ({
+        ...prev,
+        ...updates
+      }))
+    }
+  }, [newProduct.quilataje, newProduct.peso_gramos, metalRatesPedido])
+
   const loadMetalRates = async () => {
     try {
       const r = await api.get('/metal-rates')
       setMetalRates(r.data || [])
+      
+      // También cargar tasas de pedido
+      const rPedido = await api.get('/tasas-pedido/')
+      setMetalRatesPedido(rPedido.data || [])
     } catch (e) {
       console.error('Error loading metal rates:', e)
     }
@@ -168,9 +216,12 @@ export default function PedidosPage() {
 
     // Filtrar por talla
     if (tallaFilter.trim()) {
-      filtered = filtered.filter(p => 
-        p.talla && p.talla.toLowerCase().includes(tallaFilter.toLowerCase())
-      )
+      const tallaSearch = tallaFilter.trim().toLowerCase()
+      filtered = filtered.filter(p => {
+        if (!p.talla) return false
+        const tallaStr = String(p.talla).toLowerCase()
+        return tallaStr.includes(tallaSearch)
+      })
     }
 
     setProductos(filtered)
@@ -178,11 +229,12 @@ export default function PedidosPage() {
 
   const loadProductos = async (q = '') => {
     const qs = new URLSearchParams()
-    qs.set('limit', '50')
+    qs.set('limit', '1000')  // Límite muy alto para cargar todos los productos
     qs.set('activo', 'true')
     if (q) qs.set('q', q)
     try {
       const r = await api.get(`/productos-pedido/?${qs.toString()}`)
+      console.log('Productos cargados:', r.data.length)
       setAllProductos(r.data)
       applyLocalFilters(r.data)
     } catch (e: any) {
@@ -241,7 +293,7 @@ export default function PedidosPage() {
   }
 
   const getTotal = () => {
-    return cart.reduce((sum, ci) => sum + (parseFloat(ci.producto.price.toString()) * ci.cantidad), 0)
+    return cart.reduce((sum, ci) => sum + (parseFloat(ci.producto.precio.toString()) * ci.cantidad), 0)
   }
 
   const getAnticipoRequerido = () => {
@@ -270,17 +322,17 @@ export default function PedidosPage() {
 
     try {
       const productData = {
-        name: newProduct.name,
+        modelo: newProduct.modelo,
+        nombre: newProduct.nombre || null,
         codigo: newProduct.codigo,  // Ahora es requerido
         marca: newProduct.marca || null,
-        modelo: newProduct.modelo || null,
         color: newProduct.color || null,
         quilataje: newProduct.quilataje || null,
         base: newProduct.base || null,
-        tipo_joya: newProduct.tipo_joya || null,
         talla: newProduct.talla || null,
+        peso: newProduct.peso || null,
         peso_gramos: newProduct.peso_gramos ? parseFloat(newProduct.peso_gramos) : null,
-        price: parseFloat(newProduct.price),
+        precio: parseFloat(newProduct.precio),
         cost_price: newProduct.cost_price ? parseFloat(newProduct.cost_price) : null,
         precio_manual: newProduct.precio_manual ? parseFloat(newProduct.precio_manual) : null,
         milimetros: newProduct.milimetros || null,
@@ -302,17 +354,17 @@ export default function PedidosPage() {
       setShowCreateProductModal(false)
       setEditingProduct(null)
       setNewProduct({
-        name: '',
+        modelo: '',
+        nombre: '',
         codigo: '',
         marca: '',
-        modelo: '',
         color: '',
         quilataje: '',
         base: '',
-        tipo_joya: '',
         talla: '',
+        peso: '',
         peso_gramos: '',
-        price: '',
+        precio: '',
         cost_price: '',
         precio_manual: '',
         milimetros: '',
@@ -333,19 +385,19 @@ export default function PedidosPage() {
   const editProduct = (product: ProductoPedido) => {
     setEditingProduct(product)
     setNewProduct({
-      name: product.name,
-      price: product.price.toString(),
+      modelo: product.modelo,
+      nombre: product.nombre || '',
+      precio: product.precio.toString(),
       cost_price: product.cost_price?.toString() || '',
       milimetros: product.milimetros || '',
       default_discount_pct: product.default_discount_pct?.toString() || '',
       codigo: product.codigo || '',
       marca: product.marca || '',
-      modelo: product.modelo || '',
       color: product.color || '',
       quilataje: product.quilataje || '',
       base: product.base || '',
-      tipo_joya: product.tipo_joya || '',
       talla: product.talla || '',
+      peso: product.peso || '',
       peso_gramos: product.peso_gramos?.toString() || '',
       precio_manual: product.precio_manual?.toString() || '',
       anticipo_sugerido: product.anticipo_sugerido?.toString() || '',
@@ -365,36 +417,6 @@ export default function PedidosPage() {
     } catch (error) {
       console.error('Error deleting product:', error)
       setMsg('Error al eliminar el producto')
-    }
-  }
-
-  const calcularPrecioPorTasa = async () => {
-    if (!newProduct.quilataje || !newProduct.peso_gramos) {
-      setMsg('⚠️ Para calcular automáticamente necesitas quilataje y peso en gramos')
-      setTimeout(() => setMsg(''), 3000)
-      return
-    }
-
-    try {
-      const response = await api.get('/productos-pedido/calcular-precio/', {
-        params: {
-          quilataje: newProduct.quilataje,
-          peso_gramos: parseFloat(newProduct.peso_gramos)
-        }
-      })
-      
-      const costoCalculado = response.data.costo_calculado
-      setNewProduct({
-        ...newProduct,
-        cost_price: costoCalculado.toString()
-      })
-      
-      setMsg(`✅ Costo calculado: $${costoCalculado.toFixed(2)} (Tasa: $${response.data.tasa_por_gramo}/g × ${response.data.peso_gramos}g)`)
-      setTimeout(() => setMsg(''), 5000)
-      
-    } catch (error: any) {
-      setMsg(error?.response?.data?.detail || 'Error calculando precio')
-      setTimeout(() => setMsg(''), 3000)
     }
   }
 
@@ -478,7 +500,8 @@ export default function PedidosPage() {
           cliente_email: clienteEmail || null,
           cantidad: item.cantidad,
           anticipo_pagado: parseFloat(anticipoPagado) || 0,
-          notas_cliente: notasCliente || null
+          notas_cliente: notasCliente || null,
+          user_id: vendedorId ? parseInt(vendedorId) : undefined
         }
         
         console.log('Sending pedido data:', pedidoData)
@@ -491,6 +514,8 @@ export default function PedidosPage() {
       setClienteTelefono('')
       setClienteEmail('')
       setNotasCliente('')
+      setVendedorId('')
+      setAnticipoPagado('')
       
       // Limpiar mensaje después de 3 segundos
       setTimeout(() => setMsg(''), 3000)
@@ -536,6 +561,18 @@ export default function PedidosPage() {
                 value={clienteEmail}
                 onChange={e => setClienteEmail(e.target.value)}
               />
+              <select
+                className="border border-gray-300 rounded-lg px-3 py-2"
+                value={vendedorId}
+                onChange={e => setVendedorId(e.target.value)}
+              >
+                <option value="">Seleccionar vendedor (opcional)</option>
+                {users.map(u => (
+                  <option key={u.id} value={u.id}>
+                    {u.email}
+                  </option>
+                ))}
+              </select>
               <input
                 className="border border-gray-300 rounded-lg px-3 py-2"
                 placeholder="Anticipo pagado ($)"
@@ -576,11 +613,11 @@ export default function PedidosPage() {
                 {cart.map(ci => (
                   <div key={ci.producto.id} className="flex items-center justify-between bg-gray-50 p-3 rounded-lg">
                     <div className="flex-1">
-                      <div className="font-medium">{ci.producto.name}</div>
+                      <div className="font-medium">{ci.producto.modelo}</div>
                       <div className="text-sm text-gray-600">
+                        {ci.producto.nombre && `${ci.producto.nombre} - `}
                         {ci.producto.codigo && `${ci.producto.codigo} - `}
                         {ci.producto.marca && `${ci.producto.marca} - `}
-                        {ci.producto.modelo && `${ci.producto.modelo} - `}
                         {ci.producto.color && `${ci.producto.color} - `}
                         {ci.producto.quilataje && `${ci.producto.quilataje} - `}
                         {ci.producto.talla && `Talla ${ci.producto.talla}`}
@@ -606,8 +643,8 @@ export default function PedidosPage() {
                         </button>
                       </div>
                       <div className="text-right">
-                        <div className="font-bold">${(parseFloat(ci.producto.price?.toString() || '0') * ci.cantidad).toFixed(2)}</div>
-                        <div className="text-xs text-gray-500">${ci.producto.price || 0} c/u</div>
+                        <div className="font-bold">${(parseFloat(ci.producto.precio?.toString() || '0') * ci.cantidad).toFixed(2)}</div>
+                        <div className="text-xs text-gray-500">${ci.producto.precio || 0} c/u</div>
                       </div>
                       <button
                         onClick={() => removeFromCart(ci.producto.id)}
@@ -690,19 +727,19 @@ export default function PedidosPage() {
                   onClick={() => {
                     setEditingProduct(null)
                     setNewProduct({
-                      name: '',
-                      price: '',
+                      modelo: '',
+                      nombre: '',
+                      precio: '',
                       cost_price: '',
                       milimetros: '',
                       default_discount_pct: '',
                       codigo: '',
                       marca: '',
-                      modelo: '',
                       color: '',
                       quilataje: '',
                       base: '',
-                      tipo_joya: '',
                       talla: '',
+                      peso: '',
                       peso_gramos: '',
                       precio_manual: '',
                       anticipo_sugerido: '',
@@ -798,12 +835,12 @@ export default function PedidosPage() {
                       disabled={!p.disponible}
                       className="flex-1 text-left disabled:cursor-not-allowed"
                     >
-                      <div className="font-medium text-sm">{p.name}</div>
-                      <div className="text-purple-600 font-bold">${p.price}</div>
+                      <div className="font-medium text-sm">{p.modelo}</div>
+                      <div className="text-purple-600 font-bold">${p.precio}</div>
                       <div className="text-xs text-gray-500">
+                        {p.nombre && `${p.nombre} - `}
                         {p.codigo && `${p.codigo} - `}
                         {p.marca && `${p.marca} - `}
-                        {p.modelo && `${p.modelo} - `}
                         {p.color && `${p.color} - `}
                         {p.quilataje && `${p.quilataje}`}
                       </div>
@@ -897,9 +934,15 @@ export default function PedidosPage() {
             <div className="space-y-3">
               <input
                 className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                placeholder="Nombre del producto"
-                value={newProduct.name}
-                onChange={e => setNewProduct({...newProduct, name: e.target.value})}
+                placeholder="Modelo"
+                value={newProduct.modelo}
+                onChange={e => setNewProduct({...newProduct, modelo: e.target.value})}
+              />
+              <input
+                className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                placeholder="Nombre (tipo de joya)"
+                value={newProduct.nombre}
+                onChange={e => setNewProduct({...newProduct, nombre: e.target.value})}
               />
               <div className="grid grid-cols-2 gap-3">
                 <input
@@ -911,47 +954,11 @@ export default function PedidosPage() {
                 />
                 <input
                   className="border border-gray-300 rounded-lg px-3 py-2"
-                  placeholder="Precio"
+                  placeholder="Peso (gramos)"
                   type="number"
-                  step="0.01"
-                  value={newProduct.price}
-                  onChange={e => setNewProduct({...newProduct, price: e.target.value})}
-                />
-                <div className="relative">
-                  <input
-                    className="border border-gray-300 rounded-lg px-3 py-2 w-full"
-                    placeholder="Costo"
-                    type="number"
-                    step="0.01"
-                    value={newProduct.cost_price}
-                    onChange={e => setNewProduct({...newProduct, cost_price: e.target.value})}
-                  />
-                  <button
-                    type="button"
-                    onClick={calcularPrecioPorTasa}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600"
-                    title="Calcular costo basado en quilataje y peso"
-                  >
-                    🧮
-                  </button>
-                </div>
-                <input
-                  className="border border-gray-300 rounded-lg px-3 py-2"
-                  placeholder="Peso"
-                  value={newProduct.milimetros}
-                  onChange={e => setNewProduct({...newProduct, milimetros: e.target.value})}
-                />
-                <input
-                  className="border border-gray-300 rounded-lg px-3 py-2"
-                  placeholder="Nombre"
-                  value={newProduct.marca}
-                  onChange={e => setNewProduct({...newProduct, marca: e.target.value})}
-                />
-                <input
-                  className="border border-gray-300 rounded-lg px-3 py-2"
-                  placeholder="Modelo"
-                  value={newProduct.modelo}
-                  onChange={e => setNewProduct({...newProduct, modelo: e.target.value})}
+                  step="0.001"
+                  value={newProduct.peso_gramos}
+                  onChange={e => setNewProduct({...newProduct, peso_gramos: e.target.value})}
                 />
                 <input
                   className="border border-gray-300 rounded-lg px-3 py-2"
@@ -959,20 +966,6 @@ export default function PedidosPage() {
                   value={newProduct.color}
                   onChange={e => setNewProduct({...newProduct, color: e.target.value})}
                 />
-                <select
-                  className="border border-gray-300 rounded-lg px-3 py-2"
-                  value={newProduct.quilataje}
-                  onChange={e => setNewProduct({...newProduct, quilataje: e.target.value})}
-                >
-                  <option value="">Seleccionar quilataje</option>
-                  <option value="10k">10k</option>
-                  <option value="14k">14k</option>
-                  <option value="18k">18k</option>
-                  <option value="oro_italiano">Oro Italiano</option>
-                  <option value="plata_gold">Plata Gold</option>
-                  <option value="plata_silver">Plata Silver</option>
-                  <option value="925">925 (Plata Sterling)</option>
-                </select>
                 <input
                   className="border border-gray-300 rounded-lg px-3 py-2"
                   placeholder="Talla"
@@ -988,8 +981,64 @@ export default function PedidosPage() {
                   onChange={e => setNewProduct({...newProduct, anticipo_sugerido: e.target.value})}
                 />
               </div>
-              <div className="text-xs text-blue-600 bg-blue-50 p-2 rounded">
-                💡 <strong>Cálculo automático de costo:</strong> Ingresa quilataje y peso en gramos, luego presiona el botón 🧮 en el campo "Costo"
+              
+              {/* Tasas de Metal (Dropdowns) */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-green-700 mb-1">Tasa de Precio</label>
+                  <select
+                    className="w-full border border-green-300 rounded-lg px-3 py-2 bg-green-50"
+                    value={newProduct.quilataje}
+                    onChange={e => setNewProduct({...newProduct, quilataje: e.target.value})}
+                  >
+                    <option value="">Seleccionar tasa de precio</option>
+                    {metalRatesPedido.filter(r => r.tipo === 'precio').map(rate => (
+                      <option key={rate.id} value={rate.metal_type}>
+                        {rate.metal_type} - ${rate.rate_per_gram}/g
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-blue-700 mb-1">Tasa de Costo</label>
+                  <select
+                    className="w-full border border-blue-300 rounded-lg px-3 py-2 bg-blue-50"
+                    value={newProduct.quilataje}
+                    onChange={e => setNewProduct({...newProduct, quilataje: e.target.value})}
+                  >
+                    <option value="">Seleccionar tasa de costo</option>
+                    {metalRatesPedido.filter(r => r.tipo === 'costo').map(rate => (
+                      <option key={rate.id} value={rate.metal_type}>
+                        {rate.metal_type} - ${rate.rate_per_gram}/g
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              
+              {/* Campos calculados */}
+              <div className="grid grid-cols-2 gap-3">
+                <input
+                  className="border border-gray-300 rounded-lg px-3 py-2 bg-green-50"
+                  placeholder="Precio (auto)"
+                  type="number"
+                  step="0.01"
+                  value={newProduct.precio}
+                  onChange={e => setNewProduct({...newProduct, precio: e.target.value})}
+                  title="Se calcula automáticamente si hay tasa de precio para el quilataje"
+                />
+                <input
+                  className="border border-gray-300 rounded-lg px-3 py-2 bg-blue-50"
+                  placeholder="Costo (auto)"
+                  type="number"
+                  step="0.01"
+                  value={newProduct.cost_price}
+                  onChange={e => setNewProduct({...newProduct, cost_price: e.target.value})}
+                  title="Se calcula automáticamente si hay tasa de costo para el quilataje"
+                />
+              </div>
+              <div className="text-xs text-purple-600 bg-purple-50 p-2 rounded">
+                💡 <strong>Cálculo automático:</strong> Precio y costo se calculan automáticamente cuando ingresas quilataje y peso en gramos (si existen tasas registradas)
               </div>
               <div className="flex items-center space-x-2">
                 <input
@@ -1001,6 +1050,43 @@ export default function PedidosPage() {
                 <label htmlFor="disponible" className="text-sm">Disponible para pedidos</label>
               </div>
             </div>
+
+            {/* Tasas de Metal de Pedidos */}
+            {metalRatesPedido.length > 0 && (
+              <div className="mt-4 space-y-3 border-t pt-4">
+                <h4 className="text-sm font-semibold text-gray-700">📊 Tasas de Metal (Referencia)</h4>
+                
+                {/* Tasas de Precio */}
+                {metalRatesPedido.filter(r => r.tipo === 'precio').length > 0 && (
+                  <div className="bg-green-50 p-3 rounded-lg">
+                    <h5 className="text-xs font-semibold text-green-800 mb-2">💰 Precio (Venta)</h5>
+                    <div className="grid grid-cols-2 gap-2">
+                      {metalRatesPedido.filter(r => r.tipo === 'precio').map(rate => (
+                        <div key={rate.id} className="flex justify-between text-xs">
+                          <span className="text-gray-700">{rate.metal_type}:</span>
+                          <span className="font-semibold text-green-700">${rate.rate_per_gram.toFixed(2)}/g</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Tasas de Costo */}
+                {metalRatesPedido.filter(r => r.tipo === 'costo').length > 0 && (
+                  <div className="bg-blue-50 p-3 rounded-lg">
+                    <h5 className="text-xs font-semibold text-blue-800 mb-2">🏭 Costo (Producción)</h5>
+                    <div className="grid grid-cols-2 gap-2">
+                      {metalRatesPedido.filter(r => r.tipo === 'costo').map(rate => (
+                        <div key={rate.id} className="flex justify-between text-xs">
+                          <span className="text-gray-700">{rate.metal_type}:</span>
+                          <span className="font-semibold text-blue-700">${rate.rate_per_gram.toFixed(2)}/g</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
             
             <div className="flex justify-end space-x-3 mt-6">
               <button

@@ -5,11 +5,29 @@
 ### ✅ Cambios en Base de Datos
 
 **Tabla `productos_pedido`:**
-1. ✅ Agregada columna `category` (VARCHAR(100))
-2. ✅ Columna `name` ahora es NOT NULL
-3. ✅ Columna `price` ahora es NOT NULL con default 0
-4. ✅ Columna `cost_price` ahora es NOT NULL con default 0
-5. ✅ Columna `disponible` ahora tiene default true
+1. ✅ Columnas renombradas:
+   - `name` → `modelo` (modelo del producto - campo principal)
+   - `tipo_joya` → `nombre` (tipo/nombre de joya)
+   - `price` → `precio` (precio de venta)
+   - **Eliminada columna `modelo` duplicada antigua si existía**
+2. ✅ Agregada columna `peso` (VARCHAR(100)) - peso descriptivo
+3. ✅ Agregada columna `category` (VARCHAR(100))
+4. ✅ Columna `modelo` ahora es NOT NULL
+5. ✅ Columna `precio` ahora es NOT NULL con default 0
+6. ✅ Columna `cost_price` ahora es NOT NULL con default 0
+7. ✅ Columna `disponible` ahora tiene default true
+
+**IMPORTANTE:** La estructura final es:
+- `modelo` (NOT NULL) - Modelo/descripción principal del producto
+- `nombre` (nullable) - Tipo de joya (anillo, collar, etc)
+- `precio` (NOT NULL) - Precio de venta
+- `peso` (nullable) - Peso descriptivo
+- Más campos de joyería: codigo, marca, color, quilataje, base, talla, peso_gramos, etc.
+
+**Tabla `tasas_metal_pedido`:**
+1. ✅ Agregada columna `tipo` (VARCHAR(20), default 'precio')
+2. ✅ Índice creado en columna `tipo`
+3. ✅ Permite separar tasas de costo y precio
 
 **No se crearon nuevas tablas** - Solo modificaciones a columnas existentes.
 

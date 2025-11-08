@@ -11,6 +11,15 @@ interface CreditPayment {
   created_at: string;
 }
 
+interface StatusHistoryEntry {
+  id: number;
+  old_status: string | null;
+  new_status: string;
+  user_email: string;
+  notes: string | null;
+  created_at: string;
+}
+
 interface CreditSale {
   id: number;
   customer_name: string | null;
@@ -20,6 +29,7 @@ interface CreditSale {
   balance: number;
   credit_status: string;
   vendedor_id: number | null;
+  vendedor_email: string | null;
   created_at: string;
   payments: CreditPayment[];
 }
@@ -31,11 +41,15 @@ export default function CreditsPage() {
   const [searchFilter, setSearchFilter] = useState<string>('');
   const [selectedCredit, setSelectedCredit] = useState<CreditSale | null>(null);
   const [showPaymentForm, setShowPaymentForm] = useState(false);
+  const [showHistorialModal, setShowHistorialModal] = useState(false);
+  const [creditHistorial, setCreditHistorial] = useState<CreditSale | null>(null);
+  const [statusHistory, setStatusHistory] = useState<StatusHistoryEntry[]>([]);
   const [paymentData, setPaymentData] = useState({
     amount: '',
     payment_method: 'efectivo',
     notes: '',
   });
+  const userRole = localStorage.getItem('role') || '';
 
   useEffect(() => {
     loadCredits();
@@ -93,6 +107,63 @@ export default function CreditsPage() {
     setShowPaymentForm(true);
   };
 
+  const abrirHistorial = async (credit: CreditSale) => {
+    setCreditHistorial(credit);
+    
+    // Cargar historial de estados
+    try {
+      const response = await api.get(`/status-history/sale/${credit.id}`);
+      setStatusHistory(response.data);
+    } catch (error) {
+      console.error('Error loading status history:', error);
+      setStatusHistory([]);
+    }
+    
+    setShowHistorialModal(true);
+  };
+
+  const marcarComoEntregado = async (saleId: number) => {
+    if (!confirm('¿Marcar esta venta como entregada?')) return;
+    
+    try {
+      await api.patch(`/credits/sales/${saleId}/entregado`);
+      alert('Venta marcada como entregada exitosamente');
+      loadCredits();
+    } catch (error: any) {
+      alert(error.response?.data?.detail || 'Error al marcar como entregado');
+    }
+  };
+
+  const marcarComoCancelado = async (saleId: number) => {
+    if (!confirm('¿Cancelar esta venta? Esta acción no se puede deshacer.')) return;
+    
+    try {
+      await api.patch(`/credits/sales/${saleId}/cancelado`);
+      alert('Venta cancelada exitosamente');
+      loadCredits();
+    } catch (error: any) {
+      alert(error.response?.data?.detail || 'Error al cancelar venta');
+    }
+  };
+
+  const cambiarEstado = async (saleId: number, nuevoEstado: string) => {
+    try {
+      // Usar endpoints específicos para cambios de estado
+      if (nuevoEstado === 'entregado') {
+        await api.patch(`/credits/sales/${saleId}/entregado`);
+      } else if (nuevoEstado === 'cancelado') {
+        if (!confirm('¿Cancelar esta venta?')) return;
+        await api.patch(`/credits/sales/${saleId}/cancelado`);
+      } else {
+        // Para otros estados, usar endpoint genérico si existe
+        await api.patch(`/credits/sales/${saleId}/status`, { status: nuevoEstado });
+      }
+      loadCredits();
+    } catch (error: any) {
+      alert(error.response?.data?.detail || 'Error al cambiar estado');
+    }
+  };
+
   // Filter credits by search term
   const filteredCredits = credits.filter(credit => {
     if (!searchFilter.trim()) return true;
@@ -116,7 +187,7 @@ export default function CreditsPage() {
     <Layout>
       <div className="max-w-7xl mx-auto">
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold text-gray-800">Gestión de Abonos</h1>
+          <h1 className="text-3xl font-bold text-gray-800">Gestión de apartados</h1>
           
           <div className="flex gap-2">
             <input
@@ -132,8 +203,11 @@ export default function CreditsPage() {
               className="border border-gray-300 rounded-lg px-4 py-2"
             >
               <option value="">Todos los estados</option>
-              <option value="pendiente">Pendientes</option>
-              <option value="pagado">Pagados</option>
+              <option value="pendiente">Pendiente</option>
+              <option value="pagado">Pagado</option>
+              <option value="entregado">Entregado</option>
+              <option value="vencido">Vencido</option>
+              <option value="cancelado">Cancelado</option>
             </select>
           </div>
         </div>
@@ -147,7 +221,7 @@ export default function CreditsPage() {
               <div className="mb-4 p-3 bg-gray-50 rounded-lg">
                 <p><strong>Cliente:</strong> {selectedCredit.customer_name || 'Sin nombre'}</p>
                 <p><strong>Total:</strong> ${selectedCredit.total.toFixed(2)}</p>
-                <p><strong>Pagado:</strong> ${selectedCredit.amount_paid.toFixed(2)}</p>
+                <p><strong>Abonado:</strong> ${selectedCredit.amount_paid.toFixed(2)}</p>
                 <p className="text-lg font-bold text-red-600">
                   <strong>Saldo:</strong> ${selectedCredit.balance.toFixed(2)}
                 </p>
@@ -224,31 +298,31 @@ export default function CreditsPage() {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
                     Folio
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
                     Cliente
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Teléfono
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
                     Total
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
                     Pagado
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
                     Saldo
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
                     Estado
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                    Vendedor
+                  </th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
                     Fecha
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
                     Acciones
                   </th>
                 </tr>
@@ -256,72 +330,129 @@ export default function CreditsPage() {
               <tbody className="bg-white divide-y divide-gray-200">
                 {credits.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="px-6 py-4 text-center text-gray-500">
+                    <td colSpan={9} className="px-3 py-4 text-center text-gray-500">
                       No hay abonos registrados
                     </td>
                   </tr>
                 ) : filteredCredits.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="px-6 py-4 text-center text-gray-500">
+                    <td colSpan={9} className="px-3 py-4 text-center text-gray-500">
                       No se encontraron resultados para tu búsqueda
                     </td>
                   </tr>
                 ) : (
                   filteredCredits.map((credit) => (
                     <tr key={credit.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                        {String(credit.id).padStart(6, '0')}
+                      <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-600">
+                        #{String(credit.id).padStart(4, '0')}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="font-medium text-gray-900">
+                      <td className="px-3 py-2 text-sm">
+                        <div className="font-medium text-gray-900">
                           {credit.customer_name || 'Sin nombre'}
-                        </span>
+                        </div>
+                        {credit.customer_phone && (
+                          <div className="text-xs text-gray-500">{credit.customer_phone}</div>
+                        )}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {credit.customer_phone || '-'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      <td className="px-3 py-2 whitespace-nowrap text-sm">
                         ${credit.total.toFixed(2)}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600">
+                      <td className="px-3 py-2 whitespace-nowrap text-sm text-green-600">
                         ${credit.amount_paid.toFixed(2)}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-red-600">
+                      <td className="px-3 py-2 whitespace-nowrap text-sm font-bold text-red-600">
                         ${credit.balance.toFixed(2)}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span
-                          className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                            credit.credit_status === 'pagado'
-                              ? 'bg-green-100 text-green-800'
-                              : 'bg-yellow-100 text-yellow-800'
-                          }`}
-                        >
-                          {credit.credit_status === 'pagado' ? 'Pagado' : 'Pendiente'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {new Date(credit.created_at).toLocaleDateString()}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        {credit.credit_status === 'pendiente' && (
-                          <button
-                            onClick={() => openPaymentForm(credit)}
-                            className="text-blue-600 hover:text-blue-900 mr-4"
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        {(userRole === 'admin' || userRole === 'owner') ? (
+                          <select
+                            value={credit.credit_status}
+                            onChange={(e) => cambiarEstado(credit.id, e.target.value)}
+                            className={`px-2 py-1 text-xs font-semibold rounded-full border-0 ${
+                              credit.credit_status === 'pagado'
+                                ? 'bg-green-100 text-green-800'
+                                : credit.credit_status === 'entregado'
+                                ? 'bg-blue-100 text-blue-800'
+                                : credit.credit_status === 'vencido'
+                                ? 'bg-red-100 text-red-800'
+                                : credit.credit_status === 'cancelado'
+                                ? 'bg-gray-100 text-gray-800'
+                                : 'bg-yellow-100 text-yellow-800'
+                            }`}
                           >
-                            Registrar Abono
-                          </button>
+                            <option value="pendiente">Pendiente</option>
+                            <option value="pagado">Pagado</option>
+                            <option value="entregado">Entregado</option>
+                            <option value="vencido">Vencido</option>
+                            <option value="cancelado">Cancelado</option>
+                          </select>
+                        ) : (
+                          <span
+                            className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                              credit.credit_status === 'pagado'
+                                ? 'bg-green-100 text-green-800'
+                                : credit.credit_status === 'entregado'
+                                ? 'bg-blue-100 text-blue-800'
+                                : credit.credit_status === 'vencido'
+                                ? 'bg-red-100 text-red-800'
+                                : credit.credit_status === 'cancelado'
+                                ? 'bg-gray-100 text-gray-800'
+                                : 'bg-yellow-100 text-yellow-800'
+                            }`}
+                          >
+                            {credit.credit_status === 'pagado'
+                              ? 'Pagado'
+                              : credit.credit_status === 'entregado'
+                              ? 'Entregado'
+                              : credit.credit_status === 'vencido'
+                              ? 'Vencido'
+                              : credit.credit_status === 'cancelado'
+                              ? 'Cancelado'
+                              : 'Pendiente'}
+                          </span>
                         )}
-                        <button
-                          className="text-gray-600 hover:text-gray-900"
-                          onClick={() => {
-                            alert(`Pagos registrados: ${credit.payments.length}\n\n${credit.payments.map(
-                              p => `${new Date(p.created_at).toLocaleDateString()}: $${p.amount.toFixed(2)} (${p.payment_method})`
-                            ).join('\n')}`);
-                          }}
-                        >
-                          Ver Historial ({credit.payments.length})
-                        </button>
+                      </td>
+                      <td className="px-3 py-2 text-sm text-gray-500">
+                        <div className="max-w-[120px] truncate" title={credit.vendedor_email || '-'}>
+                          {credit.vendedor_email || '-'}
+                        </div>
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-500">
+                        {new Date(credit.created_at).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: '2-digit' })}
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap text-sm">
+                        <div className="flex flex-col gap-1">
+                          {credit.credit_status === 'pendiente' && (
+                            <>
+                              <button
+                                onClick={() => openPaymentForm(credit)}
+                                className="text-blue-600 hover:text-blue-900 text-xs"
+                              >
+                                💰 Abonar
+                              </button>
+                              <button
+                                onClick={() => marcarComoCancelado(credit.id)}
+                                className="text-red-600 hover:text-red-900 text-xs"
+                              >
+                                ✕ Cancelar
+                              </button>
+                            </>
+                          )}
+                          {credit.credit_status === 'pagado' && (
+                            <button
+                              onClick={() => marcarComoEntregado(credit.id)}
+                              className="text-green-600 hover:text-green-900 text-xs"
+                            >
+                              ✓ Marcar entregado
+                            </button>
+                          )}
+                          <button
+                            className="text-gray-600 hover:text-gray-900 text-xs"
+                            onClick={() => abrirHistorial(credit)}
+                          >
+                            📋 Historial ({credit.payments.length})
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -358,6 +489,123 @@ export default function CreditsPage() {
             </p>
           </div>
         </div>
+
+        {/* Modal de Historial de Pagos */}
+        {showHistorialModal && creditHistorial && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold">Historial de Abonos</h3>
+                <button
+                  onClick={() => setShowHistorialModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  ✕
+                </button>
+              </div>
+              
+              <div className="mb-4 space-y-2 bg-gray-50 p-3 rounded-lg">
+                <p className="text-gray-700">
+                  <strong>Cliente:</strong> {creditHistorial.customer_name || 'Sin nombre'}
+                </p>
+                <p className="text-gray-700">
+                  <strong>Total:</strong> ${creditHistorial.total.toFixed(2)}
+                </p>
+                <p className="text-gray-700">
+                  <strong>Total abonos:</strong> ${creditHistorial.amount_paid.toFixed(2)}
+                </p>
+                <p className="text-gray-700 font-bold">
+                  <strong>Saldo pendiente:</strong> ${creditHistorial.balance.toFixed(2)}
+                </p>
+              </div>
+              
+              {creditHistorial.payments.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  No hay abonos registrados para esta venta
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Fecha</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Monto</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Método</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Notas</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {creditHistorial.payments.map((pago) => (
+                        <tr key={pago.id}>
+                          <td className="px-4 py-3 text-sm">
+                            {new Date(pago.created_at).toLocaleString('es-MX', { timeZone: 'America/Mexico_City' })}
+                          </td>
+                          <td className="px-4 py-3 text-sm font-medium text-green-600">
+                            ${pago.amount.toFixed(2)}
+                          </td>
+                          <td className="px-4 py-3 text-sm capitalize">
+                            {pago.payment_method}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-500">
+                            {pago.notes || '-'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              
+              {/* Historial de Estados */}
+              {statusHistory.length > 0 && (
+                <div className="mt-6">
+                  <h4 className="text-sm font-semibold text-gray-700 mb-3">📊 Historial de Estados</h4>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Fecha</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Usuario</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Cambio</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Notas</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                        {statusHistory.map((history) => (
+                          <tr key={history.id}>
+                            <td className="px-4 py-3 text-sm">
+                              {new Date(history.created_at).toLocaleString('es-MX', { timeZone: 'America/Mexico_City' })}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-700">
+                              {history.user_email}
+                            </td>
+                            <td className="px-4 py-3 text-sm">
+                              <span className="text-gray-500">{history.old_status || 'Nuevo'}</span>
+                              <span className="mx-2">→</span>
+                              <span className="font-semibold text-blue-600">{history.new_status}</span>
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-500">
+                              {history.notes || '-'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+              
+              <div className="flex justify-end mt-6">
+                <button
+                  onClick={() => setShowHistorialModal(false)}
+                  className="bg-gray-300 text-gray-700 px-6 py-2 rounded-lg hover:bg-gray-400"
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </Layout>
   );

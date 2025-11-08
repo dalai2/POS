@@ -24,14 +24,15 @@ type Pedido = {
   vendedor_email?: string
   producto: {
     id: number
-    name: string
-    modelo?: string
+    modelo: string  // Renombrado de "name"
+    nombre?: string  // Renombrado de "tipo_joya"
     color?: string
     quilataje?: string
     talla?: string
-    price: number
+    precio: number  // Renombrado de "price"
     disponible: boolean
     anticipo_sugerido?: number
+    peso?: string
     peso_gramos?: number
     codigo?: string
   }
@@ -42,6 +43,16 @@ type PagoPedido = {
   monto: number
   metodo_pago: string
   tipo_pago: string
+  notas?: string
+  created_at: string
+}
+
+type StatusHistoryEntry = {
+  id: number
+  old_status: string | null
+  new_status: string
+  user_email: string
+  notes: string | null
   created_at: string
 }
 
@@ -61,6 +72,12 @@ export default function GestionPedidosPage() {
   const [montoPago, setMontoPago] = useState('')
   const [metodoPago, setMetodoPago] = useState('efectivo')
   const [tipoPago, setTipoPago] = useState('saldo')
+  
+  // Modal para historial de pagos
+  const [showHistorialModal, setShowHistorialModal] = useState(false)
+  const [pagosPedido, setPagosPedido] = useState<PagoPedido[]>([])
+  const [pedidoHistorial, setPedidoHistorial] = useState<Pedido | null>(null)
+  const [statusHistory, setStatusHistory] = useState<StatusHistoryEntry[]>([])
 
   useEffect(() => {
     if (!localStorage.getItem('access')) {
@@ -122,6 +139,27 @@ export default function GestionPedidosPage() {
     setMontoPago(pedido.saldo_pendiente.toString())
     setTipoPago('saldo')
     setShowPagoModal(true)
+  }
+
+  const abrirHistorial = async (pedido: Pedido) => {
+    try {
+      const response = await api.get(`/productos-pedido/pedidos/${pedido.id}/pagos`)
+      setPagosPedido(response.data || [])
+      setPedidoHistorial(pedido)
+      
+      // Cargar historial de estados
+      try {
+        const historyResponse = await api.get(`/status-history/pedido/${pedido.id}`)
+        setStatusHistory(historyResponse.data || [])
+      } catch (error) {
+        console.error('Error loading status history:', error)
+        setStatusHistory([])
+      }
+      
+      setShowHistorialModal(true)
+    } catch (error: any) {
+      setMsg(error?.response?.data?.detail || 'Error cargando historial de pagos')
+    }
   }
 
   const registrarPago = async () => {
@@ -222,8 +260,8 @@ export default function GestionPedidosPage() {
 
       // Build product description similar to SalesPage
       const descParts = []
-      if (pedido.producto?.name) descParts.push(pedido.producto.name)
       if (pedido.producto?.modelo) descParts.push(pedido.producto.modelo)
+      if (pedido.producto?.nombre) descParts.push(pedido.producto.nombre)
       if (pedido.producto?.color) descParts.push(pedido.producto.color)
       if (pedido.producto?.quilataje) descParts.push(pedido.producto.quilataje)
       if (pedido.producto?.peso_gramos) {
@@ -406,7 +444,7 @@ export default function GestionPedidosPage() {
 
       <!-- Header Info -->
       <div class="header-info">
-        <div><strong>FOLIO :</strong> ${String(pedido.id).padStart(6, '0')}</div>
+        <div><strong>FOLIO DE PEDIDO :</strong> ${String(pedido.id).padStart(6, '0')}</div>
         <div><strong>FECHA PEDIDO :</strong> ${formattedDate}</div>
         <div>HIDALGO #112 ZONA CENTRO, LOCAL 12, 23 Y 24 C.P: 37000. LEÓN, GTO.</div>
         <div>WhatsApp: 4776621788</div>
@@ -463,8 +501,8 @@ export default function GestionPedidosPage() {
     <!-- Totals -->
     <div class="totals">
       <div><strong>TOTAL :</strong> $${pedido.total.toFixed(2)}</div>
-      <div><strong>ANTICIPO :</strong> $${pedido.anticipo_pagado.toFixed(2)}</div>
-      <div><strong>SALDO :</strong> $${pedido.saldo_pendiente.toFixed(2)}</div>
+      <div><strong>TOTAL DE ABONOS :</strong> $${pedido.anticipo_pagado.toFixed(2)}</div>
+      <div><strong>SALDO PENDIENTE :</strong> $${pedido.saldo_pendiente.toFixed(2)}</div>
     </div>
 
     <!-- Footer Section -->
@@ -513,10 +551,10 @@ export default function GestionPedidosPage() {
   const getEstadoColor = (estado: string) => {
     switch (estado) {
       case 'pendiente': return 'bg-yellow-100 text-yellow-800'
-      case 'confirmado': return 'bg-blue-100 text-blue-800'
-      case 'en_proceso': return 'bg-orange-100 text-orange-800'
-      case 'listo': return 'bg-cyan-100 text-cyan-800'
-      case 'entregado': return 'bg-green-100 text-green-800'
+      case 'pedido': return 'bg-blue-100 text-blue-800'
+      case 'recibido': return 'bg-cyan-100 text-cyan-800'
+      case 'pagado': return 'bg-green-100 text-green-800'
+      case 'entregado': return 'bg-emerald-100 text-emerald-800'
       case 'cancelado': return 'bg-red-100 text-red-800'
       case 'vencido': return 'bg-purple-100 text-purple-800'
       default: return 'bg-gray-100 text-gray-800'
@@ -526,9 +564,9 @@ export default function GestionPedidosPage() {
   const getEstadoTexto = (estado: string) => {
     switch (estado) {
       case 'pendiente': return 'Pendiente'
-      case 'confirmado': return 'Confirmado'
-      case 'en_proceso': return 'En Proceso'
-      case 'listo': return 'Listo'
+      case 'pedido': return 'Pedido'
+      case 'recibido': return 'Recibido'
+      case 'pagado': return 'Pagado'
       case 'entregado': return 'Entregado'
       case 'cancelado': return 'Cancelado'
       case 'vencido': return 'Vencido'
@@ -593,9 +631,9 @@ export default function GestionPedidosPage() {
               >
                 <option value="">Todos los estados</option>
                 <option value="pendiente">Pendiente</option>
-                <option value="confirmado">Confirmado</option>
-                <option value="en_proceso">En Proceso</option>
-                <option value="listo">Listo</option>
+                <option value="pedido">Pedido</option>
+                <option value="recibido">Recibido</option>
+                <option value="pagado">Pagado</option>
                 <option value="entregado">Entregado</option>
                 <option value="cancelado">Cancelado</option>
                 <option value="vencido">Vencido</option>
@@ -671,9 +709,9 @@ export default function GestionPedidosPage() {
                       </td>
                       <td className="px-4 py-3 text-sm">
                         <div>
-                          <div className="font-medium">{p.producto?.name || 'Producto no encontrado'}</div>
+                          <div className="font-medium">{p.producto?.modelo || 'Producto no encontrado'}</div>
                           <div className="text-gray-500">
-                            {p.producto?.modelo && `${p.producto.modelo} - `}
+                            {p.producto?.nombre && `${p.producto.nombre} - `}
                             {p.producto?.color && `${p.producto.color} - `}
                             {p.producto?.quilataje && `${p.producto.quilataje}`}
                           </div>
@@ -707,9 +745,9 @@ export default function GestionPedidosPage() {
                             className={`px-2 py-1 rounded-full text-xs font-medium border-0 ${getEstadoColor(p.estado)}`}
                           >
                             <option value="pendiente">Pendiente</option>
-                            <option value="confirmado">Confirmado</option>
-                            <option value="en_proceso">En Proceso</option>
-                            <option value="listo">Listo</option>
+                            <option value="pedido">Pedido</option>
+                            <option value="recibido">Recibido</option>
+                            <option value="pagado">Pagado</option>
                             <option value="entregado">Entregado</option>
                             <option value="cancelado">Cancelado</option>
                             <option value="vencido">Vencido</option>
@@ -734,9 +772,15 @@ export default function GestionPedidosPage() {
                               onClick={() => abrirModalPago(p)}
                               className="text-purple-600 hover:text-purple-800 text-xs"
                             >
-                              Abonos
+                              Abonar
                             </button>
                           )}
+                          <button
+                            onClick={() => abrirHistorial(p)}
+                            className="text-blue-600 hover:text-blue-800 text-xs"
+                          >
+                            Historial
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -765,7 +809,7 @@ export default function GestionPedidosPage() {
                 <strong>Cliente:</strong> {pedidoSeleccionado.cliente_nombre}
               </p>
               <p className="text-gray-700">
-                <strong>Producto:</strong> {pedidoSeleccionado.producto.name}
+                <strong>Producto:</strong> {pedidoSeleccionado.producto.modelo}
               </p>
               <p className="text-gray-700">
                 <strong>Saldo pendiente:</strong> ${pedidoSeleccionado.saldo_pendiente.toFixed(2)}
@@ -817,6 +861,126 @@ export default function GestionPedidosPage() {
                 className="flex-1 bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700"
               >
                 Registrar Abono
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Historial de Pagos */}
+      {showHistorialModal && pedidoHistorial && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold">Historial de Abonos</h3>
+              <button
+                onClick={() => setShowHistorialModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div className="mb-4 space-y-2 bg-gray-50 p-3 rounded-lg">
+              <p className="text-gray-700">
+                <strong>Cliente:</strong> {pedidoHistorial.cliente_nombre}
+              </p>
+              <p className="text-gray-700">
+                <strong>Producto:</strong> {pedidoHistorial.producto?.modelo || '-'}
+              </p>
+              <p className="text-gray-700">
+                <strong>Total:</strong> ${pedidoHistorial.total.toFixed(2)}
+              </p>
+              <p className="text-gray-700">
+                <strong>Total de abonos:</strong> ${pedidoHistorial.anticipo_pagado.toFixed(2)}
+              </p>
+              <p className="text-gray-700 font-bold">
+                <strong>Saldo pendiente:</strong> ${pedidoHistorial.saldo_pendiente.toFixed(2)}
+              </p>
+            </div>
+            
+            {pagosPedido.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                No hay abonos registrados para este pedido
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Fecha</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Monto</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Método</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Notas</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {pagosPedido.map((pago) => (
+                      <tr key={pago.id}>
+                        <td className="px-4 py-3 text-sm">
+                          {new Date(pago.created_at).toLocaleString('es-MX', { timeZone: 'America/Mexico_City' })}
+                        </td>
+                        <td className="px-4 py-3 text-sm font-medium text-green-600">
+                          ${pago.monto.toFixed(2)}
+                        </td>
+                        <td className="px-4 py-3 text-sm capitalize">
+                          {pago.metodo_pago}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-500">
+                          {pago.notas || '-'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            
+            {/* Historial de Estados */}
+            {statusHistory.length > 0 && (
+              <div className="mt-6">
+                <h4 className="text-sm font-semibold text-gray-700 mb-3">📊 Historial de Estados</h4>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Fecha</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Usuario</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Cambio</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Notas</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {statusHistory.map((history) => (
+                        <tr key={history.id}>
+                          <td className="px-4 py-3 text-sm">
+                            {new Date(history.created_at).toLocaleString('es-MX', { timeZone: 'America/Mexico_City' })}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-700">
+                            {history.user_email}
+                          </td>
+                          <td className="px-4 py-3 text-sm">
+                            <span className="text-gray-500">{history.old_status || 'Nuevo'}</span>
+                            <span className="mx-2">→</span>
+                            <span className="font-semibold text-blue-600">{history.new_status}</span>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-500">
+                            {history.notes || '-'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+            
+            <div className="flex justify-end mt-6">
+              <button
+                onClick={() => setShowHistorialModal(false)}
+                className="bg-gray-300 text-gray-700 px-6 py-2 rounded-lg hover:bg-gray-400"
+              >
+                Cerrar
               </button>
             </div>
           </div>

@@ -98,18 +98,21 @@ export default function SalesHistoryPage() {
       const taxAmount = parseFloat(saleData.tax_amount || '0')
       const total = parseFloat(saleData.total || '0')
       
-      // Calculate abono and saldo based on sale type
-      let abonoAmount = 0
+      // Calculate abonos and saldo based on sale type
+      let abonoInicial = 0
+      let totalAbonos = 0
       let saldoAmount = 0
       
       if (saleData.tipo_venta === 'contado') {
-        // For contado sales, show total paid and saldo = 0
-        abonoAmount = efectivoPaid + tarjetaPaid
+        // For contado sales, don't show abonos
+        abonoInicial = 0
+        totalAbonos = 0
         saldoAmount = 0
       } else {
-        // For abono sales, show total paid and remaining balance
-        abonoAmount = efectivoPaid + tarjetaPaid
-        saldoAmount = total - abonoAmount
+        // For credito sales, usar amount_paid que tiene TODOS los abonos (inicial + posteriores)
+        abonoInicial = efectivoPaid + tarjetaPaid  // Solo el pago inicial del ticket
+        totalAbonos = parseFloat(saleData.amount_paid || '0')  // Suma de TODOS los abonos
+        saldoAmount = total - totalAbonos
       }
 
       const html = `
@@ -287,10 +290,6 @@ export default function SalesHistoryPage() {
         <td>${customerPhoneInfo}</td>
       </tr>
       <tr>
-        <td><strong>Dirección:</strong></td>
-        <td></td>
-      </tr>
-      <tr>
         <td><strong>Vendedor:</strong></td>
         <td>${vendedorInfo}</td>
       </tr>
@@ -336,10 +335,11 @@ export default function SalesHistoryPage() {
     <!-- Totals -->
     <div class="totals">
       <div><strong>TOTAL :</strong> $${total.toFixed(2)}</div>
-      ${efectivoPaid > 0 ? `<div><strong>EFECTIVO :</strong> $${efectivoPaid.toFixed(2)}</div>` : ''}
-      ${tarjetaPaid > 0 ? `<div><strong>TARJETA :</strong> $${tarjetaPaid.toFixed(2)}</div>` : ''}
-      ${abonoAmount > 0 ? `<div><strong>ABONOS/ANTICIPO :</strong> $${abonoAmount.toFixed(2)}</div>` : ''}
-      ${saldoAmount > 0 ? `<div><strong>SALDO :</strong> $${saldoAmount.toFixed(2)}</div>` : ''}
+      ${saleData.tipo_venta === 'contado' && efectivoPaid > 0 ? `<div><strong>EFECTIVO :</strong> $${efectivoPaid.toFixed(2)}</div>` : ''}
+      ${saleData.tipo_venta === 'contado' && tarjetaPaid > 0 ? `<div><strong>TARJETA :</strong> $${tarjetaPaid.toFixed(2)}</div>` : ''}
+      ${saleData.tipo_venta === 'credito' && abonoInicial > 0 ? `<div><strong>ABONO INICIAL :</strong> $${abonoInicial.toFixed(2)}</div>` : ''}
+      ${saleData.tipo_venta === 'credito' && totalAbonos > 0 ? `<div><strong>TOTAL DE ABONOS :</strong> $${totalAbonos.toFixed(2)}</div>` : ''}
+      ${saleData.tipo_venta === 'credito' && saldoAmount >= 0 ? `<div><strong>SALDO PENDIENTE :</strong> $${saldoAmount.toFixed(2)}</div>` : ''}
     </div>
 
     <!-- Footer Section -->

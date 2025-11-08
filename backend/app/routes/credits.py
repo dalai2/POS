@@ -10,7 +10,9 @@ from app.core.deps import get_tenant, get_current_user, require_admin
 from app.models.tenant import Tenant
 from app.models.user import User
 from app.models.credit_payment import CreditPayment
+from app.models.payment import Payment
 from app.models.sale import Sale
+from app.routes.status_history import create_status_history
 
 router = APIRouter()
 
@@ -27,7 +29,7 @@ class CreditPaymentResponse(BaseModel):
     sale_id: int
     amount: float
     payment_method: str
-    user_id: int
+    user_id: Optional[int]
     notes: Optional[str]
     created_at: str
 
@@ -44,6 +46,7 @@ class CreditSaleDetail(BaseModel):
     balance: float
     credit_status: str
     vendedor_id: Optional[int]
+    vendedor_email: Optional[str]
     created_at: str
     payments: List[CreditPaymentResponse]
 
@@ -57,7 +60,7 @@ def get_credit_sales(
     vendedor_id: Optional[int] = None,
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(get_tenant),
-    current_user: User = Depends(require_admin)
+    current_user: User = Depends(get_current_user)
 ):
     """Get all credit sales with optional filters"""
     from datetime import datetime, timedelta
@@ -92,13 +95,34 @@ def get_credit_sales(
     # Add payments and balance to each sale
     result = []
     for sale in sales:
-        payments_query = db.query(CreditPayment).filter(
-            CreditPayment.sale_id == sale.id
-        ).order_by(CreditPayment.created_at.desc()).all()
+        # Obtener pagos iniciales de la tabla Payment (anticipo)
+        initial_payments_query = db.query(Payment).filter(
+            Payment.sale_id == sale.id
+        ).all()
         
-        # Convert payments to dict format
-        payments = [
-            {
+        # Obtener abonos posteriores de CreditPayment
+        credit_payments_query = db.query(CreditPayment).filter(
+            CreditPayment.sale_id == sale.id
+        ).all()
+        
+        # Combinar ambos tipos de pagos
+        payments = []
+        
+        # Agregar pagos iniciales (anticipo)
+        for p in initial_payments_query:
+            payments.append({
+                "id": -p.id,  # ID negativo para diferenciar de abonos posteriores
+                "sale_id": sale.id,
+                "amount": float(p.amount),
+                "payment_method": p.method,  # En Payment se llama 'method'
+                "user_id": sale.vendedor_id,  # Usar el vendedor de la venta
+                "notes": "Anticipo inicial",
+                "created_at": sale.created_at.isoformat()  # Usar fecha de la venta
+            })
+        
+        # Agregar abonos posteriores
+        for p in credit_payments_query:
+            payments.append({
                 "id": p.id,
                 "sale_id": p.sale_id,
                 "amount": float(p.amount),
@@ -106,11 +130,19 @@ def get_credit_sales(
                 "user_id": p.user_id,
                 "notes": p.notes,
                 "created_at": p.created_at.isoformat()
-            }
-            for p in payments_query
-        ]
+            })
+        
+        # Ordenar todos los pagos por fecha
+        payments.sort(key=lambda x: x["created_at"])
         
         balance = float(sale.total) - float(sale.amount_paid or 0)
+        
+        # Obtener email del vendedor si existe
+        vendedor_email = None
+        if sale.vendedor_id:
+            vendedor = db.query(User).filter(User.id == sale.vendedor_id).first()
+            if vendedor:
+                vendedor_email = vendedor.email
         
         result.append({
             "id": sale.id,
@@ -121,6 +153,7 @@ def get_credit_sales(
             "balance": balance,
             "credit_status": sale.credit_status,
             "vendedor_id": sale.vendedor_id,
+            "vendedor_email": vendedor_email,
             "created_at": sale.created_at.isoformat(),
             "payments": payments
         })
@@ -133,7 +166,7 @@ def register_payment(
     data: CreditPaymentCreate,
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(get_tenant),
-    current_user: User = Depends(require_admin)
+    current_user: User = Depends(get_current_user)
 ):
     """Register a payment (abono) for a credit sale"""
     # Verify sale exists and is a credit sale
@@ -172,6 +205,7 @@ def register_payment(
     
     # Update sale
     sale.amount_paid = float(sale.amount_paid or 0) + data.amount
+    old_status = sale.credit_status
     
     # Update status if fully paid
     if sale.amount_paid >= sale.total:
@@ -179,6 +213,20 @@ def register_payment(
     
     db.commit()
     db.refresh(payment)
+    
+    # Registrar cambio de estado si cambió
+    if old_status != sale.credit_status:
+        create_status_history(
+            db=db,
+            tenant_id=tenant.id,
+            entity_type="sale",
+            entity_id=sale.id,
+            old_status=old_status,
+            new_status=sale.credit_status,
+            user_id=current_user.id,
+            user_email=current_user.email,
+            notes=f"Abono de ${data.amount:.2f} - Venta completamente pagada"
+        )
     
     # Return payment as dict
     return {
@@ -197,7 +245,7 @@ def get_sale_payments(
     sale_id: int,
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(get_tenant),
-    current_user: User = Depends(require_admin)
+    current_user: User = Depends(get_current_user)
 ):
     """Get all payments for a specific credit sale"""
     # Verify sale exists
@@ -229,4 +277,128 @@ def get_sale_payments(
     ]
     
     return payments
+
+
+@router.patch("/sales/{sale_id}/entregado")
+def mark_as_delivered(
+    sale_id: int,
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_tenant),
+    current_user: User = Depends(get_current_user)
+):
+    """Mark a credit sale as delivered"""
+    sale = db.query(Sale).filter(
+        Sale.id == sale_id,
+        Sale.tenant_id == tenant.id,
+        Sale.tipo_venta == "credito"
+    ).first()
+    
+    if not sale:
+        raise HTTPException(status_code=404, detail="Sale not found")
+    
+    old_status = sale.credit_status
+    sale.credit_status = "entregado"
+    db.commit()
+    
+    # Registrar en historial
+    create_status_history(
+        db=db,
+        tenant_id=tenant.id,
+        entity_type="sale",
+        entity_id=sale.id,
+        old_status=old_status,
+        new_status="entregado",
+        user_id=current_user.id,
+        user_email=current_user.email,
+        notes="Venta marcada como entregada"
+    )
+    
+    return {"message": "Sale marked as delivered", "status": "entregado"}
+
+
+@router.patch("/sales/{sale_id}/cancelado")
+def mark_as_cancelled(
+    sale_id: int,
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_tenant),
+    current_user: User = Depends(get_current_user)
+):
+    """Mark a credit sale as cancelled"""
+    sale = db.query(Sale).filter(
+        Sale.id == sale_id,
+        Sale.tenant_id == tenant.id,
+        Sale.tipo_venta == "credito"
+    ).first()
+    
+    if not sale:
+        raise HTTPException(status_code=404, detail="Sale not found")
+    
+    if sale.credit_status not in ['pendiente', 'vencido']:
+        raise HTTPException(status_code=400, detail="Solo se pueden cancelar ventas pendientes o vencidas")
+    
+    old_status = sale.credit_status
+    sale.credit_status = "cancelado"
+    db.commit()
+    
+    # Registrar en historial
+    create_status_history(
+        db=db,
+        tenant_id=tenant.id,
+        entity_type="sale",
+        entity_id=sale.id,
+        old_status=old_status,
+        new_status="cancelado",
+        user_id=current_user.id,
+        user_email=current_user.email,
+        notes="Venta cancelada manualmente"
+    )
+    
+    return {"message": "Sale marked as cancelled", "status": "cancelado"}
+
+
+class StatusChangeRequest(BaseModel):
+    status: str
+
+
+@router.patch("/sales/{sale_id}/status")
+def change_sale_status(
+    sale_id: int,
+    data: StatusChangeRequest,
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_tenant),
+    current_user: User = Depends(get_current_user)
+):
+    """Change credit sale status manually (admin/owner only)"""
+    sale = db.query(Sale).filter(
+        Sale.id == sale_id,
+        Sale.tenant_id == tenant.id,
+        Sale.tipo_venta == "credito"
+    ).first()
+    
+    if not sale:
+        raise HTTPException(status_code=404, detail="Sale not found")
+    
+    # Validar estados permitidos
+    allowed_statuses = ['pendiente', 'pagado', 'entregado', 'vencido', 'cancelado']
+    if data.status not in allowed_statuses:
+        raise HTTPException(status_code=400, detail=f"Estado inválido. Debe ser uno de: {', '.join(allowed_statuses)}")
+    
+    old_status = sale.credit_status
+    sale.credit_status = data.status
+    db.commit()
+    
+    # Registrar en historial
+    create_status_history(
+        db=db,
+        tenant_id=tenant.id,
+        entity_type="sale",
+        entity_id=sale.id,
+        old_status=old_status,
+        new_status=data.status,
+        user_id=current_user.id,
+        user_email=current_user.email,
+        notes=f"Estado cambiado manualmente de {old_status} a {data.status}"
+    )
+    
+    return {"message": "Status updated successfully", "status": data.status}
 

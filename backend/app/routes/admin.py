@@ -34,8 +34,9 @@ class UserOut(BaseModel):
         from_attributes = True
 
 
-@router.get("/users", response_model=List[UserOut], dependencies=[Depends(require_owner)])
+@router.get("/users", response_model=List[UserOut])
 def list_users(db: Session = Depends(get_db), tenant: Tenant = Depends(get_tenant), user: User = Depends(get_current_user)):
+    """List all users for the tenant (all authenticated users can view for vendor selection)"""
     return db.query(User).filter(User.tenant_id == tenant.id).all()
 
 

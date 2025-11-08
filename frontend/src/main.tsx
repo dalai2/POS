@@ -14,6 +14,7 @@ import CreditsPage from './pages/CreditsPage'
 import ReportsPage from './pages/ReportsPage'
 import PedidosPage from './pages/PedidosPage'
 import GestionPedidosPage from './pages/GestionPedidosPage'
+import TasasPedidoPage from './pages/TasasPedidoPage'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
@@ -29,6 +30,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         <Route path="/gestion-pedidos" element={<GestionPedidosPage />} />
         <Route path="/sales/history" element={<SalesHistoryPage />} />
         <Route path="/metal-rates" element={<MetalRatesPage />} />
+        <Route path="/tasas-pedido" element={<TasasPedidoPage />} />
         <Route path="/credits" element={<CreditsPage />} />
         <Route path="/reports" element={<ReportsPage />} />
         <Route path="*" element={<Navigate to="/login" replace />} />

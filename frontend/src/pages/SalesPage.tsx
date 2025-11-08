@@ -46,7 +46,6 @@ export default function SalesPage() {
   const [vendedorId, setVendedorId] = useState<number | null>(null)
   const [customerName, setCustomerName] = useState('PUBLICO GENERAL')
   const [customerPhone, setCustomerPhone] = useState('')
-  const [customerAddress, setCustomerAddress] = useState('')
   
   // Modal de confirmación
   const [showConfirmModal, setShowConfirmModal] = useState(false)
@@ -181,6 +180,13 @@ export default function SalesPage() {
     // This effect runs when any calculation dependency changes
   }, [subtotal, discountPct, taxRateNum, cashNumCalc, cardNumCalc, saleType])
 
+  // Limpiar campo de tarjeta cuando se cambia a apartado
+  useEffect(() => {
+    if (saleType === 'credito') {
+      setCard('0')
+    }
+  }, [saleType])
+
   const getLogoAsBase64 = async (): Promise<string> => {
     try {
       const response = await fetch('/logo.png?v=' + Date.now())
@@ -272,22 +278,26 @@ export default function SalesPage() {
       console.log('Efectivo paid:', efectivoPaid, 'Tarjeta paid:', tarjetaPaid, 'Initial payment:', initialPayment)
       
       // Calculate abono and saldo based on sale type
-      let abonoAmount = 0
+      let abonoInicial = 0
+      let totalAbonos = 0
       let saldoAmount = 0
       
       console.log('DEBUG Ticket:', { tipo_venta: saleData.tipo_venta, initialPayment, efectivoPaid, tarjetaPaid, total })
       
       if (saleData.tipo_venta === 'contado') {
         // For contado sales, don't show abono/saldo
-        abonoAmount = 0
+        abonoInicial = 0
+        totalAbonos = 0
         saldoAmount = 0
       } else {
-        // For abono/credito sales, use the initialPayment parameter passed to function
-        abonoAmount = Number(initialPayment) || 0
-        saldoAmount = Number(total) - abonoAmount
+        // For credito sales, abono inicial es lo que se pagó al crear la venta
+        abonoInicial = Number(initialPayment) || 0
+        // Total de abonos es solo el inicial por ahora (en el ticket al momento de venta)
+        totalAbonos = abonoInicial
+        saldoAmount = Number(total) - totalAbonos
       }
       
-      console.log('DEBUG Calculated:', { abonoAmount, saldoAmount })
+      console.log('DEBUG Calculated:', { abonoInicial, totalAbonos, saldoAmount })
 
       const html = `
 <!DOCTYPE html>
@@ -464,10 +474,6 @@ export default function SalesPage() {
         <td>${customerPhoneInfo}</td>
       </tr>
       <tr>
-        <td><strong>Dirección:</strong></td>
-        <td></td>
-      </tr>
-      <tr>
         <td><strong>Vendedor:</strong></td>
         <td>${vendedorInfo}</td>
       </tr>
@@ -505,10 +511,11 @@ export default function SalesPage() {
     <!-- Totals -->
     <div class="totals">
       <div><strong>TOTAL :</strong> $${total.toFixed(2)}</div>
-      ${efectivoPaid > 0 ? `<div><strong>EFECTIVO :</strong> $${efectivoPaid.toFixed(2)}</div>` : ''}
-      ${tarjetaPaid > 0 ? `<div><strong>TARJETA :</strong> $${tarjetaPaid.toFixed(2)}</div>` : ''}
-      ${abonoAmount > 0 ? `<div><strong>ABONOS/ANTICIPO :</strong> $${abonoAmount.toFixed(2)}</div>` : ''}
-      ${saldoAmount > 0 ? `<div><strong>SALDO :</strong> $${saldoAmount.toFixed(2)}</div>` : ''}
+      ${saleData.tipo_venta === 'contado' && efectivoPaid > 0 ? `<div><strong>EFECTIVO :</strong> $${efectivoPaid.toFixed(2)}</div>` : ''}
+      ${saleData.tipo_venta === 'contado' && tarjetaPaid > 0 ? `<div><strong>TARJETA :</strong> $${tarjetaPaid.toFixed(2)}</div>` : ''}
+      ${saleData.tipo_venta === 'credito' && abonoInicial > 0 ? `<div><strong>ABONO INICIAL :</strong> $${abonoInicial.toFixed(2)}</div>` : ''}
+      ${saleData.tipo_venta === 'credito' && totalAbonos > 0 ? `<div><strong>TOTAL DE ABONOS :</strong> $${totalAbonos.toFixed(2)}</div>` : ''}
+      ${saleData.tipo_venta === 'credito' && saldoAmount > 0 ? `<div><strong>SALDO PENDIENTE :</strong> $${saldoAmount.toFixed(2)}</div>` : ''}
     </div>
 
     <!-- Footer Section -->
@@ -582,11 +589,12 @@ export default function SalesPage() {
       const items = cart.map(ci => ({
         product_id: ci.product.id,
         quantity: ci.quantity,
-        discount_pct: Number(ci.discount_pct) || 0
+        discount_pct: 0  // El precio del producto ya tiene el descuento aplicado
       }))
 
       let payments = null
-      if (saleType === 'contado') {
+      // Para contado y crédito, enviamos los pagos iniciales en el array payments
+      if (saleType === 'contado' || saleType === 'credito') {
         payments = []
         if (cashNumCalc > 0) payments.push({ method: 'cash', amount: parseFloat(cashNumCalc.toFixed(2)) })
         if (cardNumCalc > 0) payments.push({ method: 'card', amount: parseFloat(cardNumCalc.toFixed(2)) })
@@ -627,42 +635,14 @@ export default function SalesPage() {
       const initialPaymentAmount = cashAmount + cardAmount
       const currentCart = [...cart]
       
-      console.log('===== BEFORE registering payments =====')
+      console.log('===== Initial payment info =====')
       console.log('saleType:', saleType)
-      console.log('cash field:', cash)
-      console.log('card field:', card)
-      console.log('Calculated - cashAmount:', cashAmount)
-      console.log('Calculated - cardAmount:', cardAmount)
-      console.log('Calculated - initialPaymentAmount:', initialPaymentAmount)
-      console.log('=======================================')
+      console.log('cashAmount:', cashAmount)
+      console.log('cardAmount:', cardAmount)
+      console.log('initialPaymentAmount:', initialPaymentAmount)
+      console.log('================================')
       
-      // If it's a credito sale with initial payment (from Efectivo or Tarjeta), register it
-      if (saleType === 'credito' && initialPaymentAmount > 0) {
-        try {
-          // Register cash payment if any
-          if (cashAmount > 0) {
-            await api.post('/credits/payments', {
-              sale_id: r.data.id,
-              amount: cashAmount,
-              payment_method: 'efectivo',
-              notes: 'Abono inicial - Efectivo'
-            })
-          }
-          
-          // Register card payment if any
-          if (cardAmount > 0) {
-            await api.post('/credits/payments', {
-              sale_id: r.data.id,
-              amount: cardAmount,
-              payment_method: 'tarjeta',
-              notes: 'Abono inicial - Tarjeta'
-            })
-          }
-        } catch (paymentError) {
-          console.error('Error registering initial payment:', paymentError)
-          // Continue anyway - the sale was created successfully
-        }
-      }
+      // Ya no necesitamos registrar pagos adicionales - se envían en el array payments al crear la venta
       
       setCart([])
       setCash('')
@@ -670,7 +650,6 @@ export default function SalesPage() {
       setDiscount('0')
       setCustomerName('')
       setCustomerPhone('')
-      setCustomerAddress('')
       
       setMsg(`✅ Venta realizada. Folio ${r.data.id}. Total $${r.data.total}`)
       
@@ -750,7 +729,7 @@ export default function SalesPage() {
                   className="w-full border border-gray-300 rounded-lg px-3 py-2"
                 >
                   <option value="contado">💵 Contado</option>
-                  <option value="credito">💳 Abonos</option>
+                  <option value="credito">💳 Apartado</option>
                 </select>
               </div>
               <div>
@@ -891,9 +870,9 @@ export default function SalesPage() {
             </div>
 
             {/* Payment fields */}
-            <div className="grid grid-cols-2 gap-3">
+            {saleType === 'credito' ? (
               <div>
-                <label className="text-sm font-medium">Efectivo</label>
+                <label className="text-sm font-medium">Anticipo (opcional)</label>
                 <input
                   type="number"
                   step="0.01"
@@ -902,25 +881,42 @@ export default function SalesPage() {
                   className="w-full border rounded-lg px-3 py-2"
                   placeholder="0.00"
                 />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Tarjeta</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={card}
-                  onChange={e => setCard(e.target.value)}
-                  className="w-full border rounded-lg px-3 py-2"
-                  placeholder="0.00"
-                />
-              </div>
+                <p className="text-xs text-gray-500 mt-1">Puedes dejar en $0.00 si no hay anticipo inicial</p>
             </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-sm font-medium">Efectivo</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={cash}
+                      onChange={e => setCash(e.target.value)}
+                      className="w-full border rounded-lg px-3 py-2"
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Tarjeta</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={card}
+                      onChange={e => setCard(e.target.value)}
+                      className="w-full border rounded-lg px-3 py-2"
+                      placeholder="0.00"
+                    />
+                  </div>
+                </div>
 
-            {saleType === 'contado' && paid > 0 && (
-              <div className="flex justify-between">
-                <span>Cambio:</span>
-                <span className="font-bold text-blue-600">${change.toFixed(2)}</span>
-              </div>
+                {paid > 0 && (
+                  <div className="flex justify-between">
+                    <span>Cambio:</span>
+                    <span className="font-bold text-blue-600">${change.toFixed(2)}</span>
+                  </div>
+                )}
+              </>
             )}
 
             {/* Checkout Button */}

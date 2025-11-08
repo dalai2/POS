@@ -21,10 +21,7 @@ export default function MetalRatesPage() {
     metal_type: '',
     rate_per_gram: '',
   });
-
-  useEffect(() => {
-    loadRates();
-  }, []);
+  const userRole = localStorage.getItem('role') || '';
 
   const loadRates = async () => {
     try {
@@ -36,6 +33,25 @@ export default function MetalRatesPage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    loadRates();
+  }, []);
+
+  // Verificar permisos
+  if (userRole !== 'admin' && userRole !== 'owner') {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <h2 className="text-2xl font-bold text-red-600 mb-2">⛔ Acceso Denegado</h2>
+            <p className="text-gray-600">No tienes permisos para ver las tasas de metal.</p>
+            <p className="text-gray-600">Solo administradores y dueños pueden acceder.</p>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

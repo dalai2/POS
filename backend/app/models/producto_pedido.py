@@ -9,9 +9,10 @@ class ProductoPedido(Base):
     id = Column(Integer, primary_key=True, index=True)
     tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False)
     
-    # Campos exactamente iguales a Product
-    name = Column(String(255), nullable=False)
-    price = Column(Numeric(10, 2), nullable=False, default=0)
+    # Campos base
+    modelo = Column(String(255), nullable=False)  # Renombrado de "name"
+    nombre = Column(String(50), nullable=True, index=True)  # Renombrado de "tipo_joya"
+    precio = Column(Numeric(10, 2), nullable=False, default=0)  # Renombrado de "price"
     cost_price = Column(Numeric(10, 2), nullable=False, default=0)
     category = Column(String(100), nullable=True, index=True)
     default_discount_pct = Column(Numeric(5, 2), nullable=False, default=0)
@@ -19,15 +20,14 @@ class ProductoPedido(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
-    # Campos específicos de joyería (iguales a Product)
+    # Campos específicos de joyería
     codigo = Column(String(100), nullable=True, index=True)
     marca = Column(String(100), nullable=True)
-    modelo = Column(String(100), nullable=True)
     color = Column(String(50), nullable=True)
     quilataje = Column(String(20), nullable=True, index=True)
     base = Column(String(50), nullable=True)
-    tipo_joya = Column(String(50), nullable=True, index=True)
     talla = Column(String(20), nullable=True)
+    peso = Column(String(100), nullable=True)  # Peso descriptivo
     peso_gramos = Column(Numeric(10, 3), nullable=True)
     precio_manual = Column(Numeric(10, 2), nullable=True)
     
