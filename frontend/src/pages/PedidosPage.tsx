@@ -332,7 +332,7 @@ export default function PedidosPage() {
         talla: newProduct.talla || null,
         peso: newProduct.peso || null,
         peso_gramos: newProduct.peso_gramos ? parseFloat(newProduct.peso_gramos) : null,
-        precio: parseFloat(newProduct.precio),
+        precio: newProduct.precio ? parseFloat(newProduct.precio) : 0,
         cost_price: newProduct.cost_price ? parseFloat(newProduct.cost_price) : null,
         precio_manual: newProduct.precio_manual ? parseFloat(newProduct.precio_manual) : null,
         milimetros: newProduct.milimetros || null,
@@ -378,7 +378,15 @@ export default function PedidosPage() {
       setTimeout(() => setMsg(''), 3000)
       
     } catch (e: any) {
-      setMsg(e?.response?.data?.detail || 'Error procesando producto')
+      console.error('Error creating/updating product:', e?.response?.data)
+      const detail = e?.response?.data?.detail
+      if (Array.isArray(detail)) {
+        // Manejar errores de validación de Pydantic
+        const errorMessages = detail.map((err: any) => `${err.loc.join('.')}: ${err.msg}`).join(', ')
+        setMsg(`Error de validación: ${errorMessages}`)
+      } else {
+        setMsg(detail || 'Error procesando producto')
+      }
     }
   }
 
@@ -446,7 +454,14 @@ export default function PedidosPage() {
       setTimeout(() => setMsg(''), 5000)
       
     } catch (e: any) {
-      setMsg(e?.response?.data?.detail || 'Error importando productos')
+      console.error('Import error:', e?.response?.data)
+      const detail = e?.response?.data?.detail
+      if (Array.isArray(detail)) {
+        const errorMessages = detail.map((err: any) => `${err.loc.join('.')}: ${err.msg}`).join(', ')
+        setMsg(`Error de validación: ${errorMessages}`)
+      } else {
+        setMsg(detail || 'Error importando productos')
+      }
     } finally {
       setImporting(false)
     }
@@ -523,7 +538,14 @@ export default function PedidosPage() {
     } catch (e: any) {
       console.error('Checkout error:', e)
       console.error('Error response:', e?.response)
-      setMsg(e?.response?.data?.detail || 'Error creando pedido')
+      const detail = e?.response?.data?.detail
+      if (Array.isArray(detail)) {
+        // Manejar errores de validación de Pydantic
+        const errorMessages = detail.map((err: any) => `${err.loc.join('.')}: ${err.msg}`).join(', ')
+        setMsg(`Error de validación: ${errorMessages}`)
+      } else {
+        setMsg(detail || 'Error creando pedido')
+      }
     }
   }
 
@@ -889,7 +911,7 @@ export default function PedidosPage() {
                 <strong>Producto:</strong> {productoToAdd.nombre}
               </p>
               <p className="text-gray-700 mb-2">
-                <strong>Precio:</strong> ${productoToAdd.precio}
+                <strong>Precio:</strong> ${productoToAdd.precio || 0}
               </p>
               <p className="text-gray-700 mb-2">
                 <strong>Tiempo de entrega:</strong> A convenir
