@@ -54,7 +54,9 @@ export default function ProductsPage() {
   const [quilatajeFilter, setQuilatajeFilter] = useState('')
   const [editingId, setEditingId] = useState<number | null>(null)
   const [showAddForm, setShowAddForm] = useState(false)
-  const [userRole, setUserRole] = useState<string>(localStorage.getItem('role') || 'cashier')
+  const [userRole, setUserRole] = useState<'owner' | 'admin' | 'cashier'>(
+    (localStorage.getItem('role') as 'owner' | 'admin' | 'cashier') || 'cashier'
+  )
   const [showImportModal, setShowImportModal] = useState(false)
   const [importFile, setImportFile] = useState<File | null>(null)
   const [importMode, setImportMode] = useState<'add' | 'replace'>('add')

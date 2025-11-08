@@ -886,10 +886,10 @@ export default function PedidosPage() {
             <h3 className="text-lg font-semibold mb-4">Confirmar Producto sobre Pedido</h3>
             <div className="mb-4">
               <p className="text-gray-700 mb-2">
-                <strong>Producto:</strong> {productoToAdd.name}
+                <strong>Producto:</strong> {productoToAdd.nombre}
               </p>
               <p className="text-gray-700 mb-2">
-                <strong>Precio:</strong> ${productoToAdd.price}
+                <strong>Precio:</strong> ${productoToAdd.precio}
               </p>
               <p className="text-gray-700 mb-2">
                 <strong>Tiempo de entrega:</strong> A convenir

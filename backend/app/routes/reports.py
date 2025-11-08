@@ -615,6 +615,12 @@ def get_detailed_corte_caja(
     num_pedidos_vencidos = 0  # Pedidos con status vencido
     num_abonos_apartados = 0  # Cantidad de abonos a apartados
     num_abonos_pedidos = 0  # Cantidad de abonos a pedidos
+    
+    # Reembolsos y Saldos Vencidos
+    reembolso_apartados_cancelados = 0.0  # Suma de anticipos de apartados cancelados
+    reembolso_pedidos_cancelados = 0.0  # Suma de anticipos de pedidos cancelados
+    saldo_vencido_apartados = 0.0  # Suma de saldos pendientes de apartados vencidos
+    saldo_vencido_pedidos = 0.0  # Suma de saldos pendientes de pedidos vencidos
 
     # Group sales by vendedor for vendor stats
     vendor_stats = {}
@@ -1178,6 +1184,10 @@ def get_detailed_corte_caja(
         "num_abonos_pedidos": num_abonos_pedidos,
         "subtotal_venta_tarjeta": total_tarjeta_contado,  # Subtotal sin descuento
         "total_tarjeta_neto": total_tarjeta_neto,  # Con descuento del 3%
+        "reembolso_apartados_cancelados": reembolso_apartados_cancelados,
+        "reembolso_pedidos_cancelados": reembolso_pedidos_cancelados,
+        "saldo_vencido_apartados": saldo_vencido_apartados,
+        "saldo_vencido_pedidos": saldo_vencido_pedidos,
         "vendedores": vendedores,
         "daily_summaries": daily_summaries,
         "sales_details": sales_details,

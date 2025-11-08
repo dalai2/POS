@@ -456,7 +456,7 @@ const DashboardPedidosPage: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         <div className="bg-white p-4 rounded-lg shadow">
           <h3 className="text-sm font-semibold mb-3">Anticipos vs Saldos</h3>
-          <Bar data={cashFlowChart} options={{ responsive: true, plugins: { legend: { display: false } }, scales: { y: { ticks: { callback: (v) => String(v) } } } }} />
+          <Bar data={cashFlowChart} options={{ responsive: true, plugins: { legend: { display: false } }, scales: { y: { ticks: { callback: (v: number | string) => String(v) } } } }} />
         </div>
         <div className="bg-white p-4 rounded-lg shadow">
           <h3 className="text-sm font-semibold mb-3">Top 5 Clientes por Total</h3>
