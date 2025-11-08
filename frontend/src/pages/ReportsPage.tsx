@@ -226,13 +226,6 @@ export default function ReportsPage() {
         const response = await api.get('/reports/detailed-corte-caja', {
           params: { start_date: startDate, end_date: endDate }
         });
-        console.log('DEBUG - Keys en response.data:', Object.keys(response.data).filter(k => k.includes('reembolso') || k.includes('vencido')));
-        console.log('DEBUG - Valores:', {
-          reembolso_apartados: response.data.reembolso_apartados_cancelados,
-          reembolso_pedidos: response.data.reembolso_pedidos_cancelados,
-          saldo_apartados: response.data.saldo_vencido_apartados,
-          saldo_pedidos: response.data.saldo_vencido_pedidos
-        });
         setDetailedReport(response.data);
     } catch (error) {
       console.error('Error generating report:', error);

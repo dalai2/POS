@@ -1161,13 +1161,8 @@ def get_detailed_corte_caja(
             "vendedor": vendedor,
             "motivo": motivo
         })
-    
-    print(f"🔥 DEBUG FINAL - reembolso_apartados_cancelados: {reembolso_apartados_cancelados}")
-    print(f"🔥 DEBUG FINAL - reembolso_pedidos_cancelados: {reembolso_pedidos_cancelados}")
-    print(f"🔥 DEBUG FINAL - saldo_vencido_apartados: {saldo_vencido_apartados}")
-    print(f"🔥 DEBUG FINAL - saldo_vencido_pedidos: {saldo_vencido_pedidos}")
 
-    result = {
+    return {
         "start_date": start_date.isoformat(),
         "end_date": end_date.isoformat(),
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -1228,7 +1223,4 @@ def get_detailed_corte_caja(
         "apartados_cancelados_vencidos": apartados_cancelados_vencidos,
         "pedidos_cancelados_vencidos": pedidos_cancelados_vencidos
     }
-    
-    print(f"🔥 KEYS EN RESULT: {[k for k in result.keys() if 'reembolso' in k or 'vencido' in k]}")
-    return result
 
