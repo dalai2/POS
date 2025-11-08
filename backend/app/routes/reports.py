@@ -808,13 +808,13 @@ def get_detailed_corte_caja(
         
         # Agregar a sales_details para aparecer en listas detalladas
         sales_details.append({
-            "id": f"P{pedido.id}",  # Prefijo P para identificar como pedido
+            "id": pedido.id,  # ID numérico del pedido
             "tipo": "Pedido Contado",
             "fecha": pedido.created_at.strftime("%Y-%m-%d %H:%M"),
             "cliente": pedido.cliente_nombre,
-            "producto": producto_name,
-            "cantidad": pedido.cantidad,
+            "piezas": pedido.cantidad,  # Campo requerido por el schema
             "total": float(pedido.total),
+            "estado": "Pagada",  # Estado para el reporte
             "vendedor": vendedor,
             "efectivo": efectivo_pedido,
             "tarjeta": tarjeta_pedido
