@@ -1038,6 +1038,13 @@ def get_detailed_corte_caja(
         
         saldo = float(apartado.total) - float(apartado.amount_paid or 0)
         motivo = "Vencido" if apartado.credit_status == "vencido" else "Cancelado"
+        total_pagado = float(apartado.amount_paid or 0)
+        
+        # Calcular reembolsos y saldos vencidos
+        if apartado.credit_status == "cancelado":
+            reembolso_apartados_cancelados += total_pagado
+        elif apartado.credit_status == "vencido":
+            saldo_vencido_apartados += total_pagado
         
         apartados_cancelados_vencidos.append({
             "id": apartado.id,
@@ -1122,6 +1129,18 @@ def get_detailed_corte_caja(
         producto_name = producto.modelo if producto else "Producto desconocido"
         
         motivo = "Vencido" if pedido.estado == "vencido" else "Cancelado"
+        
+        # Calcular total pagado (anticipo + abonos)
+        anticipo = float(pedido.anticipo_pagado)
+        abonos_pedido = db.query(PagoPedido).filter(PagoPedido.pedido_id == pedido.id).all()
+        total_abonos = sum(float(p.monto) for p in abonos_pedido)
+        total_pagado = anticipo + total_abonos
+        
+        # Calcular reembolsos y saldos vencidos
+        if pedido.estado == "cancelado":
+            reembolso_pedidos_cancelados += total_pagado
+        elif pedido.estado == "vencido":
+            saldo_vencido_pedidos += total_pagado
         
         pedidos_cancelados_vencidos.append({
             "id": pedido.id,
