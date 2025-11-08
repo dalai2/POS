@@ -657,14 +657,13 @@ export default function ProductsPage() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Existencia {userRole === 'cashier' && <span className="text-xs text-red-500">(Solo admin/owner)</span>}
+                  Existencia
                 </label>
                 <input
                   type="number"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-1.5 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-1.5"
                   value={form.stock}
                   onChange={e => setForm({...form, stock: e.target.value})}
-                  disabled={userRole === 'cashier'}
                 />
               </div>
 
