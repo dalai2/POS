@@ -226,6 +226,13 @@ export default function ReportsPage() {
         const response = await api.get('/reports/detailed-corte-caja', {
           params: { start_date: startDate, end_date: endDate }
         });
+        console.log('DEBUG - Keys en response.data:', Object.keys(response.data).filter(k => k.includes('reembolso') || k.includes('vencido')));
+        console.log('DEBUG - Valores:', {
+          reembolso_apartados: response.data.reembolso_apartados_cancelados,
+          reembolso_pedidos: response.data.reembolso_pedidos_cancelados,
+          saldo_apartados: response.data.saldo_vencido_apartados,
+          saldo_pedidos: response.data.saldo_vencido_pedidos
+        });
         setDetailedReport(response.data);
     } catch (error) {
       console.error('Error generating report:', error);
@@ -295,10 +302,10 @@ export default function ReportsPage() {
     rows.push([]);
     
     rows.push(['Reembolsos y Saldos Vencidos']);
-    rows.push(['Reembolso apartados cancelados', `$${detailedReport.reembolso_apartados_cancelados.toFixed(2)}`]);
-    rows.push(['Reembolso pedidos cancelados', `$${detailedReport.reembolso_pedidos_cancelados.toFixed(2)}`]);
-    rows.push(['Saldo vencido apartados', `$${detailedReport.saldo_vencido_apartados.toFixed(2)}`]);
-    rows.push(['Saldo vencido pedidos', `$${detailedReport.saldo_vencido_pedidos.toFixed(2)}`]);
+    rows.push(['Reembolso apartados cancelados', `$${(detailedReport.reembolso_apartados_cancelados ?? 0).toFixed(2)}`]);
+    rows.push(['Reembolso pedidos cancelados', `$${(detailedReport.reembolso_pedidos_cancelados ?? 0).toFixed(2)}`]);
+    rows.push(['Saldo vencido apartados', `$${(detailedReport.saldo_vencido_apartados ?? 0).toFixed(2)}`]);
+    rows.push(['Saldo vencido pedidos', `$${(detailedReport.saldo_vencido_pedidos ?? 0).toFixed(2)}`]);
     rows.push([]);
     
     // Vendedores
@@ -1666,19 +1673,19 @@ export default function ReportsPage() {
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     <div className="text-center p-2 bg-red-50 rounded border">
                       <p className="text-xs text-gray-600">Reembolso apartados cancelados</p>
-                      <p className="text-lg font-bold text-red-700">${detailedReport.reembolso_apartados_cancelados.toFixed(2)}</p>
+                      <p className="text-lg font-bold text-red-700">${(detailedReport.reembolso_apartados_cancelados ?? 0).toFixed(2)}</p>
                     </div>
                     <div className="text-center p-2 bg-orange-50 rounded border">
                       <p className="text-xs text-gray-600">Reembolso pedidos cancelados</p>
-                      <p className="text-lg font-bold text-orange-700">${detailedReport.reembolso_pedidos_cancelados.toFixed(2)}</p>
+                      <p className="text-lg font-bold text-orange-700">${(detailedReport.reembolso_pedidos_cancelados ?? 0).toFixed(2)}</p>
                     </div>
                     <div className="text-center p-2 bg-amber-50 rounded border">
                       <p className="text-xs text-gray-600">Saldo vencido apartados</p>
-                      <p className="text-lg font-bold text-amber-700">${detailedReport.saldo_vencido_apartados.toFixed(2)}</p>
+                      <p className="text-lg font-bold text-amber-700">${(detailedReport.saldo_vencido_apartados ?? 0).toFixed(2)}</p>
                     </div>
                     <div className="text-center p-2 bg-yellow-50 rounded border">
                       <p className="text-xs text-gray-600">Saldo vencido pedidos</p>
-                      <p className="text-lg font-bold text-yellow-700">${detailedReport.saldo_vencido_pedidos.toFixed(2)}</p>
+                      <p className="text-lg font-bold text-yellow-700">${(detailedReport.saldo_vencido_pedidos ?? 0).toFixed(2)}</p>
                     </div>
                   </div>
                 </div>

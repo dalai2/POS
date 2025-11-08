@@ -437,6 +437,12 @@ class DetailedCorteCajaReport(BaseModel):
     num_abonos_pedidos: int
     subtotal_venta_tarjeta: float  # Suma de ventas con tarjeta (sin descuento)
     total_tarjeta_neto: float  # Total tarjeta con descuento del 3%
+    
+    # Reembolsos y Saldos Vencidos
+    reembolso_apartados_cancelados: float  # Total pagado en apartados cancelados
+    reembolso_pedidos_cancelados: float  # Total pagado en pedidos cancelados
+    saldo_vencido_apartados: float  # Total pagado en apartados vencidos
+    saldo_vencido_pedidos: float  # Total pagado en pedidos vencidos
 
     # Vendedores
     vendedores: List[SalesByVendorReport]
@@ -1155,8 +1161,13 @@ def get_detailed_corte_caja(
             "vendedor": vendedor,
             "motivo": motivo
         })
+    
+    print(f"🔥 DEBUG FINAL - reembolso_apartados_cancelados: {reembolso_apartados_cancelados}")
+    print(f"🔥 DEBUG FINAL - reembolso_pedidos_cancelados: {reembolso_pedidos_cancelados}")
+    print(f"🔥 DEBUG FINAL - saldo_vencido_apartados: {saldo_vencido_apartados}")
+    print(f"🔥 DEBUG FINAL - saldo_vencido_pedidos: {saldo_vencido_pedidos}")
 
-    return {
+    result = {
         "start_date": start_date.isoformat(),
         "end_date": end_date.isoformat(),
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -1217,4 +1228,7 @@ def get_detailed_corte_caja(
         "apartados_cancelados_vencidos": apartados_cancelados_vencidos,
         "pedidos_cancelados_vencidos": pedidos_cancelados_vencidos
     }
+    
+    print(f"🔥 KEYS EN RESULT: {[k for k in result.keys() if 'reembolso' in k or 'vencido' in k]}")
+    return result
 
