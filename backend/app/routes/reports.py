@@ -558,6 +558,16 @@ def get_detailed_corte_caja(
     )
     pedidos_liquidados = pedidos_liquidados_query.all()
     
+    # Get pedidos de contado (tipo_pedido='contado' y estado='pagado') para Ventas Activas
+    pedidos_contado_query = db.query(Pedido).filter(
+        Pedido.tenant_id == tenant.id,
+        Pedido.created_at >= start_datetime,
+        Pedido.created_at <= end_datetime,
+        Pedido.tipo_pedido == 'contado',
+        Pedido.estado == 'pagado'
+    )
+    pedidos_contado = pedidos_contado_query.all()
+    
     # Get pedidos pendientes (NO pagados/entregados) para "Ventas pasivas"
     pedidos_pendientes_query = db.query(Pedido).filter(
         Pedido.tenant_id == tenant.id,
@@ -763,8 +773,86 @@ def get_detailed_corte_caja(
             "tarjeta": tarjeta_amount
         })
 
-    # Process pedidos liquidados para "Ventas de liquidación"
+    # Process pedidos de contado para Ventas Activas
     from app.models.producto_pedido import ProductoPedido
+    for pedido in pedidos_contado:
+        # Obtener los pagos del pedido
+        pagos_pedido_contado = db.query(PagoPedido).filter(
+            PagoPedido.pedido_id == pedido.id
+        ).all()
+        
+        efectivo_pedido = sum(float(p.monto) for p in pagos_pedido_contado if p.metodo_pago == 'efectivo')
+        tarjeta_pedido = sum(float(p.monto) for p in pagos_pedido_contado if p.metodo_pago == 'tarjeta')
+        
+        total_efectivo_contado += efectivo_pedido
+        total_tarjeta_contado += tarjeta_pedido
+        
+        # Obtener producto para calcular costo
+        producto = db.query(ProductoPedido).filter(
+            ProductoPedido.id == pedido.producto_pedido_id
+        ).first()
+        
+        if producto and producto.cost_price:
+            costo_ventas_contado += float(producto.cost_price) * pedido.cantidad
+        
+        # Contar piezas vendidas
+        num_piezas_vendidas += pedido.cantidad
+        
+        # Obtener vendedor
+        vendedor = "Unknown"
+        if pedido.user_id:
+            vendor = db.query(User).filter(User.id == pedido.user_id).first()
+            vendedor = vendor.email if vendor else "Unknown"
+        
+        producto_name = producto.modelo if producto else "Producto desconocido"
+        
+        # Agregar a sales_details para aparecer en listas detalladas
+        sales_details.append({
+            "id": f"P{pedido.id}",  # Prefijo P para identificar como pedido
+            "tipo": "Pedido Contado",
+            "fecha": pedido.created_at.strftime("%Y-%m-%d %H:%M"),
+            "cliente": pedido.cliente_nombre,
+            "producto": producto_name,
+            "cantidad": pedido.cantidad,
+            "total": float(pedido.total),
+            "vendedor": vendedor,
+            "efectivo": efectivo_pedido,
+            "tarjeta": tarjeta_pedido
+        })
+        
+        # Actualizar stats por vendedor si existe
+        if pedido.user_id:
+            if pedido.user_id not in vendor_stats:
+                vendor_stats[pedido.user_id] = {
+                    "vendedor_id": pedido.user_id,
+                    "vendedor_name": vendedor,
+                    "sales_count": 0,
+                    "contado_count": 0,
+                    "credito_count": 0,
+                    "total_contado": 0.0,
+                    "total_credito": 0.0,
+                    "total_profit": 0.0,
+                    "total_efectivo_contado": 0.0,
+                    "total_tarjeta_contado": 0.0,
+                    "total_tarjeta_neto": 0.0,
+                    "anticipos_apartados": 0.0,
+                    "anticipos_pedidos": 0.0,
+                    "abonos_apartados": 0.0,
+                    "abonos_pedidos": 0.0,
+                    "ventas_total_activa": 0.0,
+                    "venta_total_pasiva": 0.0,
+                    "cuentas_por_cobrar": 0.0
+                }
+            
+            vendor_stats[pedido.user_id]["sales_count"] += 1
+            vendor_stats[pedido.user_id]["contado_count"] += 1
+            vendor_stats[pedido.user_id]["total_contado"] += float(pedido.total)
+            vendor_stats[pedido.user_id]["total_efectivo_contado"] += efectivo_pedido
+            vendor_stats[pedido.user_id]["total_tarjeta_contado"] += tarjeta_pedido
+            vendor_stats[pedido.user_id]["total_tarjeta_neto"] += tarjeta_pedido * 0.97
+            vendor_stats[pedido.user_id]["ventas_total_activa"] += efectivo_pedido + (tarjeta_pedido * 0.97)
+
+    # Process pedidos liquidados para "Ventas de liquidación"
     for pedido in pedidos_liquidados:
         pedidos_liquidados_total += float(pedido.total)
         pedidos_total += float(pedido.total)

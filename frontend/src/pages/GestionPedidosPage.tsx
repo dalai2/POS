@@ -15,6 +15,7 @@ type Pedido = {
   anticipo_pagado: number
   saldo_pendiente: number
   estado: string
+  tipo_pedido: string
   fecha_entrega_estimada?: string
   fecha_entrega_real?: string
   notas_cliente?: string
@@ -235,6 +236,17 @@ export default function GestionPedidosPage() {
 
   const verTicket = async (pedido: Pedido) => {
     try {
+      // Obtener todos los pagos del pedido para calcular el total de abonos
+      let totalAbonos = 0
+      try {
+        const pagosResponse = await api.get(`/productos-pedido/pedidos/${pedido.id}/pagos`)
+        const pagos = pagosResponse.data || []
+        totalAbonos = pagos.reduce((sum: number, pago: PagoPedido) => sum + pago.monto, 0)
+      } catch (error) {
+        console.warn('Could not load payment history, using anticipo_pagado:', error)
+        totalAbonos = pedido.anticipo_pagado
+      }
+
       // Get logo as base64 (similar to SalesPage)
       const getLogoAsBase64 = async () => {
         try {
@@ -501,8 +513,8 @@ export default function GestionPedidosPage() {
     <!-- Totals -->
     <div class="totals">
       <div><strong>TOTAL :</strong> $${pedido.total.toFixed(2)}</div>
-      <div><strong>TOTAL DE ABONOS :</strong> $${pedido.anticipo_pagado.toFixed(2)}</div>
-      <div><strong>SALDO PENDIENTE :</strong> $${pedido.saldo_pendiente.toFixed(2)}</div>
+      <div><strong>TOTAL DE ABONOS :</strong> $${totalAbonos.toFixed(2)}</div>
+      <div><strong>SALDO PENDIENTE :</strong> $${(pedido.total - totalAbonos).toFixed(2)}</div>
     </div>
 
     <!-- Footer Section -->
@@ -667,6 +679,7 @@ export default function GestionPedidosPage() {
                 <tr>
                   <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">ID</th>
                   <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Cliente</th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Tipo</th>
                   <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Producto</th>
                   <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Vendedor</th>
                   <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Cantidad</th>
@@ -681,7 +694,7 @@ export default function GestionPedidosPage() {
               <tbody className="divide-y divide-gray-200">
                 {pedidos.length === 0 ? (
                   <tr>
-                    <td colSpan={11} className="px-4 py-8 text-center text-gray-500">
+                    <td colSpan={12} className="px-4 py-8 text-center text-gray-500">
                       No hay pedidos registrados
                     </td>
                   </tr>
@@ -706,6 +719,15 @@ export default function GestionPedidosPage() {
                             <div className="text-gray-500">{p.cliente_telefono}</div>
                           )}
                         </div>
+                      </td>
+                      <td className="px-4 py-3 text-sm">
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          p.tipo_pedido === 'contado' 
+                            ? 'bg-green-100 text-green-800' 
+                            : 'bg-orange-100 text-orange-800'
+                        }`}>
+                          {p.tipo_pedido === 'contado' ? '💵 Contado' : '📌 Apartado'}
+                        </span>
                       </td>
                       <td className="px-4 py-3 text-sm">
                         <div>

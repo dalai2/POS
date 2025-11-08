@@ -78,6 +78,9 @@ class PedidoBase(BaseModel):
     cliente_email: Optional[str] = None
     cantidad: int = 1
     anticipo_pagado: float = 0
+    tipo_pedido: str = "apartado"  # 'contado' o 'apartado'
+    metodo_pago_efectivo: Optional[float] = 0  # Para pedidos de contado
+    metodo_pago_tarjeta: Optional[float] = 0  # Para pedidos de contado
     notas_cliente: Optional[str] = None
 
 class PedidoCreate(PedidoBase):
@@ -102,6 +105,7 @@ class PedidoOut(BaseModel):
     anticipo_pagado: float
     saldo_pendiente: float
     estado: str
+    tipo_pedido: str
     fecha_entrega_estimada: Optional[datetime] = None
     fecha_entrega_real: Optional[datetime] = None
     notas_cliente: Optional[str] = None
@@ -297,6 +301,8 @@ def create_pedido(
     tenant: Tenant = Depends(get_tenant),
     user: User = Depends(get_current_user),
 ):
+    from decimal import Decimal
+    
     # Verificar que el producto existe
     producto = db.query(ProductoPedido).filter(
         ProductoPedido.id == pedido.producto_pedido_id,
@@ -312,9 +318,6 @@ def create_pedido(
     precio_unitario = float(producto.precio)
     total = precio_unitario * pedido.cantidad
     
-    # Anticipo flexible - no hay validación estricta
-    saldo_pendiente = total - pedido.anticipo_pagado
-    
     # Usar el user_id proporcionado o el usuario autenticado
     vendedor_id = pedido.user_id if pedido.user_id else user.id
     
@@ -327,31 +330,121 @@ def create_pedido(
         if not vendedor:
             raise HTTPException(status_code=404, detail="Vendedor no encontrado")
     
-    db_pedido = Pedido(
-        tenant_id=tenant.id,
-        user_id=vendedor_id,
-        precio_unitario=precio_unitario,
-        total=total,
-        saldo_pendiente=saldo_pendiente,
-        **pedido.dict(exclude={'user_id'})
-    )
-    
-    db.add(db_pedido)
-    db.commit()
-    db.refresh(db_pedido)
-    
-    # Registrar estado inicial en el historial
-    create_status_history(
-        db=db,
-        tenant_id=tenant.id,
-        entity_type="pedido",
-        entity_id=db_pedido.id,
-        old_status=None,  # Estado inicial
-        new_status=db_pedido.estado,
-        user_id=user.id,
-        user_email=user.email,
-        notes=f"Pedido creado con estado inicial: {db_pedido.estado}"
-    )
+    # Lógica según el tipo de pedido
+    if pedido.tipo_pedido == "contado":
+        # Pedido de contado: debe estar completamente pagado
+        total_pagado = (pedido.metodo_pago_efectivo or 0) + (pedido.metodo_pago_tarjeta or 0)
+        
+        if abs(total_pagado - total) > 0.01:  # Tolerancia de 1 centavo
+            raise HTTPException(
+                status_code=400, 
+                detail=f"El total pagado (${total_pagado:.2f}) debe ser igual al total del pedido (${total:.2f})"
+            )
+        
+        # Crear pedido con estado 'pagado'
+        db_pedido = Pedido(
+            tenant_id=tenant.id,
+            user_id=vendedor_id,
+            precio_unitario=precio_unitario,
+            total=total,
+            anticipo_pagado=total,  # Total pagado
+            saldo_pendiente=0,  # Sin saldo pendiente
+            estado="pagado",
+            tipo_pedido="contado",
+            producto_pedido_id=pedido.producto_pedido_id,
+            cliente_nombre=pedido.cliente_nombre,
+            cliente_telefono=pedido.cliente_telefono,
+            cliente_email=pedido.cliente_email,
+            cantidad=pedido.cantidad,
+            notas_cliente=pedido.notas_cliente
+        )
+        
+        db.add(db_pedido)
+        db.commit()
+        db.refresh(db_pedido)
+        
+        # Crear registros de pago
+        if pedido.metodo_pago_efectivo and pedido.metodo_pago_efectivo > 0:
+            pago_efectivo = PagoPedido(
+                pedido_id=db_pedido.id,
+                monto=Decimal(str(pedido.metodo_pago_efectivo)),
+                metodo_pago="efectivo",
+                tipo_pago="total"
+            )
+            db.add(pago_efectivo)
+        
+        if pedido.metodo_pago_tarjeta and pedido.metodo_pago_tarjeta > 0:
+            pago_tarjeta = PagoPedido(
+                pedido_id=db_pedido.id,
+                monto=Decimal(str(pedido.metodo_pago_tarjeta)),
+                metodo_pago="tarjeta",
+                tipo_pago="total"
+            )
+            db.add(pago_tarjeta)
+        
+        db.commit()
+        
+        # Registrar estado inicial en el historial
+        create_status_history(
+            db=db,
+            tenant_id=tenant.id,
+            entity_type="pedido",
+            entity_id=db_pedido.id,
+            old_status=None,
+            new_status="pagado",
+            user_id=user.id,
+            user_email=user.email,
+            notes=f"Pedido de contado creado - Pagado completo (Efectivo: ${pedido.metodo_pago_efectivo or 0:.2f}, Tarjeta: ${pedido.metodo_pago_tarjeta or 0:.2f})"
+        )
+        
+    else:  # tipo_pedido == "apartado"
+        # Pedido apartado: con anticipo
+        saldo_pendiente = total - pedido.anticipo_pagado
+        
+        db_pedido = Pedido(
+            tenant_id=tenant.id,
+            user_id=vendedor_id,
+            precio_unitario=precio_unitario,
+            total=total,
+            anticipo_pagado=pedido.anticipo_pagado,
+            saldo_pendiente=saldo_pendiente,
+            estado="pendiente",
+            tipo_pedido="apartado",
+            producto_pedido_id=pedido.producto_pedido_id,
+            cliente_nombre=pedido.cliente_nombre,
+            cliente_telefono=pedido.cliente_telefono,
+            cliente_email=pedido.cliente_email,
+            cantidad=pedido.cantidad,
+            notas_cliente=pedido.notas_cliente
+        )
+        
+        db.add(db_pedido)
+        db.commit()
+        db.refresh(db_pedido)
+        
+        # Crear registro de anticipo si hay
+        if pedido.anticipo_pagado > 0:
+            pago_anticipo = PagoPedido(
+                pedido_id=db_pedido.id,
+                monto=Decimal(str(pedido.anticipo_pagado)),
+                metodo_pago="efectivo",  # Por defecto
+                tipo_pago="anticipo"
+            )
+            db.add(pago_anticipo)
+            db.commit()
+        
+        # Registrar estado inicial en el historial
+        create_status_history(
+            db=db,
+            tenant_id=tenant.id,
+            entity_type="pedido",
+            entity_id=db_pedido.id,
+            old_status=None,
+            new_status="pendiente",
+            user_id=user.id,
+            user_email=user.email,
+            notes=f"Pedido apartado creado - Anticipo: ${pedido.anticipo_pagado:.2f}"
+        )
     
     return db_pedido
 

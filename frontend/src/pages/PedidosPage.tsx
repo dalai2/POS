@@ -69,6 +69,11 @@ export default function PedidosPage() {
   // Anticipo flexible
   const [anticipoPagado, setAnticipoPagado] = useState('')
   
+  // Tipo de pedido y métodos de pago
+  const [tipoPedido, setTipoPedido] = useState<'contado' | 'apartado'>('apartado')
+  const [metodoPagoEfectivo, setMetodoPagoEfectivo] = useState('')
+  const [metodoPagoTarjeta, setMetodoPagoTarjeta] = useState('')
+  
   // Modal de confirmación
   const [showConfirmModal, setShowConfirmModal] = useState(false)
   const [productoToAdd, setProductoToAdd] = useState<ProductoPedido | null>(null)
@@ -514,7 +519,10 @@ export default function PedidosPage() {
           cliente_telefono: clienteTelefono || null,
           cliente_email: clienteEmail || null,
           cantidad: item.cantidad,
-          anticipo_pagado: parseFloat(anticipoPagado) || 0,
+          tipo_pedido: tipoPedido,
+          anticipo_pagado: tipoPedido === 'apartado' ? (parseFloat(anticipoPagado) || 0) : 0,
+          metodo_pago_efectivo: tipoPedido === 'contado' ? (parseFloat(metodoPagoEfectivo) || 0) : 0,
+          metodo_pago_tarjeta: tipoPedido === 'contado' ? (parseFloat(metodoPagoTarjeta) || 0) : 0,
           notas_cliente: notasCliente || null,
           user_id: vendedorId ? parseInt(vendedorId) : undefined
         }
@@ -531,6 +539,9 @@ export default function PedidosPage() {
       setNotasCliente('')
       setVendedorId('')
       setAnticipoPagado('')
+      setMetodoPagoEfectivo('')
+      setMetodoPagoTarjeta('')
+      setTipoPedido('apartado')
       
       // Limpiar mensaje después de 3 segundos
       setTimeout(() => setMsg(''), 3000)
@@ -596,20 +607,117 @@ export default function PedidosPage() {
                 ))}
               </select>
               <input
-                className="border border-gray-300 rounded-lg px-3 py-2"
-                placeholder="Anticipo pagado ($)"
-                type="number"
-                step="0.01"
-                value={anticipoPagado}
-                onChange={e => setAnticipoPagado(e.target.value)}
-              />
-              <input
                 className="border border-gray-300 rounded-lg px-3 py-2 col-span-2"
                 placeholder="Notas del cliente"
                 value={notasCliente}
                 onChange={e => setNotasCliente(e.target.value)}
               />
             </div>
+          </div>
+
+          {/* Tipo de Pedido y Pago */}
+          <div className="bg-blue-50 rounded-lg p-4">
+            <h3 className="font-semibold mb-3">Tipo de Pedido</h3>
+            
+            {/* Selector de Tipo */}
+            <div className="flex gap-4 mb-4">
+              <button
+                onClick={() => setTipoPedido('contado')}
+                className={`flex-1 py-3 px-4 rounded-lg font-semibold transition-all ${
+                  tipoPedido === 'contado'
+                    ? 'bg-green-600 text-white shadow-lg'
+                    : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-green-400'
+                }`}
+              >
+                💵 Pedido de Contado
+              </button>
+              <button
+                onClick={() => setTipoPedido('apartado')}
+                className={`flex-1 py-3 px-4 rounded-lg font-semibold transition-all ${
+                  tipoPedido === 'apartado'
+                    ? 'bg-orange-600 text-white shadow-lg'
+                    : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-orange-400'
+                }`}
+              >
+                📌 Pedido Apartado
+              </button>
+            </div>
+
+            {/* Campos de Pago según tipo */}
+            {tipoPedido === 'contado' ? (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Efectivo
+                  </label>
+                  <input
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                    placeholder="$0.00"
+                    type="number"
+                    step="0.01"
+                    value={metodoPagoEfectivo}
+                    onChange={e => setMetodoPagoEfectivo(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Tarjeta
+                  </label>
+                  <input
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                    placeholder="$0.00"
+                    type="number"
+                    step="0.01"
+                    value={metodoPagoTarjeta}
+                    onChange={e => setMetodoPagoTarjeta(e.target.value)}
+                  />
+                </div>
+                <div className="col-span-2 bg-green-100 p-3 rounded-lg">
+                  <div className="flex justify-between text-sm">
+                    <span className="font-medium">Total a pagar:</span>
+                    <span className="font-bold">${getTotal().toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm mt-1">
+                    <span className="font-medium">Total pagado:</span>
+                    <span className="font-bold text-green-700">
+                      ${((parseFloat(metodoPagoEfectivo) || 0) + (parseFloat(metodoPagoTarjeta) || 0)).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Anticipo
+                </label>
+                <input
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                  placeholder="Anticipo pagado ($)"
+                  type="number"
+                  step="0.01"
+                  value={anticipoPagado}
+                  onChange={e => setAnticipoPagado(e.target.value)}
+                />
+                <div className="bg-orange-100 p-3 rounded-lg mt-3">
+                  <div className="flex justify-between text-sm">
+                    <span className="font-medium">Total del pedido:</span>
+                    <span className="font-bold">${getTotal().toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm mt-1">
+                    <span className="font-medium">Anticipo:</span>
+                    <span className="font-bold text-orange-700">
+                      ${(parseFloat(anticipoPagado) || 0).toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm mt-1">
+                    <span className="font-medium">Saldo pendiente:</span>
+                    <span className="font-bold text-red-700">
+                      ${(getTotal() - (parseFloat(anticipoPagado) || 0)).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Cart */}

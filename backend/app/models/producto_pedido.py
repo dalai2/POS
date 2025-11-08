@@ -59,6 +59,7 @@ class Pedido(Base):
     
     # Estado del pedido
     estado = Column(String(20), default="pendiente")  # pendiente, confirmado, en_proceso, entregado, cancelado
+    tipo_pedido = Column(String(20), default="apartado")  # contado, apartado
     fecha_entrega_estimada = Column(DateTime(timezone=True))
     fecha_entrega_real = Column(DateTime(timezone=True))
     
