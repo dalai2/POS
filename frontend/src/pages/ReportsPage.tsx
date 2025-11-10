@@ -242,7 +242,6 @@ export default function ReportsPage() {
         const response = await api.get('/reports/detailed-corte-caja', {
           params: { start_date: startDate, end_date: endDate }
         });
-        console.log('DEBUG FRONTEND: Vendedores recibidos del backend:', response.data.vendedores);
         setDetailedReport(response.data);
     } catch (error) {
       console.error('Error generating report:', error);
@@ -1497,8 +1496,8 @@ export default function ReportsPage() {
                       </tr>
                     </thead>
                     <tbody className="bg-white">
-                      {report.vendedores.map((vendedor) => (
-                        <tr key={vendedor.vendedor_id} className="border-t">
+                      {report.vendedores.map((vendedor, idx) => (
+                        <tr key={`${vendedor.vendedor_id}-${idx}`} className="border-t">
                           <td className="px-4 py-2 text-sm font-medium">{vendedor.vendedor_name}</td>
                           <td className="px-4 py-2 text-center text-sm">{vendedor.sales_count}</td>
                           <td className="px-4 py-2 text-center text-sm">{vendedor.contado_count}</td>
@@ -1528,7 +1527,7 @@ export default function ReportsPage() {
                   className="flex-1 bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700"
                 >
                   📥 Descargar CSV
-                </button>
+              </button>
               </div>
             </div>
           </div>
@@ -1622,7 +1621,7 @@ export default function ReportsPage() {
                     </thead>
                         <tbody>
                           {detailedReport.vendedores.map((vendedor, idx) => (
-                            <tr key={vendedor.vendedor_id} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                            <tr key={`${vendedor.vendedor_id}-${idx}`} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                               <td className="border border-gray-300 px-3 py-2 text-sm font-medium text-gray-900">{vendedor.vendedor_name}</td>
                               <td className="border border-gray-300 px-3 py-2 text-sm text-right text-gray-700">${vendedor.total_efectivo_contado.toFixed(2)}</td>
                               <td className="border border-gray-300 px-3 py-2 text-sm text-right text-gray-700">${vendedor.total_tarjeta_neto.toFixed(2)}</td>
@@ -1819,8 +1818,8 @@ export default function ReportsPage() {
                             <th className="px-4 py-3 text-right font-semibold uppercase tracking-wide text-xs">
                               Total
                             </th>
-                          </tr>
-                        </thead>
+                      </tr>
+                    </thead>
                         <tbody className="divide-y divide-gray-200">
                           {detailedReport.resumen_ventas_activas.map((row, idx) => {
                             const isSubtotal = row.metodo_pago === 'SUBTOTAL';
@@ -1862,14 +1861,14 @@ export default function ReportsPage() {
                                 <td className={`px-4 py-3 text-right ${isSubtotal ? 'font-extrabold text-lg bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent' : 'font-semibold text-gray-900'}`}>
                                   ${row.total.toFixed(2)}
                                 </td>
-                              </tr>
+                        </tr>
                             );
                           })}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
                 
                 {/* Resumen de Pagos - Ventas Pasivas */}
                 {detailedReport.resumen_pagos && detailedReport.resumen_pagos.length > 0 && (

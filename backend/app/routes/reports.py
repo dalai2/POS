@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+﻿from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_, text
@@ -38,6 +38,7 @@ class SalesByVendorReport(BaseModel):
     ventas_total_activa: float  # Contado + Tarjeta finalizadas
     venta_total_pasiva: float  # Anticipos + Abonos
     cuentas_por_cobrar: float  # Saldo pendiente
+    productos_liquidados: float  # Total de productos liquidados por vendedor
 
 
 class CorteDeCajaReport(BaseModel):
@@ -244,7 +245,18 @@ def get_corte_de_caja(
                 "credito_count": 0,
                 "total_contado": 0.0,
                 "total_credito": 0.0,
-                "total_profit": 0.0
+                "total_profit": 0.0,
+                "total_efectivo_contado": 0.0,
+                "total_tarjeta_contado": 0.0,
+                "total_tarjeta_neto": 0.0,
+                "anticipos_apartados": 0.0,
+                "anticipos_pedidos": 0.0,
+                "abonos_apartados": 0.0,
+                "abonos_pedidos": 0.0,
+                "ventas_total_activa": 0.0,
+                "venta_total_pasiva": 0.0,
+                "cuentas_por_cobrar": 0.0,
+                "productos_liquidados": 0.0
             }
         
         vendor_stats[vendedor_id]["sales_count"] += 1
@@ -256,38 +268,6 @@ def get_corte_de_caja(
             vendor_stats[vendedor_id]["total_credito"] += float(sale.total)
         vendor_stats[vendedor_id]["total_profit"] += float(sale.utilidad or 0)
     
-    vendedores = list(vendor_stats.values())
-    
-    return {
-        "start_date": start_date.isoformat(),
-        "end_date": end_date.isoformat(),
-        "ventas_contado_count": ventas_contado_count,
-        "ventas_contado_total": ventas_contado_total,
-        "ventas_credito_count": ventas_credito_count,
-        "ventas_credito_total": ventas_credito_total,
-        "efectivo_ventas": efectivo_ventas,
-        "tarjeta_ventas": tarjeta_ventas,
-        "credito_ventas": credito_ventas,
-        "abonos_efectivo": abonos_efectivo,
-        "abonos_tarjeta": abonos_tarjeta,
-        "abonos_total": abonos_total,
-        "pedidos_count": pedidos_count,
-        "pedidos_total": pedidos_total,
-        "pedidos_anticipos": pedidos_anticipos,
-        "pedidos_saldo": pedidos_saldo,
-        "pedidos_efectivo": pedidos_efectivo,
-        "pedidos_tarjeta": pedidos_tarjeta,
-        "pedidos_pagos_total": pedidos_pagos_total,
-        "total_efectivo": total_efectivo,
-        "total_tarjeta": total_tarjeta,
-        "total_revenue": total_revenue,
-        "total_cost": total_cost,
-        "total_profit": total_profit,
-        "profit_margin": profit_margin,
-        "returns_count": returns_count,
-        "returns_total": returns_total,
-        "vendedores": vendedores
-    }
 
 
 class DailySummaryReport(BaseModel):
@@ -1281,11 +1261,6 @@ def get_detailed_corte_caja(
                 vendor_stats[pedido.user_id]["productos_liquidados"] += monto
 
     # Convert vendor_stats to list
-    print("DEBUG: Productos liquidados por vendedor:")
-    for vid, vdata in vendor_stats.items():
-        if vdata["productos_liquidados"] > 0:
-            print(f"  Vendedor {vdata['vendedor_name']}: ${vdata['productos_liquidados']}")
-    
     vendedores = list(vendor_stats.values())
     daily_summaries = list(daily_stats.values())
     

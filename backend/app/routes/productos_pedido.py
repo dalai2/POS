@@ -399,15 +399,15 @@ def create_pedido(
         
     else:  # tipo_pedido == "apartado"
         # Pedido apartado: con anticipo
-    saldo_pendiente = total - pedido.anticipo_pagado
-    
-    db_pedido = Pedido(
-        tenant_id=tenant.id,
+        saldo_pendiente = total - pedido.anticipo_pagado
+
+        db_pedido = Pedido(
+            tenant_id=tenant.id,
             user_id=vendedor_id,
-        precio_unitario=precio_unitario,
-        total=total,
+            precio_unitario=precio_unitario,
+            total=total,
             anticipo_pagado=pedido.anticipo_pagado,
-        saldo_pendiente=saldo_pendiente,
+            saldo_pendiente=saldo_pendiente,
             estado="pendiente",
             tipo_pedido="apartado",
             producto_pedido_id=pedido.producto_pedido_id,
@@ -416,12 +416,12 @@ def create_pedido(
             cliente_email=pedido.cliente_email,
             cantidad=pedido.cantidad,
             notas_cliente=pedido.notas_cliente
-    )
-    
-    db.add(db_pedido)
-    db.commit()
-    db.refresh(db_pedido)
-        
+        )
+
+        db.add(db_pedido)
+        db.commit()
+        db.refresh(db_pedido)
+
         # Crear registros de pago separados por método
         if pedido.metodo_pago_efectivo and pedido.metodo_pago_efectivo > 0:
             pago_efectivo = PagoPedido(
@@ -431,7 +431,7 @@ def create_pedido(
                 tipo_pago="anticipo"
             )
             db.add(pago_efectivo)
-        
+
         if pedido.metodo_pago_tarjeta and pedido.metodo_pago_tarjeta > 0:
             pago_tarjeta = PagoPedido(
                 pedido_id=db_pedido.id,
@@ -440,9 +440,9 @@ def create_pedido(
                 tipo_pago="anticipo"
             )
             db.add(pago_tarjeta)
-        
+
         db.commit()
-        
+
         # Registrar estado inicial en el historial
         create_status_history(
             db=db,
@@ -455,7 +455,7 @@ def create_pedido(
             user_email=user.email,
             notes=f"Pedido apartado creado - Anticipo: ${pedido.anticipo_pagado:.2f} (Efectivo: ${pedido.metodo_pago_efectivo or 0:.2f}, Tarjeta: ${pedido.metodo_pago_tarjeta or 0:.2f})"
         )
-    
+
     return db_pedido
 
 @router.put("/pedidos/{pedido_id}", response_model=PedidoOut)
