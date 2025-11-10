@@ -399,15 +399,15 @@ def create_pedido(
         
     else:  # tipo_pedido == "apartado"
         # Pedido apartado: con anticipo
-        saldo_pendiente = total - pedido.anticipo_pagado
-        
-        db_pedido = Pedido(
-            tenant_id=tenant.id,
+    saldo_pendiente = total - pedido.anticipo_pagado
+    
+    db_pedido = Pedido(
+        tenant_id=tenant.id,
             user_id=vendedor_id,
-            precio_unitario=precio_unitario,
-            total=total,
+        precio_unitario=precio_unitario,
+        total=total,
             anticipo_pagado=pedido.anticipo_pagado,
-            saldo_pendiente=saldo_pendiente,
+        saldo_pendiente=saldo_pendiente,
             estado="pendiente",
             tipo_pedido="apartado",
             producto_pedido_id=pedido.producto_pedido_id,
@@ -416,22 +416,32 @@ def create_pedido(
             cliente_email=pedido.cliente_email,
             cantidad=pedido.cantidad,
             notas_cliente=pedido.notas_cliente
-        )
+    )
+    
+    db.add(db_pedido)
+    db.commit()
+    db.refresh(db_pedido)
         
-        db.add(db_pedido)
-        db.commit()
-        db.refresh(db_pedido)
-        
-        # Crear registro de anticipo si hay
-        if pedido.anticipo_pagado > 0:
-            pago_anticipo = PagoPedido(
+        # Crear registros de pago separados por método
+        if pedido.metodo_pago_efectivo and pedido.metodo_pago_efectivo > 0:
+            pago_efectivo = PagoPedido(
                 pedido_id=db_pedido.id,
-                monto=Decimal(str(pedido.anticipo_pagado)),
-                metodo_pago="efectivo",  # Por defecto
+                monto=Decimal(str(pedido.metodo_pago_efectivo)),
+                metodo_pago="efectivo",
                 tipo_pago="anticipo"
             )
-            db.add(pago_anticipo)
-            db.commit()
+            db.add(pago_efectivo)
+        
+        if pedido.metodo_pago_tarjeta and pedido.metodo_pago_tarjeta > 0:
+            pago_tarjeta = PagoPedido(
+                pedido_id=db_pedido.id,
+                monto=Decimal(str(pedido.metodo_pago_tarjeta)),
+                metodo_pago="tarjeta",
+                tipo_pago="anticipo"
+            )
+            db.add(pago_tarjeta)
+        
+        db.commit()
         
         # Registrar estado inicial en el historial
         create_status_history(
@@ -443,7 +453,7 @@ def create_pedido(
             new_status="pendiente",
             user_id=user.id,
             user_email=user.email,
-            notes=f"Pedido apartado creado - Anticipo: ${pedido.anticipo_pagado:.2f}"
+            notes=f"Pedido apartado creado - Anticipo: ${pedido.anticipo_pagado:.2f} (Efectivo: ${pedido.metodo_pago_efectivo or 0:.2f}, Tarjeta: ${pedido.metodo_pago_tarjeta or 0:.2f})"
         )
     
     return db_pedido
@@ -505,16 +515,19 @@ def get_pagos_pedido(
     if not pedido:
         raise HTTPException(status_code=404, detail="Pedido no encontrado")
     
-    # Obtener abonos posteriores de PagoPedido
-    pagos_posteriores = db.query(PagoPedido).filter(
-        PagoPedido.pedido_id == pedido_id
-    ).order_by(PagoPedido.created_at.asc()).all()
-    
     # Crear lista de pagos combinados
     pagos = []
     
-    # Agregar anticipo inicial si existe (similar a como funciona en apartados)
-    if float(pedido.anticipo_pagado) > 0:
+    # Obtener abonos de PagoPedido
+    pagos_db = db.query(PagoPedido).filter(
+        PagoPedido.pedido_id == pedido_id
+    ).order_by(PagoPedido.created_at.asc()).all()
+    
+    # Verificar si hay pagos iniciales (anticipo o total)
+    tiene_pagos_iniciales = any(p.tipo_pago in ['anticipo', 'total'] for p in pagos_db)
+    
+    # Solo agregar el "Anticipo inicial" falso si NO existen pagos reales con tipo anticipo/total
+    if float(pedido.anticipo_pagado) > 0 and not tiene_pagos_iniciales:
         pagos.append({
             "id": -pedido.id,  # ID negativo para identificar el anticipo
             "pedido_id": pedido.id,
@@ -524,14 +537,22 @@ def get_pagos_pedido(
             "created_at": pedido.created_at.isoformat()
         })
     
-    # Agregar abonos posteriores
-    for p in pagos_posteriores:
+    # Agregar todos los pagos reales
+    for p in pagos_db:
+        # Determinar la etiqueta según el tipo de pago
+        if p.tipo_pago == 'anticipo':
+            nota = "Anticipo inicial"
+        elif p.tipo_pago == 'total':
+            nota = "Anticipo inicial"
+        else:
+            nota = "Abono"
+            
         pagos.append({
             "id": p.id,
             "pedido_id": p.pedido_id,
             "monto": float(p.monto),
             "metodo_pago": p.metodo_pago,
-            "notas": "Abono",
+            "notas": nota,
             "created_at": p.created_at.isoformat()
         })
     

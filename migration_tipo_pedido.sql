@@ -21,3 +21,4 @@ SELECT
     ELSE '❌ Error: columna tipo_pedido no existe'
     END as status;
 
+

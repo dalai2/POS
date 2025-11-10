@@ -15,6 +15,7 @@ import ReportsPage from './pages/ReportsPage'
 import PedidosPage from './pages/PedidosPage'
 import GestionPedidosPage from './pages/GestionPedidosPage'
 import TasasPedidoPage from './pages/TasasPedidoPage'
+import ClientsPage from './pages/ClientsPage'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
@@ -33,6 +34,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         <Route path="/tasas-pedido" element={<TasasPedidoPage />} />
         <Route path="/credits" element={<CreditsPage />} />
         <Route path="/reports" element={<ReportsPage />} />
+        <Route path="/clients" element={<ClientsPage />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </BrowserRouter>

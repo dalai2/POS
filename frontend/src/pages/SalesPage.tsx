@@ -39,13 +39,16 @@ export default function SalesPage() {
   const [cash, setCash] = useState('')
   const [card, setCard] = useState('')
   const [discount, setDiscount] = useState('0')
-  const [taxRate, setTaxRate] = useState('0')
   
   // Jewelry store fields
   const [saleType, setSaleType] = useState<'contado' | 'credito'>('contado')
   const [vendedorId, setVendedorId] = useState<number | null>(null)
   const [customerName, setCustomerName] = useState('PUBLICO GENERAL')
   const [customerPhone, setCustomerPhone] = useState('')
+  
+  // Pagos separados para apartados (similar a pedidos apartados)
+  const [apartadoCash, setApartadoCash] = useState('')
+  const [apartadoCard, setApartadoCard] = useState('')
   
   // Modal de confirmación
   const [showConfirmModal, setShowConfirmModal] = useState(false)
@@ -161,13 +164,10 @@ export default function SalesPage() {
 
   // Usar cálculo más preciso similar al backend (usando Decimal-like precision)
   const discountPct = parseFloat(discount || '0') || 0
-  const taxRateNum = parseFloat(taxRate || '0') || 0
 
   // Calcular con la misma precisión que el backend usa Decimal
   const discountAmountCalc = Math.round((subtotal * (discountPct / 100)) * 100) / 100
-  const taxable = Math.max(0, Math.round((subtotal - discountAmountCalc) * 100) / 100)
-  const taxAmount = taxRateNum > 0 ? Math.round((taxable * (taxRateNum / 100)) * 100) / 100 : 0
-  const total = Math.round((taxable + taxAmount) * 100) / 100
+  const total = Math.max(0, Math.round((subtotal - discountAmountCalc) * 100) / 100)
   const profit = total - totalCost
 
   const cashNumCalc = Math.round((parseFloat(cash || '0') || 0) * 100) / 100
@@ -178,12 +178,18 @@ export default function SalesPage() {
   // Reset calculations when dependencies change
   useEffect(() => {
     // This effect runs when any calculation dependency changes
-  }, [subtotal, discountPct, taxRateNum, cashNumCalc, cardNumCalc, saleType])
+  }, [subtotal, discountPct, cashNumCalc, cardNumCalc, saleType])
 
-  // Limpiar campo de tarjeta cuando se cambia a apartado
+  // Limpiar campos cuando se cambia el tipo de venta
   useEffect(() => {
     if (saleType === 'credito') {
-      setCard('0')
+      // Limpiar campos de contado
+      setCash('')
+      setCard('')
+    } else {
+      // Limpiar campos de apartado
+      setApartadoCash('')
+      setApartadoCard('')
     }
   }, [saleType])
 
@@ -207,7 +213,7 @@ export default function SalesPage() {
     }
   }
 
-  const printSaleTicket = async (saleData: any, cartItems: CartItem[], subtotal: number, discountAmount: number, taxAmount: number, total: number, paid: number, change: number, initialPayment: number = 0) => {
+  const printSaleTicket = async (saleData: any, cartItems: CartItem[], subtotal: number, discountAmount: number, total: number, paid: number, change: number, initialPayment: number = 0) => {
     try {
       const logoBase64 = await getLogoAsBase64()
       const w = window.open('', '_blank')
@@ -594,16 +600,23 @@ export default function SalesPage() {
 
       let payments = null
       // Para contado y crédito, enviamos los pagos iniciales en el array payments
-      if (saleType === 'contado' || saleType === 'credito') {
+      if (saleType === 'contado') {
         payments = []
         if (cashNumCalc > 0) payments.push({ method: 'cash', amount: parseFloat(cashNumCalc.toFixed(2)) })
         if (cardNumCalc > 0) payments.push({ method: 'card', amount: parseFloat(cardNumCalc.toFixed(2)) })
+      } else if (saleType === 'credito') {
+        // Para apartados, usar los campos separados
+        payments = []
+        const apartadoCashNum = parseFloat(apartadoCash || '0')
+        const apartadoCardNum = parseFloat(apartadoCard || '0')
+        if (apartadoCashNum > 0) payments.push({ method: 'cash', amount: parseFloat(apartadoCashNum.toFixed(2)) })
+        if (apartadoCardNum > 0) payments.push({ method: 'card', amount: parseFloat(apartadoCardNum.toFixed(2)) })
       }
 
       const saleData: any = {
         items,
         discount_amount: parseFloat(discountAmountCalc.toFixed(2)),
-        tax_rate: parseFloat(taxRateNum.toFixed(2)) || 0,
+        tax_rate: 0,  // IVA siempre 0
         tipo_venta: saleType  // Ya es 'credito' directamente
       }
 
@@ -630,8 +643,8 @@ export default function SalesPage() {
       const r = await api.post('/sales/', saleData)
       
       // Guardar valores ANTES de limpiar los estados
-      const cashAmount = parseFloat(cash || '0')
-      const cardAmount = parseFloat(card || '0')
+      const cashAmount = saleType === 'contado' ? parseFloat(cash || '0') : parseFloat(apartadoCash || '0')
+      const cardAmount = saleType === 'contado' ? parseFloat(card || '0') : parseFloat(apartadoCard || '0')
       const initialPaymentAmount = cashAmount + cardAmount
       const currentCart = [...cart]
       
@@ -647,6 +660,8 @@ export default function SalesPage() {
       setCart([])
       setCash('')
       setCard('')
+      setApartadoCash('')
+      setApartadoCard('')
       setDiscount('0')
       setCustomerName('')
       setCustomerPhone('')
@@ -656,7 +671,7 @@ export default function SalesPage() {
       // Generar ticket de venta - usar el valor calculado ANTES de limpiar
       const finalInitialPayment = saleType === 'credito' ? initialPaymentAmount : 0
       console.log('CALLING printSaleTicket with initialPayment:', finalInitialPayment)
-      printSaleTicket(r.data, currentCart, subtotal, discountAmountCalc, taxAmount, total, paid, change, finalInitialPayment)
+      printSaleTicket(r.data, currentCart, subtotal, discountAmountCalc, total, paid, change, finalInitialPayment)
     } catch (e: any) {
       setMsg(e?.response?.data?.detail || 'Error al crear venta')
     }
@@ -699,7 +714,6 @@ export default function SalesPage() {
   <table>
     <tr><td>Subtotal:</td><td style="text-align:right;">$${Number(sale.subtotal || 0).toFixed(2)}</td></tr>
     ${Number(sale.discount_amount || 0) > 0 ? `<tr><td>Descuento:</td><td style="text-align:right;">-$${Number(sale.discount_amount).toFixed(2)}</td></tr>` : ''}
-    ${Number(sale.tax_amount || 0) > 0 ? `<tr><td>IVA (${Number(sale.tax_rate || 0).toFixed(1)}%):</td><td style="text-align:right;">$${Number(sale.tax_amount).toFixed(2)}</td></tr>` : ''}
     <tr class="total"><td>TOTAL:</td><td style="text-align:right;">$${Number(sale.total || 0).toFixed(2)}</td></tr>
   </table>
   <div class="center" style="margin-top:20px;">
@@ -839,28 +853,10 @@ export default function SalesPage() {
               <span className="font-bold">${subtotal.toFixed(2)}</span>
             </div>
 
-              <div>
-                <label className="text-sm">IVA %</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={taxRate}
-                  onChange={e => setTaxRate(e.target.value)}
-                  className="w-full border rounded px-3 py-1"
-                />
-            </div>
-
             {discountAmountCalc > 0 && (
               <div className="flex justify-between text-red-600">
                 <span>Descuento:</span>
                 <span>-${discountAmountCalc.toFixed(2)}</span>
-              </div>
-            )}
-
-            {taxAmount > 0 && (
-              <div className="flex justify-between text-sm">
-                <span>IVA:</span>
-                <span>${taxAmount.toFixed(2)}</span>
               </div>
             )}
 
@@ -871,18 +867,48 @@ export default function SalesPage() {
 
             {/* Payment fields */}
             {saleType === 'credito' ? (
-              <div>
-                <label className="text-sm font-medium">Anticipo (opcional)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={cash}
-                  onChange={e => setCash(e.target.value)}
-                  className="w-full border rounded-lg px-3 py-2"
-                  placeholder="0.00"
-                />
-                <p className="text-xs text-gray-500 mt-1">Puedes dejar en $0.00 si no hay anticipo inicial</p>
+              <div className="space-y-3">
+                <p className="text-sm font-medium text-gray-700">Anticipo Inicial (opcional)</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-sm font-medium text-gray-600">Efectivo</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={apartadoCash}
+                      onChange={e => setApartadoCash(e.target.value)}
+                      className="w-full border rounded-lg px-3 py-2"
+                      placeholder="0.00"
+                    />
             </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-600">Tarjeta</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={apartadoCard}
+                      onChange={e => setApartadoCard(e.target.value)}
+                      className="w-full border rounded-lg px-3 py-2"
+                      placeholder="0.00"
+                    />
+                  </div>
+                </div>
+                <div className="bg-orange-50 p-3 rounded-lg">
+                  <div className="flex justify-between text-sm">
+                    <span className="font-medium">Anticipo:</span>
+                    <span className="font-bold text-orange-700">
+                      ${((parseFloat(apartadoCash || '0') || 0) + (parseFloat(apartadoCard || '0') || 0)).toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm mt-1">
+                    <span className="font-medium">Saldo pendiente:</span>
+                    <span className="font-bold text-red-700">
+                      ${(total - ((parseFloat(apartadoCash || '0') || 0) + (parseFloat(apartadoCard || '0') || 0))).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+                <p className="text-xs text-gray-500">Puedes dejar en $0.00 si no hay anticipo inicial</p>
+              </div>
             ) : (
               <>
                 <div className="grid grid-cols-2 gap-3">

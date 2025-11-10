@@ -18,6 +18,7 @@ from app.routes.init import router as init_router
 from app.routes.productos_pedido import router as productos_pedido_router
 from app.routes.tasas_pedido import router as tasas_pedido_router
 from app.routes.status_history import router as status_history_router
+from app.routes.customers import router as customers_router
 from app.core.database import SessionLocal, init_db
 from app.services.seed import seed_demo
 
@@ -50,6 +51,7 @@ def create_app() -> FastAPI:
     app.include_router(productos_pedido_router, prefix="/productos-pedido", tags=["productos-pedido"])
     app.include_router(tasas_pedido_router, prefix="/tasas-pedido", tags=["tasas-pedido"])
     app.include_router(status_history_router, prefix="/status-history", tags=["status-history"])
+    app.include_router(customers_router, prefix="/customers", tags=["customers"])
 
     return app
 

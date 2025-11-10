@@ -60,14 +60,10 @@ export default function PedidosPage() {
   // Información del cliente
   const [clienteNombre, setClienteNombre] = useState('')
   const [clienteTelefono, setClienteTelefono] = useState('')
-  const [clienteEmail, setClienteEmail] = useState('')
   const [notasCliente, setNotasCliente] = useState('')
   
   // Vendedor
   const [vendedorId, setVendedorId] = useState('')
-  
-  // Anticipo flexible
-  const [anticipoPagado, setAnticipoPagado] = useState('')
   
   // Tipo de pedido y métodos de pago
   const [tipoPedido, setTipoPedido] = useState<'contado' | 'apartado'>('apartado')
@@ -301,24 +297,6 @@ export default function PedidosPage() {
     return cart.reduce((sum, ci) => sum + (parseFloat(ci.producto.precio.toString()) * ci.cantidad), 0)
   }
 
-  const getAnticipoRequerido = () => {
-    const total = getTotal()
-    if (cart.length === 0) return 0
-    
-    // Usar el anticipo sugerido del primer producto como referencia
-    const primerProducto = cart[0].producto
-    if (primerProducto.anticipo_sugerido) {
-      return parseFloat(primerProducto.anticipo_sugerido.toString())
-    }
-    
-    return 0 // Sin anticipo sugerido
-  }
-
-  const getSaldoPendiente = () => {
-    const anticipo = parseFloat(anticipoPagado) || 0
-    return getTotal() - anticipo
-  }
-
   const createProduct = async () => {
     if (!newProduct.codigo.trim()) {
       setMsg('El código es requerido')
@@ -505,6 +483,11 @@ export default function PedidosPage() {
       setMsg('El nombre del cliente es requerido')
       return
     }
+    
+    if (!vendedorId) {
+      setMsg('Debe seleccionar un vendedor')
+      return
+    }
 
     try {
       console.log('Starting checkout process...')
@@ -517,12 +500,11 @@ export default function PedidosPage() {
           producto_pedido_id: item.producto.id,
           cliente_nombre: clienteNombre,
           cliente_telefono: clienteTelefono || null,
-          cliente_email: clienteEmail || null,
           cantidad: item.cantidad,
           tipo_pedido: tipoPedido,
-          anticipo_pagado: tipoPedido === 'apartado' ? (parseFloat(anticipoPagado) || 0) : 0,
-          metodo_pago_efectivo: tipoPedido === 'contado' ? (parseFloat(metodoPagoEfectivo) || 0) : 0,
-          metodo_pago_tarjeta: tipoPedido === 'contado' ? (parseFloat(metodoPagoTarjeta) || 0) : 0,
+          anticipo_pagado: (parseFloat(metodoPagoEfectivo) || 0) + (parseFloat(metodoPagoTarjeta) || 0),
+          metodo_pago_efectivo: parseFloat(metodoPagoEfectivo) || 0,
+          metodo_pago_tarjeta: parseFloat(metodoPagoTarjeta) || 0,
           notas_cliente: notasCliente || null,
           user_id: vendedorId ? parseInt(vendedorId) : undefined
         }
@@ -535,10 +517,8 @@ export default function PedidosPage() {
       clearCart()
       setClienteNombre('')
       setClienteTelefono('')
-      setClienteEmail('')
       setNotasCliente('')
       setVendedorId('')
-      setAnticipoPagado('')
       setMetodoPagoEfectivo('')
       setMetodoPagoTarjeta('')
       setTipoPedido('apartado')
@@ -587,19 +567,12 @@ export default function PedidosPage() {
                 value={clienteTelefono}
                 onChange={e => setClienteTelefono(e.target.value)}
               />
-              <input
-                className="border border-gray-300 rounded-lg px-3 py-2"
-                placeholder="Email"
-                type="email"
-                value={clienteEmail}
-                onChange={e => setClienteEmail(e.target.value)}
-              />
               <select
                 className="border border-gray-300 rounded-lg px-3 py-2"
                 value={vendedorId}
                 onChange={e => setVendedorId(e.target.value)}
               >
-                <option value="">Seleccionar vendedor (opcional)</option>
+                <option value="">Seleccionar vendedor *</option>
                 {users.map(u => (
                   <option key={u.id} value={u.id}>
                     {u.email}
@@ -644,80 +617,54 @@ export default function PedidosPage() {
             </div>
 
             {/* Campos de Pago según tipo */}
-            {tipoPedido === 'contado' ? (
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Efectivo
-                  </label>
-                  <input
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                    placeholder="$0.00"
-                    type="number"
-                    step="0.01"
-                    value={metodoPagoEfectivo}
-                    onChange={e => setMetodoPagoEfectivo(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Tarjeta
-                  </label>
-                  <input
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                    placeholder="$0.00"
-                    type="number"
-                    step="0.01"
-                    value={metodoPagoTarjeta}
-                    onChange={e => setMetodoPagoTarjeta(e.target.value)}
-                  />
-                </div>
-                <div className="col-span-2 bg-green-100 p-3 rounded-lg">
-                  <div className="flex justify-between text-sm">
-                    <span className="font-medium">Total a pagar:</span>
-                    <span className="font-bold">${getTotal().toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm mt-1">
-                    <span className="font-medium">Total pagado:</span>
-                    <span className="font-bold text-green-700">
-                      ${((parseFloat(metodoPagoEfectivo) || 0) + (parseFloat(metodoPagoTarjeta) || 0)).toFixed(2)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            ) : (
+            <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Anticipo
+                  Efectivo
                 </label>
                 <input
                   className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                  placeholder="Anticipo pagado ($)"
+                  placeholder="$0.00"
                   type="number"
                   step="0.01"
-                  value={anticipoPagado}
-                  onChange={e => setAnticipoPagado(e.target.value)}
+                  value={metodoPagoEfectivo}
+                  onChange={e => setMetodoPagoEfectivo(e.target.value)}
                 />
-                <div className="bg-orange-100 p-3 rounded-lg mt-3">
-                  <div className="flex justify-between text-sm">
-                    <span className="font-medium">Total del pedido:</span>
-                    <span className="font-bold">${getTotal().toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm mt-1">
-                    <span className="font-medium">Anticipo:</span>
-                    <span className="font-bold text-orange-700">
-                      ${(parseFloat(anticipoPagado) || 0).toFixed(2)}
-                    </span>
-                  </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Tarjeta
+                </label>
+                <input
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                  placeholder="$0.00"
+                  type="number"
+                  step="0.01"
+                  value={metodoPagoTarjeta}
+                  onChange={e => setMetodoPagoTarjeta(e.target.value)}
+                />
+              </div>
+              <div className={`col-span-2 p-3 rounded-lg ${tipoPedido === 'contado' ? 'bg-green-100' : 'bg-orange-100'}`}>
+                <div className="flex justify-between text-sm">
+                  <span className="font-medium">Total del pedido:</span>
+                  <span className="font-bold">${getTotal().toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-sm mt-1">
+                  <span className="font-medium">{tipoPedido === 'contado' ? 'Total pagado:' : 'Anticipo:'}</span>
+                  <span className={`font-bold ${tipoPedido === 'contado' ? 'text-green-700' : 'text-orange-700'}`}>
+                    ${((parseFloat(metodoPagoEfectivo) || 0) + (parseFloat(metodoPagoTarjeta) || 0)).toFixed(2)}
+                  </span>
+                </div>
+                {tipoPedido === 'apartado' && (
                   <div className="flex justify-between text-sm mt-1">
                     <span className="font-medium">Saldo pendiente:</span>
                     <span className="font-bold text-red-700">
-                      ${(getTotal() - (parseFloat(anticipoPagado) || 0)).toFixed(2)}
+                      ${(getTotal() - ((parseFloat(metodoPagoEfectivo) || 0) + (parseFloat(metodoPagoTarjeta) || 0))).toFixed(2)}
                     </span>
                   </div>
-                </div>
+                )}
               </div>
-            )}
+            </div>
           </div>
 
           {/* Cart */}
@@ -751,9 +698,6 @@ export default function PedidosPage() {
                         {ci.producto.color && `${ci.producto.color} - `}
                         {ci.producto.quilataje && `${ci.producto.quilataje} - `}
                         {ci.producto.talla && `Talla ${ci.producto.talla}`}
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        {ci.producto.anticipo_sugerido && `Anticipo sugerido: $${ci.producto.anticipo_sugerido}`}
                       </div>
                     </div>
                     <div className="flex items-center space-x-3">
@@ -789,38 +733,15 @@ export default function PedidosPage() {
             )}
           </div>
 
-          {/* Totals */}
+          {/* Checkout Button */}
           {cart.length > 0 && (
-            <div className="bg-gray-50 rounded-lg p-4">
-              <div className="space-y-2">
-                <div className="flex justify-between">
-                  <span>Subtotal:</span>
-                  <span className="font-bold">${getTotal().toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between text-blue-600">
-                  <span>Anticipo pagado:</span>
-                  <span className="font-bold">${(parseFloat(anticipoPagado) || 0).toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between text-green-600">
-                  <span>Saldo pendiente:</span>
-                  <span className="font-bold">${getSaldoPendiente().toFixed(2)}</span>
-                </div>
-                {cart[0]?.producto.anticipo_sugerido && (
-                  <div className="text-sm text-gray-600 mt-2">
-                    Anticipo sugerido: ${cart[0].producto.anticipo_sugerido}
-                  </div>
-                )}
-              </div>
-
-              {/* Checkout Button */}
-              <button
-                onClick={checkout}
-                disabled={cart.length === 0 || !clienteNombre.trim()}
-                className="w-full bg-purple-600 text-white py-4 rounded-lg text-xl font-bold hover:bg-purple-700 disabled:bg-gray-400 mt-4"
-              >
-                📋 Crear Pedido
-              </button>
-            </div>
+            <button
+              onClick={checkout}
+              disabled={cart.length === 0 || !clienteNombre.trim() || !vendedorId}
+              className="w-full bg-purple-600 text-white py-4 rounded-lg text-xl font-bold hover:bg-purple-700 disabled:bg-gray-400"
+            >
+              📋 Crear Pedido
+            </button>
           )}
 
           {/* Messages */}
@@ -974,9 +895,6 @@ export default function PedidosPage() {
                         {p.color && `${p.color} - `}
                         {p.quilataje && `${p.quilataje}`}
                       </div>
-                      <div className="text-xs text-blue-600">
-                        {p.anticipo_sugerido && `Anticipo sugerido: $${p.anticipo_sugerido}`}
-                      </div>
                       {!p.disponible && (
                         <div className="text-xs text-red-600 font-bold">No disponible</div>
                       )}
@@ -1023,9 +941,6 @@ export default function PedidosPage() {
               </p>
               <p className="text-gray-700 mb-2">
                 <strong>Tiempo de entrega:</strong> A convenir
-              </p>
-              <p className="text-gray-700 mb-2">
-                <strong>Anticipo:</strong> {productoToAdd.anticipo_sugerido || 0}%
               </p>
               {productoToAdd.modelo && (
                 <p className="text-gray-700">

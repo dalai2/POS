@@ -13,11 +13,12 @@ export default function Sidebar() {
         <a className="block px-3 py-2 rounded transition-colors hover:opacity-80" href="/gestion-pedidos" style={{ backgroundColor: 'transparent' }}>📊 Gestión de Pedidos</a>
         <a className="block px-3 py-2 rounded transition-colors hover:opacity-80" href="/products" style={{ backgroundColor: 'transparent' }}>💍 Productos/Joyería</a>
         <a className="block px-3 py-2 rounded transition-colors hover:opacity-80" href="/credits" style={{ backgroundColor: 'transparent' }}>💳 Gestión de apartados</a>
+        <a className="block px-3 py-2 rounded transition-colors hover:opacity-80" href="/clients" style={{ backgroundColor: 'transparent' }}>👥 Clientes</a>
         <a className="block px-3 py-2 rounded transition-colors hover:opacity-80" href="/reports" style={{ backgroundColor: 'transparent' }}>📊 Corte de Caja</a>
         <a className="block px-3 py-2 rounded transition-colors hover:opacity-80" href="/metal-rates" style={{ backgroundColor: 'transparent' }}>⚖️ Tasas de Metal</a>
         <a className="block px-3 py-2 rounded transition-colors hover:opacity-80" href="/tasas-pedido" style={{ backgroundColor: 'transparent' }}>💎 Tasas Metal Pedidos</a>
         <a className="block px-3 py-2 rounded transition-colors hover:opacity-80" href="/sales/history" style={{ backgroundColor: 'transparent' }}>📋 Historial</a>
-        <a className="block px-3 py-2 rounded transition-colors hover:opacity-80" href="/users" style={{ backgroundColor: 'transparent' }}>👥 Usuarios</a>
+        <a className="block px-3 py-2 rounded transition-colors hover:opacity-80" href="/users" style={{ backgroundColor: 'transparent' }}>👤 Usuarios</a>
       </nav>
     </aside>
   )

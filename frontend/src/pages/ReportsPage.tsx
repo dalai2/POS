@@ -80,8 +80,23 @@ interface DetailedCorteCajaReport {
   num_piezas_entregadas: number;
   num_piezas_apartadas_pagadas: number;
   num_piezas_pedidos_pagados: number;
+  num_piezas_pedidos_apartados_liquidados: number;
   num_solicitudes_apartado: number;
   num_pedidos_hechos: number;
+  resumen_ventas_activas: Array<{
+    tipo_movimiento: string;
+    metodo_pago: string;
+    cantidad_operaciones: number;
+    subtotal: number;
+    total: number;
+  }>;
+  resumen_pagos: Array<{
+    tipo_movimiento: string;
+    metodo_pago: string;
+    cantidad_operaciones: number;
+    subtotal: number;
+    total: number;
+  }>;
   num_cancelaciones: number;
   num_apartados_vencidos: number;
   num_pedidos_vencidos: number;
@@ -112,6 +127,7 @@ interface DetailedCorteCajaReport {
     ventas_total_activa: number;
     venta_total_pasiva: number;
     cuentas_por_cobrar: number;
+    productos_liquidados: number;
   }>;
   daily_summaries: Array<{
     fecha: string;
@@ -226,6 +242,7 @@ export default function ReportsPage() {
         const response = await api.get('/reports/detailed-corte-caja', {
           params: { start_date: startDate, end_date: endDate }
         });
+        console.log('DEBUG FRONTEND: Vendedores recibidos del backend:', response.data.vendedores);
         setDetailedReport(response.data);
     } catch (error) {
       console.error('Error generating report:', error);
@@ -284,6 +301,7 @@ export default function ReportsPage() {
     rows.push(['Piezas entregadas', detailedReport.num_piezas_entregadas]);
     rows.push(['Piezas apartadas pagadas', detailedReport.num_piezas_apartadas_pagadas]);
     rows.push(['Piezas de pedidos pagados', detailedReport.num_piezas_pedidos_pagados]);
+    rows.push(['Pedidos apartados liquidados', detailedReport.num_piezas_pedidos_apartados_liquidados]);
     rows.push([]);
     
     rows.push(['Contadores']);
@@ -301,10 +319,37 @@ export default function ReportsPage() {
     rows.push(['Saldo vencido pedidos', `$${(detailedReport.saldo_vencido_pedidos ?? 0).toFixed(2)}`]);
     rows.push([]);
     
+    // Resumen de pagos - Ventas Pasivas
+    rows.push(['RESUMEN DE VENTAS ACTIVAS']);
+    rows.push(['Tipo de movimiento', 'Método de pago', 'Cantidad', 'Subtotal', 'Total']);
+    detailedReport.resumen_ventas_activas.forEach(row => {
+      rows.push([
+        row.tipo_movimiento,
+        row.metodo_pago,
+        row.cantidad_operaciones,
+        `$${row.subtotal.toFixed(2)}`,
+        `$${row.total.toFixed(2)}`
+      ]);
+    });
+    rows.push([]);
+    
+    rows.push(['RESUMEN DE PAGOS - VENTAS PASIVAS']);
+    rows.push(['Tipo de movimiento', 'Método de pago', 'Cantidad', 'Subtotal', 'Total']);
+    detailedReport.resumen_pagos.forEach(row => {
+      rows.push([
+        row.tipo_movimiento,
+        row.metodo_pago,
+        row.cantidad_operaciones,
+        `$${row.subtotal.toFixed(2)}`,
+        `$${row.total.toFixed(2)}`
+      ]);
+    });
+    rows.push([]);
+    
     // Vendedores
     if (detailedReport.vendedores.length > 0) {
       rows.push(['RESUMEN POR VENDEDORES']);
-      rows.push(['Vendedor', 'Total Contado', 'Total Tarjeta', 'Anticipos Apartados', 'Anticipos Pedidos', 'Abonos Apartados', 'Abonos Pedidos', 'Ventas Total Activa', 'Venta Total Pasiva', 'Cuentas por Cobrar']);
+      rows.push(['Vendedor', 'Total Contado', 'Total Tarjeta', 'Anticipos Apartados', 'Anticipos Pedidos', 'Abonos Apartados', 'Abonos Pedidos', 'Ventas Total Activa', 'Venta Total Pasiva', 'Cuentas por Cobrar', 'Productos Liquidados']);
       detailedReport.vendedores.forEach(v => {
         rows.push([
           v.vendedor_name,
@@ -316,7 +361,8 @@ export default function ReportsPage() {
           `$${v.abonos_pedidos.toFixed(2)}`,
           `$${v.ventas_total_activa.toFixed(2)}`,
           `$${v.venta_total_pasiva.toFixed(2)}`,
-          `$${v.cuentas_por_cobrar.toFixed(2)}`
+          `$${v.cuentas_por_cobrar.toFixed(2)}`,
+          `$${(v.productos_liquidados ?? 0).toFixed(2)}`
         ]);
       });
       rows.push([]);
@@ -357,6 +403,7 @@ export default function ReportsPage() {
       html = `
 <!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>Corte de Caja - ${formattedDate}</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
   @media print {
     @page {
@@ -366,14 +413,14 @@ export default function ReportsPage() {
     body {
       margin: 0;
       padding: 0;
-      font-family: Arial, sans-serif;
+      font-family: 'Poppins', sans-serif;
       font-size: 11px;
     }
   }
   body {
     margin: 0;
     padding: 20px;
-    font-family: Arial, sans-serif;
+    font-family: 'Poppins', sans-serif;
     font-size: 11px;
     color: #333;
   }
@@ -626,6 +673,7 @@ export default function ReportsPage() {
       html = `
 <!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>Reporte Detallado - ${formattedDate}</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
   @media print {
     @page {
@@ -635,14 +683,14 @@ export default function ReportsPage() {
     body {
       margin: 0;
       padding: 0;
-      font-family: Arial, sans-serif;
+      font-family: 'Poppins', sans-serif;
       font-size: 10px;
     }
   }
   body {
     margin: 0;
     padding: 20px;
-    font-family: Arial, sans-serif;
+    font-family: 'Poppins', sans-serif;
     font-size: 10px;
     color: #333;
   }
@@ -1002,6 +1050,62 @@ export default function ReportsPage() {
   </div>
   ` : ''}
   
+  ${detailedReport.resumen_ventas_activas && detailedReport.resumen_ventas_activas.length > 0 ? `
+  <div class="section">
+    <div class="section-title">📊 RESUMEN DE VENTAS ACTIVAS</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Tipo de movimiento</th>
+          <th>Método de pago</th>
+          <th>Operaciones</th>
+          <th>Subtotal</th>
+          <th>Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${detailedReport.resumen_ventas_activas.map(r => `
+        <tr style="${r.metodo_pago === 'SUBTOTAL' ? 'background-color: #f0fdf4; font-weight: bold;' : ''}">
+          <td>${r.tipo_movimiento}</td>
+          <td>${r.metodo_pago}</td>
+          <td style="text-align: center;">${r.cantidad_operaciones}</td>
+          <td style="text-align: right;">$${r.subtotal.toFixed(2)}</td>
+          <td style="text-align: right; ${r.metodo_pago === 'SUBTOTAL' ? 'color: #16a34a;' : ''}">$${r.total.toFixed(2)}</td>
+        </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  </div>
+  ` : ''}
+  
+  ${detailedReport.resumen_pagos && detailedReport.resumen_pagos.length > 0 ? `
+  <div class="section">
+    <div class="section-title">💳 RESUMEN DE PAGOS - VENTAS PASIVAS</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Tipo de movimiento</th>
+          <th>Método de pago</th>
+          <th>Operaciones</th>
+          <th>Subtotal</th>
+          <th>Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${detailedReport.resumen_pagos.map(r => `
+        <tr style="${r.metodo_pago === 'SUBTOTAL' ? 'background-color: #ede9fe; font-weight: bold;' : ''}">
+          <td>${r.tipo_movimiento}</td>
+          <td>${r.metodo_pago}</td>
+          <td style="text-align: center;">${r.cantidad_operaciones}</td>
+          <td style="text-align: right;">$${r.subtotal.toFixed(2)}</td>
+          <td style="text-align: right; ${r.metodo_pago === 'SUBTOTAL' ? 'color: #7c3aed;' : ''}">$${r.total.toFixed(2)}</td>
+        </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  </div>
+  ` : ''}
+  
   ${detailedReport.apartados_cancelados_vencidos && detailedReport.apartados_cancelados_vencidos.length > 0 ? `
   <div class="section">
     <div class="section-title">APARTADOS CANCELADOS Y VENCIDOS</div>
@@ -1095,7 +1199,7 @@ export default function ReportsPage() {
 
   return (
     <Layout>
-      <div className="max-w-7xl mx-auto">
+      <div className="max-w-7xl mx-auto font-['Poppins',sans-serif]">
         <h1 className="text-3xl font-bold text-gray-800 mb-6">Corte de Caja</h1>
 
         {/* Date Selection */}
@@ -1413,12 +1517,12 @@ export default function ReportsPage() {
             {/* Print Button */}
             <div className="mt-8 pt-6 border-t-2 border-gray-200 print:hidden">
               <div className="flex gap-4">
-                <button
-                  onClick={printReport}
+              <button
+                onClick={printReport}
                   className="flex-1 bg-gray-800 text-white px-6 py-3 rounded-lg hover:bg-gray-900"
-                >
-                  🖨️ Imprimir Reporte
-                </button>
+              >
+                🖨️ Imprimir Reporte
+              </button>
                 <button
                   onClick={downloadCSV}
                   className="flex-1 bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700"
@@ -1467,17 +1571,17 @@ export default function ReportsPage() {
                   <p className="text-2xl font-bold text-red-700">${detailedReport.cuentas_por_cobrar.toFixed(2)}</p>
                   <p className="text-xs text-gray-600 mt-1">Saldo pendiente</p>
                 </div>
-              </div>
+                </div>
 
               {/* Costos y Utilidades */}
               <div className="mt-6 pt-6 border-t-2 border-gray-200">
                 <h4 className="text-lg font-bold text-gray-800 mb-3">Costos y Utilidades</h4>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <div className="text-center p-3 bg-orange-100 rounded">
+                <div className="text-center p-3 bg-orange-100 rounded">
                     <p className="text-sm text-gray-600">Costos Total de Ventas Activas</p>
                     <p className="text-2xl font-bold text-orange-700">${detailedReport.costo_ventas_contado.toFixed(2)}</p>
                     <p className="text-xs text-gray-500 mt-1">Productos vendidos</p>
-                  </div>
+                </div>
                   <div className="text-center p-3 bg-blue-100 rounded">
                     <p className="text-sm text-gray-600">Costo de productos liquidados</p>
                     <p className="text-2xl font-bold text-blue-700">${detailedReport.costo_apartados_pedidos_liquidados.toFixed(2)}</p>
@@ -1492,17 +1596,17 @@ export default function ReportsPage() {
                     <p className="text-sm text-gray-600">Utilidades de Ventas Activas</p>
                     <p className="text-2xl font-bold text-green-700">${detailedReport.utilidad_ventas_activas.toFixed(2)}</p>
                     <p className="text-xs text-gray-500 mt-1">(Efectivo + Tarjeta -3%) - Costos</p>
-                  </div>
-                </div>
-                
+              </div>
+            </div>
+
                 {/* Resumen por Vendedores */}
-                {detailedReport.vendedores.length > 0 && (
+            {detailedReport.vendedores.length > 0 && (
                   <div className="mt-6 pt-6 border-t-2 border-gray-200">
                     <h5 className="text-lg font-bold text-gray-800 mb-3">👥 Resumen por Vendedores</h5>
-                    <div className="overflow-x-auto">
+                <div className="overflow-x-auto">
                       <table className="min-w-full border-collapse border border-gray-300">
                         <thead className="bg-gray-100">
-                          <tr>
+                      <tr>
                             <th className="border border-gray-300 px-3 py-2 text-left text-xs font-medium text-gray-700">Vendedor</th>
                             <th className="border border-gray-300 px-3 py-2 text-right text-xs font-medium text-gray-700">Efectivo</th>
                             <th className="border border-gray-300 px-3 py-2 text-right text-xs font-medium text-gray-700">Tarjeta (-3%)</th>
@@ -1513,8 +1617,9 @@ export default function ReportsPage() {
                             <th className="border border-gray-300 px-3 py-2 text-right text-xs font-medium text-gray-700 bg-green-50">Venta Activa</th>
                             <th className="border border-gray-300 px-3 py-2 text-right text-xs font-medium text-gray-700 bg-purple-50">Venta Pasiva</th>
                             <th className="border border-gray-300 px-3 py-2 text-right text-xs font-medium text-gray-700 bg-orange-50">Cuentas x Cobrar</th>
-                          </tr>
-                        </thead>
+                            <th className="border border-gray-300 px-3 py-2 text-right text-xs font-medium text-gray-700 bg-blue-50">Productos Liquidados</th>
+                      </tr>
+                    </thead>
                         <tbody>
                           {detailedReport.vendedores.map((vendedor, idx) => (
                             <tr key={vendedor.vendedor_id} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
@@ -1528,15 +1633,16 @@ export default function ReportsPage() {
                               <td className="border border-gray-300 px-3 py-2 text-sm text-right font-bold text-green-700 bg-green-50">${vendedor.ventas_total_activa.toFixed(2)}</td>
                               <td className="border border-gray-300 px-3 py-2 text-sm text-right font-bold text-purple-700 bg-purple-50">${vendedor.venta_total_pasiva.toFixed(2)}</td>
                               <td className="border border-gray-300 px-3 py-2 text-sm text-right font-bold text-orange-700 bg-orange-50">${vendedor.cuentas_por_cobrar.toFixed(2)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
+                              <td className="border border-gray-300 px-3 py-2 text-sm text-right font-bold text-blue-700 bg-blue-50">${(vendedor.productos_liquidados ?? 0).toFixed(2)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-              
+            )}
+              </div>
+
               {/* Resumen Detallado */}
               <div className="mt-6 pt-6 border-t-2 border-gray-200">
                 <h4 className="text-lg font-bold text-gray-800 mb-4">Resumen Detallado</h4>
@@ -1548,11 +1654,11 @@ export default function ReportsPage() {
                     <div className="text-center p-2 bg-purple-50 rounded border">
                       <p className="text-xs text-gray-600">Abonos de apartados</p>
                       <p className="text-lg font-bold text-purple-700">${detailedReport.apartados_pendientes_abonos_adicionales.toFixed(2)}</p>
-                    </div>
+                </div>
                     <div className="text-center p-2 bg-purple-50 rounded border">
                       <p className="text-xs text-gray-600">Anticipos de apartados</p>
                       <p className="text-lg font-bold text-purple-700">${detailedReport.apartados_pendientes_anticipos.toFixed(2)}</p>
-                    </div>
+              </div>
                     <div className="text-center p-2 bg-indigo-50 rounded border">
                       <p className="text-xs text-gray-600">Abonos de pedidos</p>
                       <p className="text-lg font-bold text-indigo-700">${detailedReport.pedidos_pendientes_abonos.toFixed(2)}</p>
@@ -1598,7 +1704,7 @@ export default function ReportsPage() {
                 {/* Piezas */}
                 <div className="mb-4">
                   <h5 className="font-semibold text-gray-700 mb-2">📦 Piezas</h5>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                     <div className="text-center p-2 bg-green-50 rounded border">
                       <p className="text-xs text-gray-600">Piezas vendidas</p>
                       <p className="text-lg font-bold text-green-700">{detailedReport.num_piezas_vendidas}</p>
@@ -1614,6 +1720,10 @@ export default function ReportsPage() {
                     <div className="text-center p-2 bg-indigo-50 rounded border">
                       <p className="text-xs text-gray-600">Pedidos pagados</p>
                       <p className="text-lg font-bold text-indigo-700">{detailedReport.num_piezas_pedidos_pagados}</p>
+                    </div>
+                    <div className="text-center p-2 bg-orange-50 rounded border">
+                      <p className="text-xs text-gray-600">Pedidos apartados liquidados</p>
+                      <p className="text-lg font-bold text-orange-700">{detailedReport.num_piezas_pedidos_apartados_liquidados}</p>
                     </div>
                   </div>
                 </div>
@@ -1682,6 +1792,162 @@ export default function ReportsPage() {
                     </div>
                   </div>
                 </div>
+                
+                {/* Resumen de Ventas Activas */}
+                {detailedReport.resumen_ventas_activas && detailedReport.resumen_ventas_activas.length > 0 && (
+                  <div className="mb-6">
+                    <h5 className="font-bold text-gray-800 mb-3 text-lg flex items-center">
+                      <span className="text-2xl mr-2">🛒</span>
+                      Resumen de Ventas Activas
+                    </h5>
+                    <div className="overflow-x-auto shadow-lg rounded-lg border border-gray-200">
+                      <table className="min-w-full bg-white text-sm">
+                        <thead>
+                          <tr className="bg-gradient-to-r from-green-600 to-emerald-500 text-white">
+                            <th className="px-4 py-3 text-left font-semibold uppercase tracking-wide text-xs">
+                              Tipo de movimiento
+                            </th>
+                            <th className="px-4 py-3 text-left font-semibold uppercase tracking-wide text-xs">
+                              Método de pago
+                            </th>
+                            <th className="px-4 py-3 text-center font-semibold uppercase tracking-wide text-xs">
+                              Operaciones
+                            </th>
+                            <th className="px-4 py-3 text-right font-semibold uppercase tracking-wide text-xs">
+                              Subtotal
+                            </th>
+                            <th className="px-4 py-3 text-right font-semibold uppercase tracking-wide text-xs">
+                              Total
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                          {detailedReport.resumen_ventas_activas.map((row, idx) => {
+                            const isSubtotal = row.metodo_pago === 'SUBTOTAL';
+                            return (
+                              <tr 
+                                key={idx} 
+                                className={
+                                  isSubtotal 
+                                    ? 'bg-gradient-to-r from-emerald-50 to-green-50 hover:from-emerald-100 hover:to-green-100 transition-colors border-t-2 border-b-2 border-emerald-300' 
+                                    : 'hover:bg-gray-50 transition-colors'
+                                }
+                              >
+                                <td className={`px-4 py-3 ${isSubtotal ? 'font-bold text-gray-800' : 'text-gray-700'}`}>
+                                  {row.tipo_movimiento}
+                                </td>
+                                <td className="px-4 py-3">
+                                  {isSubtotal ? (
+                                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-gradient-to-r from-emerald-600 to-green-600 text-white shadow-sm">
+                                      {row.metodo_pago}
+                                    </span>
+                                  ) : row.metodo_pago === 'Efectivo' ? (
+                                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800 border border-green-300">
+                                      💵 {row.metodo_pago}
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-300">
+                                      💳 {row.metodo_pago}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className={`px-4 py-3 text-center ${isSubtotal ? 'font-bold text-gray-800' : 'text-gray-600'}`}>
+                                  <span className={isSubtotal ? 'inline-flex items-center justify-center w-8 h-8 rounded-full bg-emerald-600 text-white text-xs font-bold' : ''}>
+                                    {row.cantidad_operaciones}
+                                  </span>
+                                </td>
+                                <td className={`px-4 py-3 text-right ${isSubtotal ? 'font-bold text-gray-800 text-base' : 'text-gray-700'}`}>
+                                  ${row.subtotal.toFixed(2)}
+                                </td>
+                                <td className={`px-4 py-3 text-right ${isSubtotal ? 'font-extrabold text-lg bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent' : 'font-semibold text-gray-900'}`}>
+                                  ${row.total.toFixed(2)}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Resumen de Pagos - Ventas Pasivas */}
+                {detailedReport.resumen_pagos && detailedReport.resumen_pagos.length > 0 && (
+                  <div className="mb-6">
+                    <h5 className="font-bold text-gray-800 mb-3 text-lg flex items-center">
+                      <span className="text-2xl mr-2">💳</span>
+                      Resumen de Pagos - Ventas Pasivas
+                    </h5>
+                    <div className="overflow-x-auto shadow-lg rounded-lg border border-gray-200">
+                      <table className="min-w-full bg-white text-sm">
+                        <thead>
+                          <tr className="bg-gradient-to-r from-purple-600 to-purple-500 text-white">
+                            <th className="px-4 py-3 text-left font-semibold uppercase tracking-wide text-xs">
+                              Tipo de movimiento
+                            </th>
+                            <th className="px-4 py-3 text-left font-semibold uppercase tracking-wide text-xs">
+                              Método de pago
+                            </th>
+                            <th className="px-4 py-3 text-center font-semibold uppercase tracking-wide text-xs">
+                              Operaciones
+                            </th>
+                            <th className="px-4 py-3 text-right font-semibold uppercase tracking-wide text-xs">
+                              Subtotal
+                            </th>
+                            <th className="px-4 py-3 text-right font-semibold uppercase tracking-wide text-xs">
+                              Total
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                          {detailedReport.resumen_pagos.map((row, idx) => {
+                            const isSubtotal = row.metodo_pago === 'SUBTOTAL';
+                            return (
+                              <tr 
+                                key={idx} 
+                                className={
+                                  isSubtotal 
+                                    ? 'bg-gradient-to-r from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100 transition-colors border-t-2 border-b-2 border-blue-300' 
+                                    : 'hover:bg-gray-50 transition-colors'
+                                }
+                              >
+                                <td className={`px-4 py-3 ${isSubtotal ? 'font-bold text-gray-800' : 'text-gray-700'}`}>
+                                  {row.tipo_movimiento}
+                                </td>
+                                <td className="px-4 py-3">
+                                  {isSubtotal ? (
+                                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm">
+                                      {row.metodo_pago}
+                                    </span>
+                                  ) : row.metodo_pago === 'Efectivo' ? (
+                                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800 border border-green-300">
+                                      💵 {row.metodo_pago}
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-300">
+                                      💳 {row.metodo_pago}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className={`px-4 py-3 text-center ${isSubtotal ? 'font-bold text-gray-800' : 'text-gray-600'}`}>
+                                  <span className={isSubtotal ? 'inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-600 text-white text-xs font-bold' : ''}>
+                                    {row.cantidad_operaciones}
+                                  </span>
+                                </td>
+                                <td className={`px-4 py-3 text-right ${isSubtotal ? 'font-bold text-gray-800 text-base' : 'text-gray-700'}`}>
+                                  ${row.subtotal.toFixed(2)}
+                                </td>
+                                <td className={`px-4 py-3 text-right ${isSubtotal ? 'font-extrabold text-lg bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent' : 'font-semibold text-gray-900'}`}>
+                                  ${row.total.toFixed(2)}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
