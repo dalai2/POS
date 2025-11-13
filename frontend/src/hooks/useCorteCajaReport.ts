@@ -189,6 +189,9 @@ export const useCorteCajaReport = (
     downloadCsv,
     closeDay,
     viewClosedDay,
+    resetCloseMessage,
+    setDetailedReport,
+    setReport,
   };
 };
 
