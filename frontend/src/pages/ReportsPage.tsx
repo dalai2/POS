@@ -1139,8 +1139,6 @@ export default function ReportsPage() {
                             <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider" style={{ color: '#ffffff', borderRight: '1px solid rgba(255, 255, 255, 0.1)' }}>Antic. Ped.</th>
                             <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider" style={{ color: '#ffffff', borderRight: '1px solid rgba(255, 255, 255, 0.1)' }}>Abono Apart.</th>
                             <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider" style={{ color: '#ffffff', borderRight: '1px solid rgba(255, 255, 255, 0.1)' }}>Abono Ped.</th>
-                            <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider" style={{ color: '#ffffff', borderRight: '1px solid rgba(255, 255, 255, 0.1)' }}>Venta Activa</th>
-                            <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider" style={{ color: '#ffffff', borderRight: '1px solid rgba(255, 255, 255, 0.1)' }}>Venta Pasiva</th>
                             <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider" style={{ color: '#ffffff', borderRight: '1px solid rgba(255, 255, 255, 0.1)' }}>Cuentas x Cobrar</th>
                             <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider" style={{ color: '#ffffff', backgroundColor: 'rgba(0, 0, 0, 0.2)' }}>Prod. Liquidados</th>
                       </tr>
@@ -1155,8 +1153,6 @@ export default function ReportsPage() {
                               <td className="px-4 py-3 text-sm text-right" style={{ color: '#2e4354', borderRight: '1px solid rgba(46, 67, 84, 0.05)' }}>${vendedor.anticipos_pedidos.toFixed(2)}</td>
                               <td className="px-4 py-3 text-sm text-right" style={{ color: '#2e4354', borderRight: '1px solid rgba(46, 67, 84, 0.05)' }}>${vendedor.abonos_apartados.toFixed(2)}</td>
                               <td className="px-4 py-3 text-sm text-right" style={{ color: '#2e4354', borderRight: '1px solid rgba(46, 67, 84, 0.05)' }}>${vendedor.abonos_pedidos.toFixed(2)}</td>
-                              <td className="px-4 py-3 text-sm text-right font-bold" style={{ color: '#2e4354', borderRight: '1px solid rgba(46, 67, 84, 0.05)' }}>${vendedor.ventas_total_activa.toFixed(2)}</td>
-                              <td className="px-4 py-3 text-sm text-right font-bold" style={{ color: '#2e4354', borderRight: '1px solid rgba(46, 67, 84, 0.05)' }}>${vendedor.venta_total_pasiva.toFixed(2)}</td>
                               <td className="px-4 py-3 text-sm text-right font-bold" style={{ color: '#2e4354', borderRight: '1px solid rgba(46, 67, 84, 0.05)' }}>${vendedor.cuentas_por_cobrar.toFixed(2)}</td>
                               <td className="px-4 py-3 text-sm text-right font-bold" style={{ color: '#2e4354', backgroundColor: 'rgba(46, 67, 84, 0.1)' }}>${(vendedor.productos_liquidados ?? 0).toFixed(2)}</td>
                         </tr>
