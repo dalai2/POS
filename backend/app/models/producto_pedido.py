@@ -52,6 +52,7 @@ class Pedido(Base):
     cantidad = Column(Integer, default=1)
     precio_unitario = Column(Numeric(10, 2), nullable=False)
     total = Column(Numeric(10, 2), nullable=False)
+    folio_pedido = Column(String(50), nullable=True, index=True)  # Folio único para pedidos
     
     # Pagos
     anticipo_pagado = Column(Numeric(10, 2), default=0)

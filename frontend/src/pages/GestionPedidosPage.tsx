@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import Layout from '../components/Layout'
 import { api } from '../utils/api'
+import { getLogoAsBase64, generatePedidoTicketHTML, openAndPrintTicket, saveTicket } from '../utils/ticketGenerator'
 
 type Pedido = {
   id: number
@@ -57,6 +58,14 @@ type StatusHistoryEntry = {
   created_at: string
 }
 
+interface TicketRecord {
+  id: number
+  sale_id: number
+  kind: string
+  html: string
+  created_at: string
+}
+
 export default function GestionPedidosPage() {
   const [pedidos, setPedidos] = useState<Pedido[]>([])
   const [msg, setMsg] = useState('')
@@ -79,6 +88,7 @@ export default function GestionPedidosPage() {
   const [pagosPedido, setPagosPedido] = useState<PagoPedido[]>([])
   const [pedidoHistorial, setPedidoHistorial] = useState<Pedido | null>(null)
   const [statusHistory, setStatusHistory] = useState<StatusHistoryEntry[]>([])
+  const [ticketsByPedido, setTicketsByPedido] = useState<Record<number, TicketRecord[]>>({})
 
   useEffect(() => {
     if (!localStorage.getItem('access')) {
@@ -142,6 +152,17 @@ export default function GestionPedidosPage() {
     setShowPagoModal(true)
   }
 
+  const openTicketHtml = (html: string) => {
+    const w = window.open('', '_blank');
+    if (!w) return;
+    w.document.write(html);
+    w.document.close();
+    w.addEventListener('load', () => setTimeout(() => w.print(), 300));
+    setTimeout(() => {
+      if (!w.closed) w.print();
+    }, 1000);
+  };
+
   const abrirHistorial = async (pedido: Pedido) => {
     try {
       const response = await api.get(`/productos-pedido/pedidos/${pedido.id}/pagos`)
@@ -155,6 +176,15 @@ export default function GestionPedidosPage() {
       } catch (error) {
         console.error('Error loading status history:', error)
         setStatusHistory([])
+      }
+      
+      // Cargar tickets de abonos
+      try {
+        const ticketsResponse = await api.get(`/tickets/by-sale/${pedido.id}`)
+        setTicketsByPedido(prev => ({ ...prev, [pedido.id]: ticketsResponse.data || [] }))
+      } catch (error) {
+        console.error('Error loading tickets:', error)
+        setTicketsByPedido(prev => ({ ...prev, [pedido.id]: [] }))
       }
       
       setShowHistorialModal(true)
@@ -181,6 +211,38 @@ export default function GestionPedidosPage() {
         metodo_pago: metodoPago,
         tipo_pago: 'saldo'
       })
+      
+      // Generate and save payment ticket
+      try {
+        const logoBase64 = await getLogoAsBase64()
+        const ticketHTML = generatePedidoTicketHTML({
+          pedido: pedidoSeleccionado,
+          producto: pedidoSeleccionado.producto,
+          vendedorEmail: pedidoSeleccionado.vendedor_email,
+          paymentData: {
+            amount: montoNum,
+            method: metodoPago,
+            previousPaid: pedidoSeleccionado.anticipo_pagado,
+            newPaid: pedidoSeleccionado.anticipo_pagado + montoNum,
+            previousBalance: pedidoSeleccionado.saldo_pendiente,
+            newBalance: pedidoSeleccionado.saldo_pendiente - montoNum
+          },
+          logoBase64
+        })
+        
+        // Save ticket to database
+        await saveTicket({
+          saleId: pedidoSeleccionado.id,
+          kind: `pedido-payment-${response.data.id}`,
+          html: ticketHTML
+        })
+        
+        // Print ticket
+        openAndPrintTicket(ticketHTML)
+      } catch (ticketError) {
+        console.error('Error generating ticket:', ticketError)
+        // Don't fail the payment if ticket fails
+      }
       
       setMsg('✅ Abono registrado correctamente')
       setShowPagoModal(false)
@@ -234,6 +296,7 @@ export default function GestionPedidosPage() {
     }
   }
 
+  /* FUNCIÓN ELIMINADA - Los tickets ahora se manejan dentro del historial
   const verTicket = async (pedido: Pedido) => {
     try {
       // Obtener todos los pagos del pedido para calcular el total de abonos
@@ -559,6 +622,7 @@ export default function GestionPedidosPage() {
       console.error('Error printing ticket:', e)
     }
   }
+  */
 
   const getEstadoColor = (estado: string) => {
     switch (estado) {
@@ -766,13 +830,13 @@ export default function GestionPedidosPage() {
                             onChange={(e) => actualizarEstado(p.id, e.target.value)}
                             className={`px-2 py-1 rounded-full text-xs font-medium border-0 ${getEstadoColor(p.estado)}`}
                           >
-                            <option value="pendiente">Pendiente</option>
+                            <option value="pendiente" disabled={p.estado === 'pagado'}>Pendiente</option>
                             <option value="pedido">Pedido</option>
                             <option value="recibido">Recibido</option>
                             <option value="pagado">Pagado</option>
                             <option value="entregado">Entregado</option>
                             <option value="cancelado">Cancelado</option>
-                            <option value="vencido">Vencido</option>
+                            <option value="vencido" disabled={p.estado === 'pagado'}>Vencido</option>
                           </select>
                         ) : (
                           <span className={`px-2 py-1 rounded-full text-xs font-medium ${getEstadoColor(p.estado)}`}>
@@ -782,13 +846,6 @@ export default function GestionPedidosPage() {
                       </td>
                       <td className="px-4 py-3 text-sm">
                         <div className="flex space-x-2">
-                          <button
-                            onClick={() => verTicket(p)}
-                            className="text-purple-600 hover:text-purple-800 text-xs"
-                            title="Ver ticket"
-                          >
-                            🎫 Ticket
-                          </button>
                           {p.saldo_pendiente > 0 && (
                             <button
                               onClick={() => abrirModalPago(p)}
@@ -934,25 +991,63 @@ export default function GestionPedidosPage() {
                       <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Monto</th>
                       <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Método</th>
                       <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Notas</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Ticket</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
-                    {pagosPedido.map((pago) => (
-                      <tr key={pago.id}>
-                        <td className="px-4 py-3 text-sm">
-                          {new Date(pago.created_at).toLocaleString('es-MX', { timeZone: 'America/Mexico_City' })}
-                        </td>
-                        <td className="px-4 py-3 text-sm font-medium text-green-600">
-                          ${pago.monto.toFixed(2)}
-                        </td>
-                        <td className="px-4 py-3 text-sm capitalize">
-                          {pago.metodo_pago}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-500">
-                          {pago.notas || '-'}
-                        </td>
-                      </tr>
-                    ))}
+                    {(() => {
+                      let abonoCounter = 0;
+                      const pedidoTickets = ticketsByPedido[pedidoHistorial.id] || [];
+                      console.log('DEBUG Pedido Tickets:', pedidoHistorial.id, pedidoTickets);
+                      return pagosPedido.map((pago) => {
+                        const isAbono = pago.tipo_pago !== 'anticipo';
+                        if (isAbono) abonoCounter += 1;
+                        
+                        // Find ticket for this payment
+                        // For initial payment (anticipo), look for 'payment' or 'sale' kind
+                        // For subsequent abonos, look for 'pedido-payment-{id}' kind
+                        let ticket;
+                        if (isAbono) {
+                          ticket = pedidoTickets.find(t => t.kind === `pedido-payment-${pago.id}`);
+                        } else {
+                          // Initial payment - look for 'payment' or 'sale' kind
+                          ticket = pedidoTickets.find(t => t.kind === 'payment' || t.kind === 'sale');
+                        }
+                        
+                        console.log(`DEBUG Pago ${pago.id}: tipo_pago=${pago.tipo_pago}, isAbono=${isAbono}, ticket=`, ticket);
+                        
+                        const ticketLabel = isAbono ? `Ticket ${abonoCounter}` : 'Ticket anticipo';
+                        
+                        return (
+                          <tr key={pago.id}>
+                            <td className="px-4 py-3 text-sm">
+                              {new Date(pago.created_at).toLocaleString('es-MX', { timeZone: 'America/Mexico_City' })}
+                            </td>
+                            <td className="px-4 py-3 text-sm font-medium text-green-600">
+                              ${pago.monto.toFixed(2)}
+                            </td>
+                            <td className="px-4 py-3 text-sm capitalize">
+                              {pago.metodo_pago}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-500">
+                              {pago.notas || '-'}
+                            </td>
+                            <td className="px-4 py-3 text-sm">
+                              {ticket ? (
+                                <button
+                                  className="text-blue-600 hover:text-blue-800 underline text-xs"
+                                  onClick={() => openTicketHtml(ticket.html)}
+                                >
+                                  {ticketLabel}
+                                </button>
+                              ) : (
+                                <span className="text-gray-400 text-xs">No disponible</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      });
+                    })()}
                   </tbody>
                 </table>
               </div>

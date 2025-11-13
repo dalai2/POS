@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Layout from '../components/Layout'
 import { api } from '../utils/api'
+import { getLogoAsBase64, generatePedidoTicketHTML, openAndPrintTicket, saveTicket } from '../utils/ticketGenerator'
 
 type ProductoPedido = { 
   id: number
@@ -510,7 +511,72 @@ export default function PedidosPage() {
         }
         
         console.log('Sending pedido data:', pedidoData)
-        await api.post('/productos-pedido/pedidos/', pedidoData)
+        const response = await api.post('/productos-pedido/pedidos/', pedidoData)
+        
+        // Generate ticket for all pedidos (both apartado and contado)
+        if (response.data) {
+          try {
+            const pedido = response.data
+            const producto = cart[0]?.producto // Get first product (assuming single item pedidos)
+            
+            if (producto) {
+              const logoBase64 = await getLogoAsBase64()
+              const vendedorEmail = users.find(u => u.id === pedido.user_id)?.email
+              
+              // Determine payment method for initial ticket
+              const efectivo = parseFloat(metodoPagoEfectivo) || 0
+              const tarjeta = parseFloat(metodoPagoTarjeta) || 0
+              let paymentMethod = 'N/A'
+              
+              if (efectivo > 0 && tarjeta > 0) {
+                paymentMethod = 'mixto'
+              } else if (efectivo > 0) {
+                paymentMethod = 'efectivo'
+              } else if (tarjeta > 0) {
+                paymentMethod = 'tarjeta'
+              }
+              
+              const ticketHTML = generatePedidoTicketHTML({
+                pedido,
+                producto,
+                vendedorEmail,
+                paymentData: tipoPedido === 'apartado' ? {
+                  amount: pedido.anticipo_pagado,
+                  method: paymentMethod,
+                  previousPaid: 0,
+                  newPaid: pedido.anticipo_pagado,
+                  previousBalance: pedido.total,
+                  newBalance: pedido.saldo_pendiente,
+                  efectivo: efectivo > 0 ? efectivo : undefined,
+                  tarjeta: tarjeta > 0 ? tarjeta : undefined
+                } : {
+                  amount: pedido.total,
+                  method: paymentMethod,
+                  previousPaid: 0,
+                  newPaid: pedido.total,
+                  previousBalance: pedido.total,
+                  newBalance: 0,
+                  efectivo: efectivo > 0 ? efectivo : undefined,
+                  tarjeta: tarjeta > 0 ? tarjeta : undefined
+                },
+                logoBase64
+              })
+              
+              // Save ticket to database
+              await saveTicket({
+                saleId: pedido.id,
+                kind: 'payment',
+                html: ticketHTML
+              })
+              
+              // Print ticket
+              openAndPrintTicket(ticketHTML)
+            }
+          } catch (ticketError) {
+            console.error('Error generating initial ticket:', ticketError)
+            // Don't fail the order if ticket fails
+          }
+        }
       }
       
       setMsg('✅ Pedido creado exitosamente')
@@ -1004,6 +1070,12 @@ export default function PedidosPage() {
                   step="0.001"
                   value={newProduct.peso_gramos}
                   onChange={e => setNewProduct({...newProduct, peso_gramos: e.target.value})}
+                />
+                <input
+                  className="border border-gray-300 rounded-lg px-3 py-2"
+                  placeholder="Quilataje (ej: 10k, 14k)"
+                  value={newProduct.quilataje}
+                  onChange={e => setNewProduct({...newProduct, quilataje: e.target.value})}
                 />
                 <input
                   className="border border-gray-300 rounded-lg px-3 py-2"

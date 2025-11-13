@@ -324,7 +324,7 @@ export default function ProductsPage() {
     <Layout>
     <div className="space-y-6">
         <div className="flex justify-between items-center">
-          <h1 className="text-3xl font-bold text-gray-800">💍 Productos/Joyería</h1>
+          <h1 className="text-3xl font-bold text-gray-800">💍 Inventario</h1>
           <div className="flex gap-2">
             {(userRole === 'owner' || userRole === 'admin') && (
               <>

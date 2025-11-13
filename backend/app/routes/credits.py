@@ -108,16 +108,30 @@ def get_credit_sales(
         # Combinar ambos tipos de pagos
         payments = []
         
-        # Agregar pagos iniciales (anticipo)
-        for p in initial_payments_query:
+        # Consolidar pagos iniciales (anticipo) en una sola entrada
+        if initial_payments_query:
+            # Sumar todos los pagos iniciales
+            total_inicial = sum(float(p.amount) for p in initial_payments_query)
+            metodo_efectivo = sum(float(p.amount) for p in initial_payments_query if p.method == 'cash')
+            metodo_tarjeta = sum(float(p.amount) for p in initial_payments_query if p.method == 'card')
+            
+            # Determinar el método de pago a mostrar
+            if metodo_efectivo > 0 and metodo_tarjeta > 0:
+                metodo_display = f"mixto (E:${metodo_efectivo:.2f} T:${metodo_tarjeta:.2f})"
+            elif metodo_tarjeta > 0:
+                metodo_display = "card"
+            else:
+                metodo_display = "cash"
+            
+            # Agregar un solo registro consolidado para el anticipo inicial
             payments.append({
-                "id": -p.id,  # ID negativo para diferenciar de abonos posteriores
+                "id": -initial_payments_query[0].id,  # ID negativo del primer pago
                 "sale_id": sale.id,
-                "amount": float(p.amount),
-                "payment_method": p.method,  # En Payment se llama 'method'
-                "user_id": sale.vendedor_id,  # Usar el vendedor de la venta
+                "amount": total_inicial,
+                "payment_method": metodo_display,
+                "user_id": sale.vendedor_id,
                 "notes": "Anticipo inicial",
-                "created_at": sale.created_at.isoformat()  # Usar fecha de la venta
+                "created_at": sale.created_at.isoformat()
             })
         
         # Agregar abonos posteriores
@@ -184,6 +198,7 @@ def register_payment(
     
     # Calculate remaining balance
     balance = float(sale.total) - float(sale.amount_paid or 0)
+    previous_paid = float(sale.amount_paid or 0)
     
     # Validate payment amount
     if data.amount <= 0:
@@ -206,6 +221,8 @@ def register_payment(
     # Update sale
     sale.amount_paid = float(sale.amount_paid or 0) + data.amount
     old_status = sale.credit_status
+    new_paid = sale.amount_paid
+    new_balance = float(sale.total) - new_paid
     
     # Update status if fully paid
     if sale.amount_paid >= sale.total:
@@ -228,7 +245,9 @@ def register_payment(
             notes=f"Abono de ${data.amount:.2f} - Venta completamente pagada"
         )
     
-    # Return payment as dict
+    # NOTE: Ticket generation for abonos moved to frontend to match sales logic
+    
+    # Return payment as dict with serialized created_at
     return {
         "id": payment.id,
         "sale_id": payment.sale_id,
@@ -238,8 +257,6 @@ def register_payment(
         "notes": payment.notes,
         "created_at": payment.created_at.isoformat()
     }
-
-
 @router.get("/payments/{sale_id}", response_model=List[CreditPaymentResponse])
 def get_sale_payments(
     sale_id: int,
@@ -277,8 +294,6 @@ def get_sale_payments(
     ]
     
     return payments
-
-
 @router.patch("/sales/{sale_id}/entregado")
 def mark_as_delivered(
     sale_id: int,
@@ -382,6 +397,13 @@ def change_sale_status(
     allowed_statuses = ['pendiente', 'pagado', 'entregado', 'vencido', 'cancelado']
     if data.status not in allowed_statuses:
         raise HTTPException(status_code=400, detail=f"Estado inválido. Debe ser uno de: {', '.join(allowed_statuses)}")
+    
+    # Validar que un apartado pagado no pueda moverse a pendiente o vencido
+    if sale.credit_status == 'pagado' and data.status in ['pendiente', 'vencido']:
+        raise HTTPException(
+            status_code=400, 
+            detail="Un apartado pagado no puede cambiar a estado pendiente o vencido"
+        )
     
     old_status = sale.credit_status
     sale.credit_status = data.status

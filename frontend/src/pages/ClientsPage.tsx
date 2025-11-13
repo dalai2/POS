@@ -85,15 +85,16 @@ export default function ClientsPage() {
 
   return (
     <Layout>
-      <div className="max-w-7xl mx-auto font-['Poppins',sans-serif]">
-        <div className="mb-6 flex items-center justify-between">
-          <h1 className="text-3xl font-bold text-gray-800 flex items-center gap-2">
+      <div className="max-w-7xl mx-auto font-['Poppins',sans-serif]" style={{ backgroundColor: '#f0f7f7', minHeight: 'calc(100vh - 64px)', padding: '2rem', borderRadius: '8px' }}>
+        <div className="mb-8 flex items-center justify-between">
+          <h1 className="text-3xl font-['Exo_2',sans-serif] font-bold flex items-center gap-3" style={{ color: '#2e4354' }}>
             <span className="text-4xl">👥</span>
             Clientes
           </h1>
           <button
             onClick={exportToExcel}
-            className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-green-600 text-white rounded-lg font-medium hover:from-emerald-700 hover:to-green-700 transition-all shadow-md flex items-center gap-2"
+            className="px-5 py-2.5 rounded-lg font-medium transition-all shadow-lg flex items-center gap-2 hover:shadow-xl hover:scale-105"
+            style={{ backgroundColor: '#2e4354', color: '#ffffff' }}
           >
             <span>📊</span>
             Exportar a Excel
@@ -101,53 +102,60 @@ export default function ClientsPage() {
         </div>
 
         {/* Search and Stats */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+        <div className="rounded-xl shadow-lg p-6 mb-6" style={{ backgroundColor: '#ffffff', border: '1px solid rgba(46, 67, 84, 0.1)' }}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-            <div className="flex gap-2">
+            <div className="flex gap-3">
               <input
                 type="text"
                 placeholder="Buscar por nombre o teléfono..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="flex-1 px-4 py-2.5 rounded-lg transition-all"
+                style={{ border: '2px solid rgba(46, 67, 84, 0.2)', outline: 'none' }}
+                onFocus={(e) => e.target.style.border = '2px solid #2e4354'}
+                onBlur={(e) => e.target.style.border = '2px solid rgba(46, 67, 84, 0.2)'}
               />
               <button
                 onClick={handleSearch}
-                className="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+                className="px-6 py-2.5 rounded-lg font-medium transition-all hover:shadow-lg"
+                style={{ backgroundColor: '#2e4354', color: '#ffffff' }}
               >
                 🔍 Buscar
               </button>
             </div>
             
             <div className="flex gap-2 items-center justify-end">
-              <span className="text-sm text-gray-600 font-medium">
-                Total de clientes: <span className="text-2xl font-bold text-blue-600">{customers.length}</span>
+              <span className="text-sm font-medium" style={{ color: '#2e4354' }}>
+                Total de clientes: <span className="text-2xl font-bold" style={{ color: '#ffe98e' }}>{ customers.length}</span>
               </span>
             </div>
           </div>
         </div>
 
         {/* Table */}
-        <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+        <div className="rounded-xl shadow-xl overflow-hidden" style={{ backgroundColor: '#ffffff', border: '1px solid rgba(46, 67, 84, 0.1)' }}>
           {loading ? (
             <div className="p-12 text-center">
-              <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-              <p className="mt-4 text-gray-600">Cargando clientes...</p>
+              <div className="inline-block animate-spin rounded-full h-12 w-12" style={{ borderBottom: '3px solid #2e4354' }}></div>
+              <p className="mt-4 font-medium" style={{ color: '#2e4354' }}>Cargando clientes...</p>
             </div>
           ) : customers.length === 0 ? (
             <div className="p-12 text-center">
               <span className="text-6xl mb-4 block">📭</span>
-              <p className="text-xl text-gray-600">No se encontraron clientes</p>
+              <p className="text-xl font-medium" style={{ color: '#2e4354' }}>No se encontraron clientes</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
+              <table className="min-w-full">
+                <thead style={{ backgroundColor: '#2e4354' }}>
                   <tr>
                     <th
                       onClick={() => handleSort('nombre')}
-                      className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-blue-700 transition-colors"
+                      className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider cursor-pointer transition-all"
+                      style={{ color: '#ffffff' }}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1e2d3a'}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                     >
                       <div className="flex items-center gap-2">
                         <span>Cliente</span>
@@ -156,7 +164,10 @@ export default function ClientsPage() {
                     </th>
                     <th
                       onClick={() => handleSort('telefono')}
-                      className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-blue-700 transition-colors"
+                      className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider cursor-pointer transition-all"
+                      style={{ color: '#ffffff' }}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1e2d3a'}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                     >
                       <div className="flex items-center gap-2">
                         <span>📱 Teléfono</span>
@@ -165,7 +176,10 @@ export default function ClientsPage() {
                     </th>
                     <th
                       onClick={() => handleSort('total_gastado')}
-                      className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-blue-700 transition-colors"
+                      className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider cursor-pointer transition-all"
+                      style={{ color: '#ffffff' }}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1e2d3a'}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                     >
                       <div className="flex items-center justify-end gap-2">
                         <span>💰 Total Gastado</span>
@@ -174,49 +188,58 @@ export default function ClientsPage() {
                     </th>
                     <th
                       onClick={() => handleSort('fecha_registro')}
-                      className="px-6 py-4 text-center text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-blue-700 transition-colors"
+                      className="px-6 py-4 text-center text-xs font-bold uppercase tracking-wider cursor-pointer transition-all"
+                      style={{ color: '#ffffff' }}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1e2d3a'}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                     >
                       <div className="flex items-center justify-center gap-2">
                         <span>📅 Fecha de Registro</span>
                         <span className="text-sm">{getSortIcon('fecha_registro')}</span>
                       </div>
                     </th>
-                    <th className="px-6 py-4 text-center text-xs font-bold uppercase tracking-wider">
+                    <th className="px-6 py-4 text-center text-xs font-bold uppercase tracking-wider" style={{ color: '#ffffff' }}>
                       🛒 V. Contado
                     </th>
-                    <th className="px-6 py-4 text-center text-xs font-bold uppercase tracking-wider">
+                    <th className="px-6 py-4 text-center text-xs font-bold uppercase tracking-wider" style={{ color: '#ffffff' }}>
                       💳 Apartados
                     </th>
-                    <th className="px-6 py-4 text-center text-xs font-bold uppercase tracking-wider">
+                    <th className="px-6 py-4 text-center text-xs font-bold uppercase tracking-wider" style={{ color: '#ffffff' }}>
                       📦 Pedidos
                     </th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody>
                   {customers.map((customer, index) => (
                     <tr
                       key={index}
-                      className="hover:bg-blue-50 transition-colors"
+                      className="transition-all"
+                      style={{ 
+                        backgroundColor: index % 2 === 0 ? '#ffffff' : '#f0f7f7',
+                        borderBottom: '1px solid rgba(46, 67, 84, 0.08)'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 233, 142, 0.15)'}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = index % 2 === 0 ? '#ffffff' : '#f0f7f7'}
                     >
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-3">
-                          <div className="flex-shrink-0 h-10 w-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white font-bold shadow-md">
+                          <div className="flex-shrink-0 h-10 w-10 rounded-full flex items-center justify-center text-white font-bold shadow-md" style={{ backgroundColor: '#2e4354' }}>
                             {customer.nombre.charAt(0).toUpperCase()}
                           </div>
-                          <div className="font-semibold text-gray-900">
+                          <div className="font-semibold" style={{ color: '#000000' }}>
                             {customer.nombre}
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-gray-600">
-                        {customer.telefono || <span className="text-gray-400 italic">Sin teléfono</span>}
+                      <td className="px-6 py-4 whitespace-nowrap" style={{ color: '#2e4354' }}>
+                        {customer.telefono || <span className="italic opacity-60">Sin teléfono</span>}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right">
-                        <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold bg-gradient-to-r from-green-100 to-emerald-100 text-green-800 border border-green-300">
+                        <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold shadow-sm" style={{ backgroundColor: 'rgba(255, 233, 142, 0.3)', color: '#000000', border: '1px solid rgba(255, 233, 142, 0.6)' }}>
                           ${customer.total_gastado.toFixed(2)}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-600">
+                      <td className="px-6 py-4 whitespace-nowrap text-center text-sm" style={{ color: '#2e4354' }}>
                         {new Date(customer.fecha_registro).toLocaleDateString('es-ES', {
                           year: 'numeric',
                           month: 'short',
@@ -224,17 +247,17 @@ export default function ClientsPage() {
                         })}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-center">
-                        <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-green-100 text-green-800 font-bold text-sm">
+                        <span className="inline-flex items-center justify-center w-8 h-8 rounded-full font-bold text-sm shadow-sm" style={{ backgroundColor: 'rgba(255, 233, 142, 0.4)', color: '#000000' }}>
                           {customer.num_ventas_contado}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-center">
-                        <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-yellow-100 text-yellow-800 font-bold text-sm">
+                        <span className="inline-flex items-center justify-center w-8 h-8 rounded-full font-bold text-sm shadow-sm" style={{ backgroundColor: 'rgba(255, 233, 142, 0.4)', color: '#000000' }}>
                           {customer.num_apartados}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-center">
-                        <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-purple-100 text-purple-800 font-bold text-sm">
+                        <span className="inline-flex items-center justify-center w-8 h-8 rounded-full font-bold text-sm shadow-sm" style={{ backgroundColor: 'rgba(255, 233, 142, 0.4)', color: '#000000' }}>
                           {customer.num_pedidos}
                         </span>
                       </td>

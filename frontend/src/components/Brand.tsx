@@ -5,7 +5,7 @@ export default function Brand() {
     <div>
       <div className="flex items-center gap-3">
         <div className="text-xl font-bold tracking-tight" style={{ color: '#2e4354', fontFamily: 'Poppins, sans-serif' }}>
-          POS Joyero by
+          POS Jewelry by
         </div>
         <img 
           src="/logo-velant.jpg" 

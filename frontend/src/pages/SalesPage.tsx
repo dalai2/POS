@@ -462,8 +462,10 @@ export default function SalesPage() {
 
       <!-- Header Info -->
       <div class="header-info">
-        <div><strong>FOLIO :</strong> ${String(saleData.id).padStart(6, '0')}</div>
+        ${saleData.tipo_venta === 'credito' ? `<div><strong>FOLIO DE APARTADO :</strong> ${saleData.folio_apartado || 'APT-' + String(saleData.id).padStart(6, '0')}</div>` : `<div><strong>FOLIO :</strong> ${String(saleData.id).padStart(6, '0')}</div>`}
         <div><strong>FECHA VENTA :</strong> ${formattedDate}</div>
+        ${saleData.tipo_venta === 'contado' ? `<div><strong>MÉTODO DE PAGO :</strong> ${efectivoPaid > 0 && tarjetaPaid > 0 ? 'EFECTIVO / TARJETA' : (efectivoPaid > 0 ? 'EFECTIVO' : 'TARJETA')}</div>` : ''}
+        ${saleData.tipo_venta === 'credito' && (efectivoPaid > 0 || tarjetaPaid > 0) ? `<div><strong>MÉTODO DE PAGO :</strong> ${efectivoPaid > 0 && tarjetaPaid > 0 ? 'EFECTIVO / TARJETA' : (efectivoPaid > 0 ? 'EFECTIVO' : 'TARJETA')}</div>` : ''}
         <div>HIDALGO #112 ZONA CENTRO, LOCAL 12, 23 Y 24 C.P: 37000. LEÓN, GTO.</div>
         <div>WhatsApp: 4776621788</div>
       </div>
@@ -520,6 +522,8 @@ export default function SalesPage() {
       ${saleData.tipo_venta === 'contado' && efectivoPaid > 0 ? `<div><strong>EFECTIVO :</strong> $${efectivoPaid.toFixed(2)}</div>` : ''}
       ${saleData.tipo_venta === 'contado' && tarjetaPaid > 0 ? `<div><strong>TARJETA :</strong> $${tarjetaPaid.toFixed(2)}</div>` : ''}
       ${saleData.tipo_venta === 'credito' && abonoInicial > 0 ? `<div><strong>ABONO INICIAL :</strong> $${abonoInicial.toFixed(2)}</div>` : ''}
+      ${saleData.tipo_venta === 'credito' && efectivoPaid > 0 && tarjetaPaid > 0 ? `<div style="margin-left: 20px;"><strong>EFECTIVO :</strong> $${efectivoPaid.toFixed(2)}</div>` : ''}
+      ${saleData.tipo_venta === 'credito' && efectivoPaid > 0 && tarjetaPaid > 0 ? `<div style="margin-left: 20px;"><strong>TARJETA :</strong> $${tarjetaPaid.toFixed(2)}</div>` : ''}
       ${saleData.tipo_venta === 'credito' && totalAbonos > 0 ? `<div><strong>TOTAL DE ABONOS :</strong> $${totalAbonos.toFixed(2)}</div>` : ''}
       ${saleData.tipo_venta === 'credito' && saldoAmount > 0 ? `<div><strong>SALDO PENDIENTE :</strong> $${saldoAmount.toFixed(2)}</div>` : ''}
     </div>
@@ -548,6 +552,17 @@ export default function SalesPage() {
 
       w.document.write(html)
       w.document.close()
+
+      // Persist ticket HTML on the backend
+      try {
+        await api.post('/tickets', {
+          sale_id: saleData.id,
+          kind: saleData.tipo_venta === 'credito' ? 'payment' : 'sale',
+          html
+        })
+      } catch (persistErr) {
+        console.warn('No se pudo guardar el ticket:', persistErr)
+      }
       
       // Wait for images to load before printing
       w.addEventListener('load', () => {

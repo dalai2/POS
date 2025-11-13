@@ -106,6 +106,7 @@ class PedidoOut(BaseModel):
     saldo_pendiente: float
     estado: str
     tipo_pedido: str
+    folio_pedido: Optional[str] = None  # Folio único para pedidos
     fecha_entrega_estimada: Optional[datetime] = None
     fecha_entrega_real: Optional[datetime] = None
     notas_cliente: Optional[str] = None
@@ -360,6 +361,11 @@ def create_pedido(
         )
         
         db.add(db_pedido)
+        db.flush()  # Get the pedido.id
+        
+        # Generate folio_pedido
+        db_pedido.folio_pedido = f"PED-{str(db_pedido.id).zfill(6)}"
+        
         db.commit()
         db.refresh(db_pedido)
         
@@ -419,6 +425,11 @@ def create_pedido(
         )
 
         db.add(db_pedido)
+        db.flush()  # Get the pedido.id
+        
+        # Generate folio_pedido
+        db_pedido.folio_pedido = f"PED-{str(db_pedido.id).zfill(6)}"
+        
         db.commit()
         db.refresh(db_pedido)
 
@@ -455,7 +466,8 @@ def create_pedido(
             user_email=user.email,
             notes=f"Pedido apartado creado - Anticipo: ${pedido.anticipo_pagado:.2f} (Efectivo: ${pedido.metodo_pago_efectivo or 0:.2f}, Tarjeta: ${pedido.metodo_pago_tarjeta or 0:.2f})"
         )
-
+        
+        # NOTE: Ticket generation moved to frontend to match sales logic
     return db_pedido
 
 @router.put("/pedidos/{pedido_id}", response_model=PedidoOut)
@@ -478,6 +490,16 @@ def update_pedido(
     old_estado = pedido.estado if 'estado' in pedido_update.dict(exclude_unset=True) else None
     
     update_data = pedido_update.dict(exclude_unset=True)
+    
+    # Validar que un pedido pagado no pueda moverse a pendiente o vencido
+    if 'estado' in update_data:
+        new_estado = update_data['estado']
+        if pedido.estado == 'pagado' and new_estado in ['pendiente', 'vencido']:
+            raise HTTPException(
+                status_code=400, 
+                detail="Un pedido pagado no puede cambiar a estado pendiente o vencido"
+            )
+    
     for field, value in update_data.items():
         setattr(pedido, field, value)
     
@@ -523,36 +545,56 @@ def get_pagos_pedido(
         PagoPedido.pedido_id == pedido_id
     ).order_by(PagoPedido.created_at.asc()).all()
     
-    # Verificar si hay pagos iniciales (anticipo o total)
-    tiene_pagos_iniciales = any(p.tipo_pago in ['anticipo', 'total'] for p in pagos_db)
+    # Separar pagos iniciales (anticipo/total) de abonos
+    pagos_iniciales = [p for p in pagos_db if p.tipo_pago in ['anticipo', 'total']]
+    abonos = [p for p in pagos_db if p.tipo_pago not in ['anticipo', 'total']]
     
-    # Solo agregar el "Anticipo inicial" falso si NO existen pagos reales con tipo anticipo/total
-    if float(pedido.anticipo_pagado) > 0 and not tiene_pagos_iniciales:
+    # Consolidar pagos iniciales en una sola entrada
+    if pagos_iniciales:
+        # Sumar todos los pagos iniciales
+        total_inicial = sum(float(p.monto) for p in pagos_iniciales)
+        metodo_efectivo = sum(float(p.monto) for p in pagos_iniciales if p.metodo_pago == 'efectivo')
+        metodo_tarjeta = sum(float(p.monto) for p in pagos_iniciales if p.metodo_pago == 'tarjeta')
+        
+        # Determinar el método de pago a mostrar
+        if metodo_efectivo > 0 and metodo_tarjeta > 0:
+            metodo_display = f"mixto (E:${metodo_efectivo:.2f} T:${metodo_tarjeta:.2f})"
+        elif metodo_tarjeta > 0:
+            metodo_display = "tarjeta"
+        else:
+            metodo_display = "efectivo"
+        
+        # Agregar un solo registro consolidado para el anticipo inicial
         pagos.append({
-            "id": -pedido.id,  # ID negativo para identificar el anticipo
+            "id": pagos_iniciales[0].id,  # Usar el ID del primer pago para referencia
+            "pedido_id": pedido.id,
+            "monto": total_inicial,
+            "metodo_pago": metodo_display,
+            "tipo_pago": pagos_iniciales[0].tipo_pago,
+            "notas": "Anticipo inicial",
+            "created_at": pagos_iniciales[0].created_at.isoformat()
+        })
+    elif float(pedido.anticipo_pagado) > 0:
+        # Fallback: Si no hay pagos registrados pero hay anticipo en el pedido
+        pagos.append({
+            "id": -pedido.id,
             "pedido_id": pedido.id,
             "monto": float(pedido.anticipo_pagado),
-            "metodo_pago": "efectivo",  # Por defecto
+            "metodo_pago": "efectivo",
+            "tipo_pago": "anticipo",
             "notas": "Anticipo inicial",
             "created_at": pedido.created_at.isoformat()
         })
     
-    # Agregar todos los pagos reales
-    for p in pagos_db:
-        # Determinar la etiqueta según el tipo de pago
-        if p.tipo_pago == 'anticipo':
-            nota = "Anticipo inicial"
-        elif p.tipo_pago == 'total':
-            nota = "Anticipo inicial"
-        else:
-            nota = "Abono"
-            
+    # Agregar abonos individuales
+    for p in abonos:
         pagos.append({
             "id": p.id,
             "pedido_id": p.pedido_id,
             "monto": float(p.monto),
             "metodo_pago": p.metodo_pago,
-            "notas": nota,
+            "tipo_pago": p.tipo_pago if p.tipo_pago else "abono",
+            "notas": "Abono",
             "created_at": p.created_at.isoformat()
         })
     
@@ -620,7 +662,16 @@ def registrar_pago_pedido(
             notes=f"Pago de ${pago.monto:.2f} - Pedido completamente pagado"
         )
     
-    return db_pago
+    # NOTE: Ticket generation for abonos moved to frontend to match sales logic
+    
+    # Return payment as dict with serialized created_at
+    return {
+        "id": db_pago.id,
+        "monto": float(db_pago.monto),
+        "metodo_pago": db_pago.metodo_pago,
+        "tipo_pago": db_pago.tipo_pago,
+        "created_at": db_pago.created_at.isoformat()
+    }
 
 # Import/Export endpoints
 @router.post("/import/")

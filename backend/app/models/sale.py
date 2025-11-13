@@ -25,6 +25,7 @@ class Sale(Base):
     vendedor_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)  # Salesperson
     utilidad = Column(Numeric(10, 2), nullable=True, default=0)  # Profit (total - total_cost)
     total_cost = Column(Numeric(10, 2), nullable=True, default=0)  # Total cost of items sold
+    folio_apartado = Column(String(50), nullable=True, index=True)  # Folio único para apartados (credito)
     
     # Credit sale fields
     customer_name = Column(String(255), nullable=True)

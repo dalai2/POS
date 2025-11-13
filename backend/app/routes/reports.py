@@ -1,8 +1,8 @@
-﻿from fastapi import APIRouter, Depends, Query
+﻿from fastapi import APIRouter, Depends, Query, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_, text
-from typing import Optional, List
+from typing import Optional, List, Dict, Any, Tuple
 from datetime import datetime, date
 
 from app.core.database import get_db
@@ -14,6 +14,7 @@ from app.models.product import Product
 from app.models.payment import Payment
 from app.models.credit_payment import CreditPayment
 from app.models.producto_pedido import Pedido, PagoPedido
+from app.models.cash_closure import CashClosure
 
 router = APIRouter()
 
@@ -39,6 +40,17 @@ class SalesByVendorReport(BaseModel):
     venta_total_pasiva: float  # Anticipos + Abonos
     cuentas_por_cobrar: float  # Saldo pendiente
     productos_liquidados: float  # Total de productos liquidados por vendedor
+
+
+class ResumenPiezas(BaseModel):
+    nombre: str  # Nombre del producto
+    modelo: Optional[str]  # Modelo del producto
+    quilataje: Optional[str]  # Kilataje
+    piezas_vendidas: int  # Piezas vendidas (contado + apartados pagados)
+    piezas_pedidas: int  # Piezas en pedidos (apartado tipo pedido)
+    piezas_apartadas: int  # Piezas en apartados (credito pendiente)
+    piezas_liquidadas: int  # Piezas liquidadas (apartados/pedidos pagados)
+    total_piezas: int  # Total de piezas (suma de todas las categorías)
 
 
 class CorteDeCajaReport(BaseModel):
@@ -75,10 +87,196 @@ class CorteDeCajaReport(BaseModel):
     returns_count: int
     returns_total: float
     
+    # Resumen de Piezas
+    resumen_piezas: List[ResumenPiezas]
+    
     # Vendors summary
     vendedores: List[SalesByVendorReport]
 
 
+def _ensure_cash_closure_table(db: Session) -> None:
+    # Lazily ensure the table exists without a migration
+    try:
+        CashClosure.__table__.create(bind=db.get_bind(), checkfirst=True)
+    except Exception:
+        # If creation fails, proceed; subsequent operations may still work if table exists
+        pass
+
+
+@router.post("/close-day")
+def close_day(
+    for_date: Optional[date] = None,
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_tenant),
+    current_user: User = Depends(require_admin),
+):
+    """
+    Cerrar Caja para un día: calcula las métricas existentes del día y las guarda una sola vez.
+    Si ya existe un cierre para ese día, devuelve un error 400 informando que ya fue realizado.
+    """
+    _ensure_cash_closure_table(db)
+
+    target_date = for_date or date.today()
+
+    # Checar si ya está cerrado
+    existing = (
+        db.query(CashClosure)
+        .filter(
+            CashClosure.tenant_id == tenant.id,
+            CashClosure.closure_date == target_date,
+        )
+        .first()
+    )
+    if existing:
+        raise HTTPException(status_code=400, detail="El cierre de este día ya fue realizado")
+
+    # Reutilizar cálculo existente de reporte detallado para ese día
+    # Llamamos internamente la lógica de get_detailed_corte_caja para un solo día
+    report = get_detailed_corte_caja(
+        start_date=target_date, end_date=target_date, db=db, tenant=tenant, current_user=current_user
+    )
+
+    # Guardar JSON completo tal cual (sin renombrar métricas)
+    closure = CashClosure(
+        tenant_id=tenant.id,
+        closure_date=target_date,
+        data=report,  # Pydantic dict-like return
+    )
+    db.add(closure)
+    db.commit()
+    db.refresh(closure)
+
+    return {"status": "ok", "message": "Cierre guardado", "date": target_date.isoformat(), "closure_id": closure.id}
+
+
+@router.get("/closure")
+def get_day_closure(
+    for_date: Optional[date] = None,
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_tenant),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Ver Caja: leer métricas guardadas del cierre del día.
+    Si no existe cierre, devolver 404 (pendiente).
+    """
+    _ensure_cash_closure_table(db)
+
+    target_date = for_date or date.today()
+    closure = (
+        db.query(CashClosure)
+        .filter(
+            CashClosure.tenant_id == tenant.id,
+            CashClosure.closure_date == target_date,
+        )
+        .first()
+    )
+    if not closure:
+        raise HTTPException(status_code=404, detail="Cierre pendiente para este día")
+
+    return closure.data
+
+
+@router.get("/closure-range")
+def get_closure_range(
+    start_date: date,
+    end_date: date,
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_tenant),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Ver Periodo: sumar cierres guardados en el rango. No recalcula nada.
+    Si hay días sin cierre, se omiten o quedan pendientes.
+    """
+    _ensure_cash_closure_table(db)
+
+    closures = (
+        db.query(CashClosure)
+        .filter(
+            CashClosure.tenant_id == tenant.id,
+            CashClosure.closure_date >= start_date,
+            CashClosure.closure_date <= end_date,
+        )
+        .order_by(CashClosure.closure_date.asc())
+        .all()
+    )
+
+    # Si no hay cierres, regresar vacío
+    if not closures:
+        return {"start_date": start_date.isoformat(), "end_date": end_date.isoformat(), "days": [], "totals": {}}
+
+    # Sumar métricas numéricas principales del DetailedCorteCajaReport
+    numeric_fields = [
+        "ventas_validas",
+        "contado_count",
+        "credito_count",
+        "total_contado",
+        "total_credito",
+        "liquidacion_count",
+        "liquidacion_total",
+        "ventas_pasivas_total",
+        "apartados_pendientes_anticipos",
+        "apartados_pendientes_abonos_adicionales",
+        "pedidos_pendientes_anticipos",
+        "pedidos_pendientes_abonos",
+        "cuentas_por_cobrar",
+        "total_vendido",
+        "costo_total",
+        "costo_ventas_contado",
+        "costo_apartados_pedidos_liquidados",
+        "utilidad_productos_liquidados",
+        "total_efectivo_contado",
+        "total_tarjeta_contado",
+        "total_ventas_activas_neto",
+        "utilidad_ventas_activas",
+        "utilidad_total",
+        "piezas_vendidas",
+        "pendiente_credito",
+        "pedidos_count",
+        "pedidos_total",
+        "pedidos_anticipos",
+        "pedidos_saldo",
+        "pedidos_liquidados_count",
+        "pedidos_liquidados_total",
+        "num_piezas_vendidas",
+        "num_piezas_entregadas",
+        "num_piezas_apartadas_pagadas",
+        "num_piezas_pedidos_pagados",
+        "num_piezas_pedidos_apartados_liquidados",
+        "num_solicitudes_apartado",
+        "num_pedidos_hechos",
+        "num_cancelaciones",
+        "num_apartados_vencidos",
+        "num_pedidos_vencidos",
+        "num_abonos_apartados",
+        "num_abonos_pedidos",
+        "subtotal_venta_tarjeta",
+        "total_tarjeta_neto",
+        "reembolso_apartados_cancelados",
+        "reembolso_pedidos_cancelados",
+        "saldo_vencido_apartados",
+        "saldo_vencido_pedidos",
+    ]
+
+    totals = {k: 0 for k in numeric_fields}
+    days = []
+    for c in closures:
+        data = c.data or {}
+        # keep list of days for UI
+        days.append({"date": c.closure_date.isoformat(), "has_closure": True})
+        for k in numeric_fields:
+            v = data.get(k)
+            if isinstance(v, (int, float)):
+                totals[k] += v
+
+    return {
+        "start_date": start_date.isoformat(),
+        "end_date": end_date.isoformat(),
+        "days": days,
+        "totals": totals,
+        "closed_days": len(days),
+    }
 @router.get("/corte-de-caja", response_model=CorteDeCajaReport)
 def get_corte_de_caja(
     start_date: Optional[date] = None,
@@ -222,6 +420,13 @@ def get_corte_de_caja(
     
     returns_count = len(returns)
     returns_total = sum(float(r.total) for r in returns)
+    
+    cancelaciones_ventas_contado_monto = returns_total
+    cancelaciones_ventas_contado_count = returns_count
+    piezas_canceladas_ventas = 0
+    for retorno in returns:
+        sale_items = db.query(SaleItem).filter(SaleItem.sale_id == retorno.id).all()
+        piezas_canceladas_ventas += sum(item.quantity for item in sale_items)
     
     # Calculate totals
     total_efectivo = efectivo_ventas + abonos_efectivo + pedidos_efectivo
@@ -441,6 +646,12 @@ class DetailedCorteCajaReport(BaseModel):
     saldo_vencido_apartados: float  # Total pagado en apartados vencidos
     saldo_vencido_pedidos: float  # Total pagado en pedidos vencidos
 
+    dashboard: Dict[str, Any]
+
+    # Resumen de Piezas
+    resumen_piezas: List[ResumenPiezas]
+    total_piezas_por_nombre_sin_liquidadas: Dict[str, int]  # Total de piezas por nombre excluyendo liquidadas
+
     # Vendedores
     vendedores: List[SalesByVendorReport]
 
@@ -573,6 +784,9 @@ def get_detailed_corte_caja(
         Pedido.estado == 'pagado'
     )
     pedidos_contado = pedidos_contado_query.all()
+    pedidos_contado_total_monto = sum(float(p.total) for p in pedidos_contado)
+    pedidos_contado_count = len(pedidos_contado)
+    num_piezas_pedidos_contado_total = sum((p.cantidad or 0) for p in pedidos_contado)
     
     # Get pedidos pendientes (NO pagados/entregados) para "Ventas pasivas"
     # SOLO pedidos apartados pendientes, NO pedidos de contado
@@ -598,6 +812,9 @@ def get_detailed_corte_caja(
     # Initialize counters for summary
     contado_count = 0
     credito_count = 0
+    ventas_credito_count = 0
+    ventas_credito_total = 0.0
+    credito_ventas = 0.0
     total_contado = 0.0  # Suma de ventas de contado
     total_credito = 0.0  # Suma de ventas a crédito pagadas/entregadas
     total_vendido = 0.0
@@ -620,6 +837,55 @@ def get_detailed_corte_caja(
     apartados_pendientes_abonos_adicionales = 0.0  # Abonos posteriores de apartados
     pedidos_pendientes_anticipos = 0.0  # Anticipos iniciales de pedidos
     pedidos_pendientes_abonos = 0.0  # Abonos posteriores de pedidos
+
+    # Dashboard aggregation helpers
+    anticipos_apartados_total_monto = 0.0
+    anticipos_apartados_count = 0
+    anticipos_apartados_efectivo_monto = 0.0
+    anticipos_apartados_efectivo_count = 0
+    anticipos_apartados_tarjeta_bruto = 0.0
+    anticipos_apartados_tarjeta_neto = 0.0
+    anticipos_apartados_tarjeta_count = 0
+
+    anticipos_pedidos_total_monto = 0.0
+    anticipos_pedidos_count = 0
+    anticipos_pedidos_efectivo_monto = 0.0
+    anticipos_pedidos_efectivo_count = 0
+    anticipos_pedidos_tarjeta_bruto = 0.0
+    anticipos_pedidos_tarjeta_neto = 0.0
+    anticipos_pedidos_tarjeta_count = 0
+
+    abonos_apartados_total_neto = 0.0
+    abonos_apartados_count = 0
+    abonos_apartados_efectivo_monto = 0.0
+    abonos_apartados_efectivo_count = 0
+    abonos_apartados_tarjeta_bruto = 0.0
+    abonos_apartados_tarjeta_neto = 0.0
+    abonos_apartados_tarjeta_count = 0
+
+    abonos_pedidos_total_neto = 0.0
+    abonos_pedidos_count = 0
+    abonos_pedidos_efectivo_monto = 0.0
+    abonos_pedidos_efectivo_count = 0
+    abonos_pedidos_tarjeta_bruto = 0.0
+    abonos_pedidos_tarjeta_neto = 0.0
+    abonos_pedidos_tarjeta_count = 0
+
+    cancelaciones_pedidos_contado_monto = 0.0
+    cancelaciones_pedidos_contado_count = 0
+    cancelaciones_pedidos_apartados_monto = 0.0
+    cancelaciones_pedidos_apartados_count = 0
+    cancelaciones_apartados_monto = 0.0
+    cancelaciones_apartados_count = 0
+    cancelaciones_ventas_contado_monto = 0.0
+    cancelaciones_ventas_contado_count = 0
+
+    piezas_vencidas_apartados = 0
+    piezas_vencidas_pedidos_apartados = 0
+    piezas_canceladas_ventas = 0
+    piezas_canceladas_pedidos_contado = 0
+    piezas_canceladas_pedidos_apartados = 0
+    piezas_canceladas_apartados = 0
     
     # Pedidos details (todos, liquidados y pendientes)
     pedidos_count = len(pedidos_liquidados) + len(pedidos_pendientes)
@@ -678,7 +944,9 @@ def get_detailed_corte_caja(
             total_efectivo_contado += sum(float(p.amount) for p in payments_contado if p.method in ['efectivo', 'cash', 'transferencia'])
             total_tarjeta_contado += sum(float(p.amount) for p in payments_contado if p.method in ['tarjeta', 'card'])
         else:  # credito (pagado o entregado) - Apartados liquidados
-            credito_count += 1
+            ventas_credito_count += 1
+            ventas_credito_total += float(sale.total)
+            credito_ventas += float(sale.total)
             
             # Calcular pagos de apartados liquidados aplicando descuento 3% a tarjetas
             pagos_apartado = db.query(Payment).filter(Payment.sale_id == sale.id).all()
@@ -996,6 +1264,13 @@ def get_detailed_corte_caja(
         anticipo_tarjeta = sum(float(p.amount) for p in pagos_iniciales if p.method in ['tarjeta', 'card'])
         anticipo_inicial = anticipo_efectivo + (anticipo_tarjeta * 0.97)  # Aplicar 3% descuento a tarjeta
         apartados_pendientes_anticipos += anticipo_inicial
+        anticipos_apartados_total_monto += anticipo_inicial
+        anticipos_apartados_count += len(pagos_iniciales)
+        anticipos_apartados_efectivo_monto += anticipo_efectivo
+        anticipos_apartados_efectivo_count += sum(1 for p in pagos_iniciales if p.method in ['efectivo', 'cash', 'transferencia'])
+        anticipos_apartados_tarjeta_bruto += anticipo_tarjeta
+        anticipos_apartados_tarjeta_neto += anticipo_tarjeta * 0.97
+        anticipos_apartados_tarjeta_count += sum(1 for p in pagos_iniciales if p.method in ['tarjeta', 'card'])
         
         # Obtener abonos posteriores de CreditPayment (pagos después de crear la venta)
         pagos_posteriores = db.query(CreditPayment).filter(
@@ -1063,13 +1338,15 @@ def get_detailed_corte_caja(
             pagos_posteriores = db.query(CreditPayment).filter(CreditPayment.sale_id == apartado.id).all()
             abonos_efectivo = sum(float(p.amount) for p in pagos_posteriores if p.payment_method in ['efectivo', 'cash', 'transferencia'])
             abonos_tarjeta = sum(float(p.amount) for p in pagos_posteriores if p.payment_method in ['tarjeta', 'card'])
-            abonos_neto = abonos_efectivo + (abonos_tarjeta * 0.97)
-            vendor_stats[apartado.vendedor_id]["abonos_apartados"] += abonos_neto
-            vendor_stats[apartado.vendedor_id]["venta_total_pasiva"] += abonos_neto
-            
-            # Cuentas por cobrar (saldo pendiente)
-            saldo = float(apartado.total) - float(apartado.amount_paid or 0)
-            vendor_stats[apartado.vendedor_id]["cuentas_por_cobrar"] += saldo
+            abonos_posteriores = abonos_efectivo + (abonos_tarjeta * 0.97)  # Aplicar 3% descuento a tarjeta
+            pedidos_pendientes_abonos += abonos_posteriores
+            abonos_apartados_total_neto += abonos_posteriores
+            abonos_apartados_count += len(pagos_posteriores)
+            abonos_apartados_efectivo_monto += abonos_efectivo
+            abonos_apartados_efectivo_count += sum(1 for p in pagos_posteriores if p.payment_method in ['efectivo', 'cash', 'transferencia'])
+            abonos_apartados_tarjeta_bruto += abonos_tarjeta
+            abonos_apartados_tarjeta_neto += abonos_tarjeta * 0.97
+            abonos_apartados_tarjeta_count += sum(1 for p in pagos_posteriores if p.payment_method in ['tarjeta', 'card'])
     
     # Calcular anticipos y abonos por vendedor (pedidos pendientes)
     for pedido in pedidos_pendientes:
@@ -1268,11 +1545,73 @@ def get_detailed_corte_caja(
     liquidacion_count = credito_count + pedidos_liquidados_count
     liquidacion_total = total_credito + pedidos_liquidados_total
     
-    # Calcular "Ventas pasivas totales" = Todos los anticipos y abonos de ventas NO liquidadas
-    ventas_pasivas_total = (apartados_pendientes_anticipos + 
-                           apartados_pendientes_abonos_adicionales + 
-                           pedidos_pendientes_anticipos + 
-                           pedidos_pendientes_abonos)
+    # Calcular "Ventas pasivas totales" = Todos los anticipos y abonos del día (de apartados y pedidos apartados)
+    # Anticipos de apartados del día (todos los Payment de ventas tipo credito creados en el día)
+    anticipos_apartados_dia = db.query(Payment).join(Sale).filter(
+        Sale.tenant_id == tenant.id,
+        Sale.tipo_venta == "credito",
+        Sale.created_at >= start_datetime,
+        Sale.created_at <= end_datetime
+    ).all()
+    anticipos_apartados_dia_total = 0.0
+    for pago in anticipos_apartados_dia:
+        amount = float(pago.amount or 0)
+        if pago.method in ['tarjeta', 'card']:
+            anticipos_apartados_dia_total += amount * 0.97  # Aplicar descuento 3%
+        else:
+            anticipos_apartados_dia_total += amount
+    
+    # Abonos de apartados del día (todos los CreditPayment creados en el día)
+    abonos_apartados_dia = db.query(CreditPayment).join(Sale).filter(
+        Sale.tenant_id == tenant.id,
+        CreditPayment.created_at >= start_datetime,
+        CreditPayment.created_at <= end_datetime
+    ).all()
+    abonos_apartados_dia_total = 0.0
+    for abono in abonos_apartados_dia:
+        amount = float(abono.amount or 0)
+        if abono.payment_method in ['tarjeta', 'card']:
+            abonos_apartados_dia_total += amount * 0.97  # Aplicar descuento 3%
+        else:
+            abonos_apartados_dia_total += amount
+    
+    # Anticipos de pedidos apartados del día (todos los PagoPedido tipo 'anticipo' de pedidos apartados creados en el día)
+    anticipos_pedidos_dia = db.query(PagoPedido).join(Pedido).filter(
+        Pedido.tenant_id == tenant.id,
+        Pedido.tipo_pedido == 'apartado',
+        PagoPedido.tipo_pago == 'anticipo',
+        PagoPedido.created_at >= start_datetime,
+        PagoPedido.created_at <= end_datetime
+    ).all()
+    anticipos_pedidos_dia_total = 0.0
+    for pago in anticipos_pedidos_dia:
+        amount = float(pago.monto or 0)
+        if pago.metodo_pago == 'tarjeta':
+            anticipos_pedidos_dia_total += amount * 0.97  # Aplicar descuento 3%
+        else:
+            anticipos_pedidos_dia_total += amount
+    
+    # Abonos de pedidos apartados del día (todos los PagoPedido tipo 'saldo' de pedidos apartados creados en el día)
+    abonos_pedidos_dia = db.query(PagoPedido).join(Pedido).filter(
+        Pedido.tenant_id == tenant.id,
+        Pedido.tipo_pedido == 'apartado',
+        PagoPedido.tipo_pago == 'saldo',
+        PagoPedido.created_at >= start_datetime,
+        PagoPedido.created_at <= end_datetime
+    ).all()
+    abonos_pedidos_dia_total = 0.0
+    for abono in abonos_pedidos_dia:
+        amount = float(abono.monto or 0)
+        if abono.metodo_pago == 'tarjeta':
+            abonos_pedidos_dia_total += amount * 0.97  # Aplicar descuento 3%
+        else:
+            abonos_pedidos_dia_total += amount
+    
+    # Calcular "Ventas pasivas totales" = Suma de todos los anticipos y abonos del día
+    ventas_pasivas_total = (anticipos_apartados_dia_total + 
+                           abonos_apartados_dia_total + 
+                           anticipos_pedidos_dia_total + 
+                           abonos_pedidos_dia_total)
     
     # Calcular "Cuentas por Cobrar" = Saldo pendiente de apartados + pedidos
     cuentas_por_cobrar = 0.0
@@ -1309,7 +1648,7 @@ def get_detailed_corte_caja(
     num_pedidos_hechos = db.query(Pedido).filter(
         Pedido.tenant_id == tenant.id,
         Pedido.created_at >= start_datetime,
-        Pedido.created_at <= end_datetime
+        Sale.created_at <= end_datetime
     ).count()
     
     # Número de apartados vencidos
@@ -1324,8 +1663,7 @@ def get_detailed_corte_caja(
     # Número de pedidos vencidos (SOLO pedidos apartados, NO pedidos de contado)
     num_pedidos_vencidos = db.query(Pedido).filter(
         Pedido.tenant_id == tenant.id,
-        Pedido.created_at >= start_datetime,
-        Pedido.created_at <= end_datetime,
+        Sale.created_at <= end_datetime,
         Pedido.tipo_pedido == 'apartado',  # Solo pedidos apartados pueden vencer
         Pedido.estado == "vencido"
     ).count()
@@ -1419,11 +1757,18 @@ def get_detailed_corte_caja(
         
         total_pagado_neto = pagos_efectivo + (pagos_tarjeta * 0.97) + abonos_efectivo + (abonos_tarjeta * 0.97)
         
+        sale_items = db.query(SaleItem).filter(SaleItem.sale_id == apartado.id).all()
+        piezas_apartado = sum(item.quantity for item in sale_items)
+        
         # Calcular reembolsos y saldos vencidos con descuento 3% aplicado
         if apartado.credit_status == "cancelado":
             reembolso_apartados_cancelados += total_pagado_neto
+            cancelaciones_apartados_monto += total_pagado_neto
+            cancelaciones_apartados_count += 1
+            piezas_canceladas_apartados += piezas_apartado
         elif apartado.credit_status == "vencido":
             saldo_vencido_apartados += total_pagado_neto
+            piezas_vencidas_apartados += piezas_apartado
         
         apartados_cancelados_vencidos.append({
             "id": apartado.id,
@@ -1488,7 +1833,8 @@ def get_detailed_corte_caja(
             "producto": producto_name,
             "monto": float(abono.monto),
             "metodo_pago": abono.metodo_pago,
-            "vendedor": vendedor
+            "vendedor": vendedor,
+            "producto": producto_name
         })
     
     # Generar historial de pedidos cancelados y vencidos
@@ -1527,8 +1873,18 @@ def get_detailed_corte_caja(
         # Calcular reembolsos y saldos vencidos con descuento 3% aplicado
         if pedido.estado == "cancelado":
             reembolso_pedidos_cancelados += total_pagado_neto
+            if pedido.tipo_pedido == "contado":
+                cancelaciones_pedidos_contado_monto += total_pagado_neto
+                cancelaciones_pedidos_contado_count += 1
+                piezas_canceladas_pedidos_contado += pedido.cantidad or 0
+            else:
+                cancelaciones_pedidos_apartados_monto += total_pagado_neto
+                cancelaciones_pedidos_apartados_count += 1
+                piezas_canceladas_pedidos_apartados += pedido.cantidad or 0
         elif pedido.estado == "vencido":
             saldo_vencido_pedidos += total_pagado_neto
+            if pedido.tipo_pedido == "apartado":
+                piezas_vencidas_pedidos_apartados += pedido.cantidad or 0
         
         pedidos_cancelados_vencidos.append({
             "id": pedido.id,
@@ -1809,6 +2165,270 @@ def get_detailed_corte_caja(
     for v in vendedores:
         print(f"  {v['vendedor_name']}: productos_liquidados = {v['productos_liquidados']}")
 
+    # ===== RESUMEN DE PIEZAS =====
+    resumen_piezas = _build_resumen_piezas(
+        db,
+        all_sales,
+        apartados_pendientes,
+        pedidos_pendientes,
+        pedidos_liquidados,
+    )
+    
+    # Calcular total de piezas por nombre excluyendo liquidadas
+    total_piezas_por_nombre_sin_liquidadas = _build_total_piezas_por_nombre_sin_liquidadas(resumen_piezas)
+
+    cancelaciones_total_monto = (
+        cancelaciones_ventas_contado_monto
+        + cancelaciones_pedidos_contado_monto
+        + cancelaciones_pedidos_apartados_monto
+        + cancelaciones_apartados_monto
+    )
+    cancelaciones_total_count = (
+        cancelaciones_ventas_contado_count
+        + cancelaciones_pedidos_contado_count
+        + cancelaciones_pedidos_apartados_count
+        + cancelaciones_apartados_count
+    )
+
+    piezas_vencidas_totales = piezas_vencidas_apartados + piezas_vencidas_pedidos_apartados
+    piezas_canceladas_totales = (
+        piezas_canceladas_ventas
+        + piezas_canceladas_pedidos_contado
+        + piezas_canceladas_pedidos_apartados
+        + piezas_canceladas_apartados
+    )
+    piezas_totales_vendidas_contado = num_piezas_vendidas
+    piezas_totales_vendidas_pedidos_contado = num_piezas_pedidos_contado_total
+    piezas_totales_vendidas = piezas_totales_vendidas_contado + piezas_totales_vendidas_pedidos_contado
+
+    dashboard = {
+        "ventas": {
+            "contado": {"monto": total_contado, "count": contado_count},
+            "pedidos_contado": {"monto": pedidos_contado_total_monto, "count": pedidos_contado_count},
+            "total": {
+                "monto": total_contado + pedidos_contado_total_monto,
+                "count": contado_count + pedidos_contado_count,
+            },
+        },
+        "anticipos": {
+            "apartados": {
+                "monto": anticipos_apartados_total_monto,
+                "count": anticipos_apartados_count,
+                "efectivo": {
+                    "monto": anticipos_apartados_efectivo_monto,
+                    "count": anticipos_apartados_efectivo_count,
+                },
+                "tarjeta": {
+                    "bruto": anticipos_apartados_tarjeta_bruto,
+                    "neto": anticipos_apartados_tarjeta_neto,
+                    "count": anticipos_apartados_tarjeta_count,
+                },
+            },
+            "pedidos_apartados": {
+                "monto": anticipos_pedidos_total_monto,
+                "count": anticipos_pedidos_count,
+                "efectivo": {
+                    "monto": anticipos_pedidos_efectivo_monto,
+                    "count": anticipos_pedidos_efectivo_count,
+                },
+                "tarjeta": {
+                    "bruto": anticipos_pedidos_tarjeta_bruto,
+                    "neto": anticipos_pedidos_tarjeta_neto,
+                    "count": anticipos_pedidos_tarjeta_count,
+                },
+            },
+            "total": {
+                "monto": anticipos_apartados_total_monto + anticipos_pedidos_total_monto,
+                "count": anticipos_apartados_count + anticipos_pedidos_count,
+            },
+        },
+        "abonos": {
+            "apartados": {
+                "monto": abonos_apartados_total_neto,
+                "count": abonos_apartados_count,
+                "efectivo": {
+                    "monto": abonos_apartados_efectivo_monto,
+                    "count": abonos_apartados_efectivo_count,
+                },
+                "tarjeta": {
+                    "bruto": abonos_apartados_tarjeta_bruto,
+                    "neto": abonos_apartados_tarjeta_neto,
+                    "count": abonos_apartados_tarjeta_count,
+                },
+            },
+            "pedidos_apartados": {
+                "monto": abonos_pedidos_total_neto,
+                "count": abonos_pedidos_count,
+                "efectivo": {
+                    "monto": abonos_pedidos_efectivo_monto,
+                    "count": abonos_pedidos_efectivo_count,
+                },
+                "tarjeta": {
+                    "bruto": abonos_pedidos_tarjeta_bruto,
+                    "neto": abonos_pedidos_tarjeta_neto,
+                    "count": abonos_pedidos_tarjeta_count,
+                },
+            },
+            "total": {
+                "monto": abonos_apartados_total_neto + abonos_pedidos_total_neto,
+                "count": abonos_apartados_count + abonos_pedidos_count,
+            },
+        },
+        "liquidaciones": {
+            "apartados": {"monto": total_credito, "count": credito_count},
+            "pedidos_apartados": {
+                "monto": pedidos_liquidados_total,
+                "count": pedidos_liquidados_count,
+            },
+            "total": {
+                "monto": total_credito + pedidos_liquidados_total,
+                "count": credito_count + pedidos_liquidados_count,
+            },
+        },
+        "vencimientos": {
+            "apartados": {
+                "monto": saldo_vencido_apartados,
+                "count": num_apartados_vencidos,
+            },
+            "pedidos_apartados": {
+                "monto": saldo_vencido_pedidos,
+                "count": num_pedidos_vencidos,
+            },
+            "total": {
+                "monto": saldo_vencido_apartados + saldo_vencido_pedidos,
+                "count": num_apartados_vencidos + num_pedidos_vencidos,
+            },
+        },
+        "cancelaciones": {
+            "ventas_contado": {
+                "monto": cancelaciones_ventas_contado_monto,
+                "count": cancelaciones_ventas_contado_count,
+            },
+            "pedidos_contado": {
+                "monto": cancelaciones_pedidos_contado_monto,
+                "count": cancelaciones_pedidos_contado_count,
+            },
+            "pedidos_apartados": {
+                "monto": cancelaciones_pedidos_apartados_monto,
+                "count": cancelaciones_pedidos_apartados_count,
+            },
+            "apartados": {
+                "monto": cancelaciones_apartados_monto,
+                "count": cancelaciones_apartados_count,
+            },
+            "total": {
+                "monto": cancelaciones_total_monto,
+                "count": cancelaciones_total_count,
+            },
+        },
+        "metodos_pago": {
+            "ventas_contado": {
+                "efectivo": {
+                    "monto": ventas_contado_efectivo_bruto,
+                    "count": ventas_contado_efectivo_count,
+                },
+                "tarjeta": {
+                    "bruto": ventas_contado_tarjeta_bruto,
+                    "neto": ventas_contado_tarjeta_bruto * 0.97,
+                    "count": ventas_contado_tarjeta_count,
+                },
+                "total": {
+                    "monto": ventas_contado_efectivo_bruto + (ventas_contado_tarjeta_bruto * 0.97),
+                    "count": ventas_contado_efectivo_count + ventas_contado_tarjeta_count,
+                },
+            },
+            "pedidos_contado": {
+                "efectivo": {
+                    "monto": pedidos_contado_efectivo_bruto,
+                    "count": pedidos_contado_efectivo_count,
+                },
+                "tarjeta": {
+                    "bruto": pedidos_contado_tarjeta_bruto,
+                    "neto": pedidos_contado_tarjeta_bruto * 0.97,
+                    "count": pedidos_contado_tarjeta_count,
+                },
+                "total": {
+                    "monto": pedidos_contado_efectivo_bruto + (pedidos_contado_tarjeta_bruto * 0.97),
+                    "count": pedidos_contado_efectivo_count + pedidos_contado_tarjeta_count,
+                },
+            },
+            "anticipos_apartados": {
+                "efectivo": {
+                    "monto": anticipos_apartados_efectivo_monto,
+                    "count": anticipos_apartados_efectivo_count,
+                },
+                "tarjeta": {
+                    "bruto": anticipos_apartados_tarjeta_bruto,
+                    "neto": anticipos_apartados_tarjeta_neto,
+                    "count": anticipos_apartados_tarjeta_count,
+                },
+                "total": {
+                    "monto": anticipos_apartados_total_monto,
+                    "count": anticipos_apartados_count,
+                },
+            },
+            "anticipos_pedidos_apartados": {
+                "efectivo": {
+                    "monto": anticipos_pedidos_efectivo_monto,
+                    "count": anticipos_pedidos_efectivo_count,
+                },
+                "tarjeta": {
+                    "bruto": anticipos_pedidos_tarjeta_bruto,
+                    "neto": anticipos_pedidos_tarjeta_neto,
+                    "count": anticipos_pedidos_tarjeta_count,
+                },
+                "total": {
+                    "monto": anticipos_pedidos_total_monto,
+                    "count": anticipos_pedidos_count,
+                },
+            },
+            "abonos_apartados": {
+                "efectivo": {
+                    "monto": abonos_apartados_efectivo_monto,
+                    "count": abonos_apartados_efectivo_count,
+                },
+                "tarjeta": {
+                    "bruto": abonos_apartados_tarjeta_bruto,
+                    "neto": abonos_apartados_tarjeta_neto,
+                    "count": abonos_apartados_tarjeta_count,
+                },
+                "total": {
+                    "monto": abonos_apartados_total_neto,
+                    "count": abonos_apartados_count,
+                },
+            },
+            "abonos_pedidos_apartados": {
+                "efectivo": {
+                    "monto": abonos_pedidos_efectivo_monto,
+                    "count": abonos_pedidos_efectivo_count,
+                },
+                "tarjeta": {
+                    "bruto": abonos_pedidos_tarjeta_bruto,
+                    "neto": abonos_pedidos_tarjeta_neto,
+                    "count": abonos_pedidos_tarjeta_count,
+                },
+                "total": {
+                    "monto": abonos_pedidos_total_neto,
+                    "count": abonos_pedidos_count,
+                },
+            },
+        },
+        "contadores": {
+            "piezas_totales_vendidas": piezas_totales_vendidas,
+            "piezas_totales_vendidas_contado": piezas_totales_vendidas_contado,
+            "piezas_totales_vendidas_pedidos_contado": piezas_totales_vendidas_pedidos_contado,
+            "piezas_entregadas": num_piezas_entregadas,
+            "piezas_vencidas_totales": piezas_vencidas_totales,
+            "piezas_vencidas_apartados": piezas_vencidas_apartados,
+            "piezas_vencidas_pedidos_apartados": piezas_vencidas_pedidos_apartados,
+            "piezas_canceladas_ventas": piezas_canceladas_ventas,
+            "piezas_canceladas_pedidos_contado": piezas_canceladas_pedidos_contado,
+            "piezas_canceladas_pedidos_apartados": piezas_canceladas_pedidos_apartados,
+            "piezas_canceladas_apartados": piezas_canceladas_apartados,
+            "piezas_canceladas_totales": piezas_canceladas_totales,
+        },
+    }
+
     return {
         "start_date": start_date.isoformat(),
         "end_date": end_date.isoformat(),
@@ -1862,6 +2482,9 @@ def get_detailed_corte_caja(
         "reembolso_pedidos_cancelados": reembolso_pedidos_cancelados,
         "saldo_vencido_apartados": saldo_vencido_apartados,
         "saldo_vencido_pedidos": saldo_vencido_pedidos,
+        "resumen_piezas": resumen_piezas,
+        "total_piezas_por_nombre_sin_liquidadas": total_piezas_por_nombre_sin_liquidadas,
+        "dashboard": dashboard,
         "vendedores": vendedores,
         "daily_summaries": daily_summaries,
         "sales_details": sales_details,
@@ -1872,6 +2495,150 @@ def get_detailed_corte_caja(
         "apartados_cancelados_vencidos": apartados_cancelados_vencidos,
         "pedidos_cancelados_vencidos": pedidos_cancelados_vencidos,
         "resumen_ventas_activas": resumen_ventas_activas,
-        "resumen_pagos": resumen_pagos
+        "resumen_pagos": resumen_pagos,
     }
+
+
+def _build_resumen_piezas(
+    db: Session,
+    all_sales: List[Sale],
+    apartados_pendientes: List[Sale],
+    pedidos_pendientes: List[Pedido],
+    pedidos_liquidados: List[Pedido],
+) -> List[dict]:
+    resumen_piezas_dict: Dict[Tuple[str, str, str], Dict[str, Any]] = {}
+
+    for sale in all_sales:
+        if sale.tipo_venta == "contado":
+            items = db.query(SaleItem).filter(SaleItem.sale_id == sale.id).all()
+            for item in items:
+                product = db.query(Product).filter(Product.id == item.product_id).first()
+                if not product:
+                    continue
+                key = (product.name or "Sin nombre", product.modelo or "N/A", product.quilataje or "N/A")
+                if key not in resumen_piezas_dict:
+                    resumen_piezas_dict[key] = {
+                        "nombre": product.name or "Sin nombre",
+                        "modelo": product.modelo or "N/A",
+                        "quilataje": product.quilataje or "N/A",
+                        "piezas_vendidas": 0,
+                        "piezas_pedidas": 0,
+                        "piezas_apartadas": 0,
+                        "piezas_liquidadas": 0,
+                        "total_piezas": 0,
+                    }
+                resumen_piezas_dict[key]["piezas_vendidas"] += item.quantity
+
+    for apartado in apartados_pendientes:
+        items = db.query(SaleItem).filter(SaleItem.sale_id == apartado.id).all()
+        for item in items:
+            product = db.query(Product).filter(Product.id == item.product_id).first()
+            if not product:
+                continue
+            key = (product.name or "Sin nombre", product.modelo or "N/A", product.quilataje or "N/A")
+            if key not in resumen_piezas_dict:
+                resumen_piezas_dict[key] = {
+                    "nombre": product.name or "Sin nombre",
+                    "modelo": product.modelo or "N/A",
+                    "quilataje": product.quilataje or "N/A",
+                    "piezas_vendidas": 0,
+                    "piezas_pedidas": 0,
+                    "piezas_apartadas": 0,
+                    "piezas_liquidadas": 0,
+                    "total_piezas": 0,
+                }
+            resumen_piezas_dict[key]["piezas_apartadas"] += item.quantity
+
+    for sale in all_sales:
+        if sale.tipo_venta == "credito" and sale.credit_status in ['pagado', 'entregado']:
+            items = db.query(SaleItem).filter(SaleItem.sale_id == sale.id).all()
+            for item in items:
+                product = db.query(Product).filter(Product.id == item.product_id).first()
+                if not product:
+                    continue
+                key = (product.name or "Sin nombre", product.modelo or "N/A", product.quilataje or "N/A")
+                if key not in resumen_piezas_dict:
+                    resumen_piezas_dict[key] = {
+                        "nombre": product.name or "Sin nombre",
+                        "modelo": product.modelo or "N/A",
+                        "quilataje": product.quilataje or "N/A",
+                        "piezas_vendidas": 0,
+                        "piezas_pedidas": 0,
+                        "piezas_apartadas": 0,
+                        "piezas_liquidadas": 0,
+                        "total_piezas": 0,
+                    }
+                resumen_piezas_dict[key]["piezas_liquidadas"] += item.quantity
+
+    from app.models.producto_pedido import ProductoPedido
+
+    for pedido in pedidos_pendientes:
+        producto = db.query(ProductoPedido).filter(ProductoPedido.id == pedido.producto_pedido_id).first()
+        if not producto:
+            continue
+        key = (producto.nombre or producto.modelo or "Sin nombre", producto.modelo or "N/A", producto.quilataje or "N/A")
+        if key not in resumen_piezas_dict:
+            resumen_piezas_dict[key] = {
+                "nombre": producto.nombre or producto.modelo or "Sin nombre",
+                "modelo": producto.modelo or "N/A",
+                "quilataje": producto.quilataje or "N/A",
+                "piezas_vendidas": 0,
+                "piezas_pedidas": 0,
+                "piezas_apartadas": 0,
+                "piezas_liquidadas": 0,
+                "total_piezas": 0,
+            }
+        resumen_piezas_dict[key]["piezas_pedidas"] += pedido.cantidad
+
+    for pedido in pedidos_liquidados:
+        producto = db.query(ProductoPedido).filter(ProductoPedido.id == pedido.producto_pedido_id).first()
+        if not producto:
+            continue
+        key = (producto.nombre or producto.modelo or "Sin nombre", producto.modelo or "N/A", producto.quilataje or "N/A")
+        if key not in resumen_piezas_dict:
+            resumen_piezas_dict[key] = {
+                "nombre": producto.nombre or producto.modelo or "Sin nombre",
+                "modelo": producto.modelo or "N/A",
+                "quilataje": producto.quilataje or "N/A",
+                "piezas_vendidas": 0,
+                "piezas_pedidas": 0,
+                "piezas_apartadas": 0,
+                "piezas_liquidadas": 0,
+                "total_piezas": 0,
+            }
+        resumen_piezas_dict[key]["piezas_liquidadas"] += pedido.cantidad
+
+    for data in resumen_piezas_dict.values():
+        data["total_piezas"] = (
+            data["piezas_vendidas"]
+            + data["piezas_pedidas"]
+            + data["piezas_apartadas"]
+            + data["piezas_liquidadas"]
+        )
+
+    return sorted(
+        resumen_piezas_dict.values(),
+        key=lambda x: (x["nombre"], x["modelo"], x["quilataje"]),
+    )
+
+
+def _build_total_piezas_por_nombre_sin_liquidadas(
+    resumen_piezas: List[dict]
+) -> Dict[str, int]:
+    """Agrupa el resumen de piezas solo por nombre, sumando todas las categorías excepto liquidadas"""
+    total_por_nombre_dict: Dict[str, int] = {}
+    
+    for pieza in resumen_piezas:
+        nombre = pieza["nombre"]
+        if nombre not in total_por_nombre_dict:
+            total_por_nombre_dict[nombre] = 0
+        
+        # Sumar todas las categorías excepto liquidadas
+        total_por_nombre_dict[nombre] += (
+            pieza["piezas_vendidas"]
+            + pieza["piezas_pedidas"]
+            + pieza["piezas_apartadas"]
+        )
+    
+    return total_por_nombre_dict
 

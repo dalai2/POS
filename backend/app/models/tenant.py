@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, UniqueConstraint, Boolean, DateTime
+from sqlalchemy import Column, Integer, String, Text, UniqueConstraint, Boolean, DateTime
 from datetime import datetime
 from sqlalchemy.orm import declarative_base
 
@@ -17,4 +17,5 @@ class Tenant(Base):
     plan = Column(String(100), nullable=True)
     stripe_customer_id = Column(String(255), nullable=True)
     stripe_subscription_id = Column(String(255), nullable=True)
+    logo = Column(Text, nullable=True)  # Base64 encoded logo
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)

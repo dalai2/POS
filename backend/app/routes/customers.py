@@ -103,7 +103,10 @@ def get_customers(
             if not customers_dict[key]['telefono'] and customer.telefono:
                 customers_dict[key]['telefono'] = customer.telefono
             # Mantener la fecha más antigua
-            if customer.fecha_registro < customers_dict[key]['fecha_registro']:
+            # Normalizar ambas fechas para comparación (remover timezone info si existe)
+            fecha_nueva = customer.fecha_registro.replace(tzinfo=None) if customer.fecha_registro and customer.fecha_registro.tzinfo else customer.fecha_registro
+            fecha_existente = customers_dict[key]['fecha_registro'].replace(tzinfo=None) if customers_dict[key]['fecha_registro'].tzinfo else customers_dict[key]['fecha_registro']
+            if fecha_nueva and fecha_existente and fecha_nueva < fecha_existente:
                 customers_dict[key]['fecha_registro'] = customer.fecha_registro
     
     # Procesar apartados
@@ -124,7 +127,11 @@ def get_customers(
             customers_dict[key]['num_apartados'] += customer.num_apartados
             if not customers_dict[key]['telefono'] and customer.telefono:
                 customers_dict[key]['telefono'] = customer.telefono
-            if customer.fecha_registro < customers_dict[key]['fecha_registro']:
+            # Mantener la fecha más antigua
+            # Normalizar ambas fechas para comparación (remover timezone info si existe)
+            fecha_nueva = customer.fecha_registro.replace(tzinfo=None) if customer.fecha_registro and customer.fecha_registro.tzinfo else customer.fecha_registro
+            fecha_existente = customers_dict[key]['fecha_registro'].replace(tzinfo=None) if customers_dict[key]['fecha_registro'].tzinfo else customers_dict[key]['fecha_registro']
+            if fecha_nueva and fecha_existente and fecha_nueva < fecha_existente:
                 customers_dict[key]['fecha_registro'] = customer.fecha_registro
     
     # Procesar pedidos
@@ -145,7 +152,11 @@ def get_customers(
             customers_dict[key]['num_pedidos'] += customer.num_pedidos
             if not customers_dict[key]['telefono'] and customer.telefono:
                 customers_dict[key]['telefono'] = customer.telefono
-            if customer.fecha_registro < customers_dict[key]['fecha_registro']:
+            # Mantener la fecha más antigua
+            # Normalizar ambas fechas para comparación (remover timezone info si existe)
+            fecha_nueva = customer.fecha_registro.replace(tzinfo=None) if customer.fecha_registro and customer.fecha_registro.tzinfo else customer.fecha_registro
+            fecha_existente = customers_dict[key]['fecha_registro'].replace(tzinfo=None) if customers_dict[key]['fecha_registro'].tzinfo else customers_dict[key]['fecha_registro']
+            if fecha_nueva and fecha_existente and fecha_nueva < fecha_existente:
                 customers_dict[key]['fecha_registro'] = customer.fecha_registro
     
     # Convertir a lista

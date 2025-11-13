@@ -64,6 +64,7 @@ class SaleOut(BaseModel):
     vendedor_id: int | None = None
     utilidad: condecimal(max_digits=10, decimal_places=2) | None = None
     total_cost: condecimal(max_digits=10, decimal_places=2) | None = None
+    folio_apartado: str | None = None  # Folio único para apartados
 
     # Credit sale fields
     customer_name: str | None = None
@@ -175,6 +176,11 @@ async def create_sale(
         # Set credit status for credit sales
         if tipo_venta == "abono":
             sale.credit_status = "pendiente"
+        # Generate folio for apartados (credito sales)
+        if tipo_venta == "credito":
+            # Flush to get sale.id
+            db.flush()
+            sale.folio_apartado = f"APT-{str(sale.id).zfill(6)}"
     if vendedor_id is not None:
         sale.vendedor_id = vendedor_id
     if utilidad is not None:

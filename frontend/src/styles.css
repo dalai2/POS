@@ -2,9 +2,16 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Aplicar Poppins como fuente por defecto */
+/* Aplicar Poppins como fuente por defecto para todo el texto */
 * {
   font-family: 'Poppins', sans-serif;
+}
+
+/* Aplicar Exo 2 para todos los títulos (h1, h2, h3, h4, h5, h6) */
+h1, h2, h3, h4, h5, h6,
+.text-2xl, .text-3xl, .text-4xl, .text-xl, .text-lg {
+  font-family: 'Exo 2', sans-serif;
+  font-weight: 600;
 }
 
 /* Variables CSS para los colores del branding */

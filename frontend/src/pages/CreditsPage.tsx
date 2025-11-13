@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
 import { api } from '../utils/api';
+import { getLogoAsBase64, openAndPrintTicket, saveTicket, generateApartadoPaymentTicketHTML } from '../utils/ticketGenerator';
 
 interface CreditPayment {
   id: number;
@@ -8,6 +9,14 @@ interface CreditPayment {
   payment_method: string;
   user_id: number;
   notes: string | null;
+  created_at: string;
+}
+
+interface TicketRecord {
+  id: number;
+  sale_id: number;
+  kind: string;
+  html: string;
   created_at: string;
 }
 
@@ -44,6 +53,7 @@ export default function CreditsPage() {
   const [showHistorialModal, setShowHistorialModal] = useState(false);
   const [creditHistorial, setCreditHistorial] = useState<CreditSale | null>(null);
   const [statusHistory, setStatusHistory] = useState<StatusHistoryEntry[]>([]);
+  const [ticketsBySale, setTicketsBySale] = useState<Record<number, TicketRecord[]>>({});
   const [paymentData, setPaymentData] = useState({
     amount: '',
     payment_method: 'efectivo',
@@ -76,14 +86,63 @@ export default function CreditsPage() {
     if (!selectedCredit) return;
 
     try {
-      await api.post('/credits/payments', {
+      const amount = parseFloat(paymentData.amount);
+      const response = await api.post('/credits/payments', {
         sale_id: selectedCredit.id,
-        amount: parseFloat(paymentData.amount),
+        amount,
         payment_method: paymentData.payment_method,
         notes: paymentData.notes || null,
       });
 
-      alert('Pago registrado exitosamente');
+      // Generate and save ticket
+      try {
+        // Get sale items
+        const saleResponse = await api.get(`/sales/${selectedCredit.id}`);
+        const saleItems = saleResponse.data.items || [];
+        
+        // Generate ticket HTML
+        const logoBase64 = await getLogoAsBase64();
+        const previousPaid = selectedCredit.amount_paid;
+        const newPaid = previousPaid + amount;
+        const newBalance = selectedCredit.total - newPaid;
+        
+        const ticketHTML = generateApartadoPaymentTicketHTML({
+          sale: selectedCredit,
+          saleItems,
+          paymentData: {
+            amount,
+            method: paymentData.payment_method,
+            previousPaid,
+            newPaid,
+            newBalance
+          },
+          vendedorEmail: selectedCredit.vendedor_email || undefined,
+          logoBase64
+        });
+        
+        // Save ticket to database
+        await saveTicket({
+          saleId: selectedCredit.id,
+          kind: `payment-${response.data.id}`,
+          html: ticketHTML
+        });
+        
+        // Print ticket
+        openAndPrintTicket(ticketHTML);
+      } catch (ticketError) {
+        console.error('Error generating ticket:', ticketError);
+        // Don't fail the payment if ticket fails
+      }
+
+      // Reload tickets for this sale to include the new payment ticket
+      try {
+        const ticketsResponse = await api.get(`/tickets/by-sale/${selectedCredit.id}`);
+        setTicketsBySale(prev => ({ ...prev, [selectedCredit.id]: ticketsResponse.data || [] }));
+      } catch (err) {
+        console.error('Error reloading tickets:', err);
+      }
+
+      alert('Pago registrado exitosamente. El ticket ha sido generado.');
       setShowPaymentForm(false);
       setSelectedCredit(null);
       setPaymentData({ amount: '', payment_method: 'efectivo', notes: '' });
@@ -107,6 +166,17 @@ export default function CreditsPage() {
     setShowPaymentForm(true);
   };
 
+  const openTicketHtml = (html: string) => {
+    const w = window.open('', '_blank');
+    if (!w) return;
+    w.document.write(html);
+    w.document.close();
+    w.addEventListener('load', () => setTimeout(() => w.print(), 300));
+    setTimeout(() => {
+      if (!w.closed) w.print();
+    }, 1000);
+  };
+
   const abrirHistorial = async (credit: CreditSale) => {
     setCreditHistorial(credit);
     
@@ -117,6 +187,15 @@ export default function CreditsPage() {
     } catch (error) {
       console.error('Error loading status history:', error);
       setStatusHistory([]);
+    }
+    
+    // Cargar tickets de abonos
+    try {
+      const ticketsResponse = await api.get(`/tickets/by-sale/${credit.id}`);
+      setTicketsBySale(prev => ({ ...prev, [credit.id]: ticketsResponse.data || [] }));
+    } catch (error) {
+      console.error('Error loading tickets:', error);
+      setTicketsBySale(prev => ({ ...prev, [credit.id]: [] }));
     }
     
     setShowHistorialModal(true);
@@ -380,10 +459,10 @@ export default function CreditsPage() {
                                 : 'bg-yellow-100 text-yellow-800'
                             }`}
                           >
-                            <option value="pendiente">Pendiente</option>
+                            <option value="pendiente" disabled={credit.credit_status === 'pagado'}>Pendiente</option>
                             <option value="pagado">Pagado</option>
                             <option value="entregado">Entregado</option>
-                            <option value="vencido">Vencido</option>
+                            <option value="vencido" disabled={credit.credit_status === 'pagado'}>Vencido</option>
                             <option value="cancelado">Cancelado</option>
                           </select>
                         ) : (
@@ -532,25 +611,60 @@ export default function CreditsPage() {
                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Monto</th>
                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Método</th>
                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Notas</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Ticket</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
-                      {creditHistorial.payments.map((pago) => (
-                        <tr key={pago.id}>
-                          <td className="px-4 py-3 text-sm">
-                            {new Date(pago.created_at).toLocaleString('es-MX', { timeZone: 'America/Mexico_City' })}
-                          </td>
-                          <td className="px-4 py-3 text-sm font-medium text-green-600">
-                            ${pago.amount.toFixed(2)}
-                          </td>
-                          <td className="px-4 py-3 text-sm capitalize">
-                            {pago.payment_method}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-gray-500">
-                            {pago.notes || '-'}
-                          </td>
-                        </tr>
-                      ))}
+                      {(() => {
+                        let abonoCounter = 0;
+                        const saleTickets = ticketsBySale[creditHistorial.id] || [];
+                        return creditHistorial.payments.map((pago) => {
+                          const isAbono = pago.id > 0;
+                          if (isAbono) abonoCounter += 1;
+                          
+                          // Find ticket for this payment
+                          // For initial payment (anticipo), look for 'payment' or 'sale' kind
+                          // For subsequent abonos, look for 'payment-{id}' kind
+                          let ticket;
+                          if (isAbono) {
+                            ticket = saleTickets.find(t => t.kind === `payment-${pago.id}`);
+                          } else {
+                            // Initial payment - look for 'payment' or 'sale' kind
+                            ticket = saleTickets.find(t => t.kind === 'payment' || t.kind === 'sale');
+                          }
+                          
+                          const ticketLabel = isAbono ? `Ticket ${abonoCounter}` : 'Ticket anticipo';
+                          
+                          return (
+                            <tr key={pago.id}>
+                              <td className="px-4 py-3 text-sm">
+                                {new Date(pago.created_at).toLocaleString('es-MX', { timeZone: 'America/Mexico_City' })}
+                              </td>
+                              <td className="px-4 py-3 text-sm font-medium text-green-600">
+                                ${pago.amount.toFixed(2)}
+                              </td>
+                              <td className="px-4 py-3 text-sm capitalize">
+                                {pago.payment_method}
+                              </td>
+                              <td className="px-4 py-3 text-sm text-gray-500">
+                                {pago.notes || '-'}
+                              </td>
+                              <td className="px-4 py-3 text-sm">
+                                {ticket ? (
+                                  <button
+                                    className="text-blue-600 hover:text-blue-800 underline text-xs"
+                                    onClick={() => openTicketHtml(ticket.html)}
+                                  >
+                                    {ticketLabel}
+                                  </button>
+                                ) : (
+                                  <span className="text-gray-400 text-xs">No disponible</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        });
+                      })()}
                     </tbody>
                   </table>
                 </div>

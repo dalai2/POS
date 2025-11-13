@@ -1,225 +1,28 @@
-import { useState } from 'react';
 import Layout from '../components/Layout';
-import { api } from '../utils/api';
-
-interface CorteDeCajaReport {
-  start_date: string;
-  end_date: string;
-  ventas_contado_count: number;
-  ventas_contado_total: number;
-  ventas_credito_count: number;
-  ventas_credito_total: number;
-  efectivo_ventas: number;
-  tarjeta_ventas: number;
-  credito_ventas: number;
-  abonos_efectivo: number;
-  abonos_tarjeta: number;
-  abonos_total: number;
-  pedidos_count: number;
-  pedidos_total: number;
-  pedidos_anticipos: number;
-  pedidos_saldo: number;
-  pedidos_efectivo: number;
-  pedidos_tarjeta: number;
-  pedidos_pagos_total: number;
-  total_efectivo: number;
-  total_tarjeta: number;
-  total_revenue: number;
-  total_cost: number;
-  total_profit: number;
-  profit_margin: number;
-  returns_count: number;
-  returns_total: number;
-  vendedores: Array<{
-    vendedor_id: number;
-    vendedor_name: string;
-    sales_count: number;
-    contado_count: number;
-    credito_count: number;
-    total_contado: number;
-    total_credito: number;
-    total_profit: number;
-  }>;
-}
-
-interface DetailedCorteCajaReport {
-  start_date: string;
-  end_date: string;
-  generated_at: string;
-  ventas_validas: number;  // Cantidad de ventas de contado
-  contado_count: number;
-  credito_count: number;
-  total_contado: number;  // Suma de ventas de contado
-  total_credito: number;  // Suma de ventas a crédito pagadas/entregadas
-  liquidacion_count: number;  // Apartados + Pedidos liquidados
-  liquidacion_total: number;  // Suma de apartados + pedidos liquidados
-  ventas_pasivas_total: number;  // Anticipos/abonos de ventas NO liquidadas
-  apartados_pendientes_anticipos: number;  // Anticipos iniciales de apartados
-  apartados_pendientes_abonos_adicionales: number;  // Abonos posteriores de apartados
-  pedidos_pendientes_anticipos: number;  // Anticipos de pedidos pendientes
-  pedidos_pendientes_abonos: number;  // Abonos de pedidos pendientes
-  cuentas_por_cobrar: number;  // Saldo pendiente de apartados + pedidos
-  total_vendido: number;
-  costo_total: number;
-  costo_ventas_contado: number;  // Costo total de ventas de contado (Ventas Activas)
-  costo_apartados_pedidos_liquidados: number;  // Costo de apartados y pedidos liquidados
-  utilidad_productos_liquidados: number;  // Utilidad de apartados y pedidos liquidados
-  total_efectivo_contado: number;  // Total pagado en efectivo en ventas de contado
-  total_tarjeta_contado: number;  // Total pagado con tarjeta en ventas de contado
-  utilidad_ventas_activas: number;  // Utilidad de ventas activas (con descuento 3% tarjeta)
-  utilidad_total: number;
-  piezas_vendidas: number;
-  pendiente_credito: number;
-  pedidos_count: number;
-  pedidos_total: number;
-  pedidos_anticipos: number;
-  pedidos_saldo: number;
-  pedidos_liquidados_count: number;
-  pedidos_liquidados_total: number;
-  num_piezas_vendidas: number;
-  num_piezas_entregadas: number;
-  num_piezas_apartadas_pagadas: number;
-  num_piezas_pedidos_pagados: number;
-  num_piezas_pedidos_apartados_liquidados: number;
-  num_solicitudes_apartado: number;
-  num_pedidos_hechos: number;
-  resumen_ventas_activas: Array<{
-    tipo_movimiento: string;
-    metodo_pago: string;
-    cantidad_operaciones: number;
-    subtotal: number;
-    total: number;
-  }>;
-  resumen_pagos: Array<{
-    tipo_movimiento: string;
-    metodo_pago: string;
-    cantidad_operaciones: number;
-    subtotal: number;
-    total: number;
-  }>;
-  num_cancelaciones: number;
-  num_apartados_vencidos: number;
-  num_pedidos_vencidos: number;
-  num_abonos_apartados: number;
-  num_abonos_pedidos: number;
-  subtotal_venta_tarjeta: number;
-  total_tarjeta_neto: number;
-  reembolso_apartados_cancelados: number;
-  reembolso_pedidos_cancelados: number;
-  saldo_vencido_apartados: number;
-  saldo_vencido_pedidos: number;
-  vendedores: Array<{
-    vendedor_id: number;
-    vendedor_name: string;
-    sales_count: number;
-    contado_count: number;
-    credito_count: number;
-    total_contado: number;
-    total_credito: number;
-    total_profit: number;
-    total_efectivo_contado: number;
-    total_tarjeta_contado: number;
-    total_tarjeta_neto: number;
-    anticipos_apartados: number;
-    anticipos_pedidos: number;
-    abonos_apartados: number;
-    abonos_pedidos: number;
-    ventas_total_activa: number;
-    venta_total_pasiva: number;
-    cuentas_por_cobrar: number;
-    productos_liquidados: number;
-  }>;
-  daily_summaries: Array<{
-    fecha: string;
-    costo: number;
-    venta: number;
-    utilidad: number;
-  }>;
-  sales_details: Array<{
-    id: number;
-    fecha: string;
-    cliente: string;
-    piezas: number;
-    total: number;
-    estado: string;
-    tipo: string;
-    vendedor: string;
-    efectivo: number;
-    tarjeta: number;
-  }>;
-  historial_apartados: Array<{
-    id: number;
-    fecha: string;
-    cliente: string;
-    total: number;
-    anticipo: number;
-    saldo: number;
-    estado: string;
-    vendedor: string;
-  }>;
-  historial_pedidos: Array<{
-    id: number;
-    fecha: string;
-    cliente: string;
-    producto: string;
-    cantidad: number;
-    total: number;
-    anticipo: number;
-    saldo: number;
-    estado: string;
-    vendedor: string;
-  }>;
-  historial_abonos_apartados: Array<{
-    id: number;
-    fecha: string;
-    cliente: string;
-    monto: number;
-    metodo_pago: string;
-    vendedor: string;
-  }>;
-  historial_abonos_pedidos: Array<{
-    id: number;
-    fecha: string;
-    cliente: string;
-    producto: string;
-    monto: number;
-    metodo_pago: string;
-    vendedor: string;
-  }>;
-  apartados_cancelados_vencidos: Array<{
-    id: number;
-    fecha: string;
-    cliente: string;
-    total: number;
-    anticipo: number;
-    saldo: number;
-    estado: string;
-    vendedor: string;
-    motivo: string;
-  }>;
-  pedidos_cancelados_vencidos: Array<{
-    id: number;
-    fecha: string;
-    cliente: string;
-    producto: string;
-    cantidad: number;
-    total: number;
-    anticipo: number;
-    saldo: number;
-    estado: string;
-    vendedor: string;
-    motivo: string;
-  }>;
-}
+import { useCorteCajaReport } from '../hooks/useCorteCajaReport';
+import { SummaryReportView } from '../components/reports/SummaryReportView';
+import { AnalyticsDashboard } from '../components/reports/AnalyticsDashboard';
 
 export default function ReportsPage() {
-  const [loading, setLoading] = useState(false);
-  const [report, setReport] = useState<CorteDeCajaReport | null>(null);
-  const [detailedReport, setDetailedReport] = useState<DetailedCorteCajaReport | null>(null);
-  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
-  const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
-  const [reportType, setReportType] = useState<'summary' | 'detailed'>('detailed');
   const userRole = localStorage.getItem('role') || '';
+  const {
+    startDate,
+    endDate,
+    reportType,
+    loading,
+    report,
+    detailedReport,
+    closeMsg,
+    closing,
+    isDayClosed,
+    usingClosure,
+    setStartDate,
+    setEndDate,
+    generateReport,
+    downloadCsv,
+    closeDay,
+    viewClosedDay,
+  } = useCorteCajaReport();
 
   // Verificar permisos
   if (userRole !== 'admin' && userRole !== 'owner') {
@@ -235,150 +38,6 @@ export default function ReportsPage() {
       </Layout>
     )
   }
-
-  const generateReport = async () => {
-    setLoading(true);
-    try {
-        const response = await api.get('/reports/detailed-corte-caja', {
-          params: { start_date: startDate, end_date: endDate }
-        });
-        setDetailedReport(response.data);
-    } catch (error) {
-      console.error('Error generating report:', error);
-      alert('Error al generar reporte');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const downloadCSV = () => {
-    if (!detailedReport) return;
-
-    const rows = [];
-    
-    // Header
-    rows.push(['REPORTE DETALLADO DE CORTE DE CAJA']);
-    rows.push([`Fecha: ${startDate} a ${endDate}`]);
-    rows.push([]);
-    
-    // Resumen General
-    rows.push(['RESUMEN GENERAL']);
-    rows.push(['Concepto', 'Valor']);
-    rows.push(['Ventas Activas totales (Contado)', `$${detailedReport.total_contado.toFixed(2)}`]);
-    rows.push(['Ventas de liquidación (Apartados + Pedidos)', `$${detailedReport.liquidacion_total.toFixed(2)}`]);
-    rows.push(['Ventas Pasivas totales', `$${detailedReport.ventas_pasivas_total.toFixed(2)}`]);
-    rows.push(['Cuentas por Cobrar (Saldo Pendiente)', `$${detailedReport.cuentas_por_cobrar.toFixed(2)}`]);
-    rows.push([]);
-    
-    // Costos y Utilidades
-    rows.push(['COSTOS Y UTILIDADES']);
-    rows.push(['Concepto', 'Valor']);
-    rows.push(['Costos Total de Ventas Activas', `$${detailedReport.costo_ventas_contado.toFixed(2)}`]);
-    rows.push(['Costo de Apartados y Pedidos Liquidados/Entregados', `$${detailedReport.costo_apartados_pedidos_liquidados.toFixed(2)}`]);
-    rows.push(['Utilidades de Productos Liquidados (Apartados + Pedidos)', `$${detailedReport.utilidad_productos_liquidados.toFixed(2)}`]);
-    rows.push(['Utilidades de Ventas Activas', `$${detailedReport.utilidad_ventas_activas.toFixed(2)}`]);
-    rows.push([]);
-    
-    // Resumen Detallado
-    rows.push(['RESUMEN DETALLADO']);
-    rows.push([]);
-    rows.push(['Abonos y Anticipos']);
-    rows.push(['Abonos de apartados', `$${detailedReport.apartados_pendientes_abonos_adicionales.toFixed(2)}`]);
-    rows.push(['Anticipos de apartados', `$${detailedReport.apartados_pendientes_anticipos.toFixed(2)}`]);
-    rows.push(['Abonos de pedidos', `$${detailedReport.pedidos_pendientes_abonos.toFixed(2)}`]);
-    rows.push(['Anticipos de pedidos', `$${detailedReport.pedidos_pendientes_anticipos.toFixed(2)}`]);
-    rows.push([]);
-    
-    rows.push(['Ventas Activas']);
-    rows.push(['Efectivo de contado', `$${detailedReport.total_efectivo_contado.toFixed(2)}`]);
-    rows.push(['Subtotal tarjeta', `$${detailedReport.subtotal_venta_tarjeta.toFixed(2)}`]);
-    rows.push(['Tarjeta con descuento (-3%)', `$${detailedReport.total_tarjeta_neto.toFixed(2)}`]);
-    rows.push([]);
-    
-    rows.push(['Piezas']);
-    rows.push(['Piezas vendidas', detailedReport.num_piezas_vendidas]);
-    rows.push(['Piezas entregadas', detailedReport.num_piezas_entregadas]);
-    rows.push(['Piezas apartadas pagadas', detailedReport.num_piezas_apartadas_pagadas]);
-    rows.push(['Piezas de pedidos pagados', detailedReport.num_piezas_pedidos_pagados]);
-    rows.push(['Pedidos apartados liquidados', detailedReport.num_piezas_pedidos_apartados_liquidados]);
-    rows.push([]);
-    
-    rows.push(['Contadores']);
-    rows.push(['Solicitudes apartado', detailedReport.num_solicitudes_apartado]);
-    rows.push(['Pedidos hechos', detailedReport.num_pedidos_hechos]);
-    rows.push(['Cancelaciones', detailedReport.num_cancelaciones]);
-    rows.push(['Apartados vencidos', detailedReport.num_apartados_vencidos]);
-    rows.push(['Pedidos vencidos', detailedReport.num_pedidos_vencidos]);
-    rows.push([]);
-    
-    rows.push(['Reembolsos y Saldos Vencidos']);
-    rows.push(['Reembolso apartados cancelados', `$${(detailedReport.reembolso_apartados_cancelados ?? 0).toFixed(2)}`]);
-    rows.push(['Reembolso pedidos cancelados', `$${(detailedReport.reembolso_pedidos_cancelados ?? 0).toFixed(2)}`]);
-    rows.push(['Saldo vencido apartados', `$${(detailedReport.saldo_vencido_apartados ?? 0).toFixed(2)}`]);
-    rows.push(['Saldo vencido pedidos', `$${(detailedReport.saldo_vencido_pedidos ?? 0).toFixed(2)}`]);
-    rows.push([]);
-    
-    // Resumen de pagos - Ventas Pasivas
-    rows.push(['RESUMEN DE VENTAS ACTIVAS']);
-    rows.push(['Tipo de movimiento', 'Método de pago', 'Cantidad', 'Subtotal', 'Total']);
-    detailedReport.resumen_ventas_activas.forEach(row => {
-      rows.push([
-        row.tipo_movimiento,
-        row.metodo_pago,
-        row.cantidad_operaciones,
-        `$${row.subtotal.toFixed(2)}`,
-        `$${row.total.toFixed(2)}`
-      ]);
-    });
-    rows.push([]);
-    
-    rows.push(['RESUMEN DE PAGOS - VENTAS PASIVAS']);
-    rows.push(['Tipo de movimiento', 'Método de pago', 'Cantidad', 'Subtotal', 'Total']);
-    detailedReport.resumen_pagos.forEach(row => {
-      rows.push([
-        row.tipo_movimiento,
-        row.metodo_pago,
-        row.cantidad_operaciones,
-        `$${row.subtotal.toFixed(2)}`,
-        `$${row.total.toFixed(2)}`
-      ]);
-    });
-    rows.push([]);
-    
-    // Vendedores
-    if (detailedReport.vendedores.length > 0) {
-      rows.push(['RESUMEN POR VENDEDORES']);
-      rows.push(['Vendedor', 'Total Contado', 'Total Tarjeta', 'Anticipos Apartados', 'Anticipos Pedidos', 'Abonos Apartados', 'Abonos Pedidos', 'Ventas Total Activa', 'Venta Total Pasiva', 'Cuentas por Cobrar', 'Productos Liquidados']);
-      detailedReport.vendedores.forEach(v => {
-        rows.push([
-          v.vendedor_name,
-          `$${v.total_efectivo_contado.toFixed(2)}`,
-          `$${v.total_tarjeta_neto.toFixed(2)}`,
-          `$${v.anticipos_apartados.toFixed(2)}`,
-          `$${v.anticipos_pedidos.toFixed(2)}`,
-          `$${v.abonos_apartados.toFixed(2)}`,
-          `$${v.abonos_pedidos.toFixed(2)}`,
-          `$${v.ventas_total_activa.toFixed(2)}`,
-          `$${v.venta_total_pasiva.toFixed(2)}`,
-          `$${v.cuentas_por_cobrar.toFixed(2)}`,
-          `$${(v.productos_liquidados ?? 0).toFixed(2)}`
-        ]);
-      });
-      rows.push([]);
-    }
-    
-    // Convert to CSV
-    const csvContent = rows.map(row => row.join(',')).join('\n');
-    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', `corte_caja_${startDate}_${endDate}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
 
   const printReport = () => {
     const w = window.open('', '_blank');
@@ -421,7 +80,7 @@ export default function ReportsPage() {
     padding: 20px;
     font-family: 'Poppins', sans-serif;
     font-size: 11px;
-    color: #333;
+    color: #000;
   }
   .header {
     text-align: center;
@@ -755,7 +414,7 @@ export default function ReportsPage() {
     margin-top: 25px;
     text-align: center;
     font-size: 9px;
-    color: #666;
+    color: #000;
     border-top: 1px solid #ddd;
     padding-top: 8px;
   }
@@ -781,9 +440,9 @@ export default function ReportsPage() {
       <span>Ventas Pasivas totales:</span>
       <span>$${detailedReport.ventas_pasivas_total.toFixed(2)}</span>
     </div>
-    <div class="row" style="font-weight: bold; border-top: 2px solid #333; margin-top: 8px; padding-top: 8px;">
+    <div class="row">
       <span>Cuentas por Cobrar (Saldo Pendiente):</span>
-      <span style="color: red;">$${detailedReport.cuentas_por_cobrar.toFixed(2)}</span>
+      <span>$${detailedReport.cuentas_por_cobrar.toFixed(2)}</span>
     </div>
   </div>
 
@@ -791,19 +450,19 @@ export default function ReportsPage() {
     <div class="section-title">COSTOS Y UTILIDADES</div>
     <div class="row">
       <span>Costos Total de Ventas Activas:</span>
-      <span style="color: #d97706;">$${detailedReport.costo_ventas_contado.toFixed(2)}</span>
+      <span>$${detailedReport.costo_ventas_contado.toFixed(2)}</span>
     </div>
     <div class="row">
       <span>Costo de Apartados y Pedidos Liquidados/Entregados:</span>
-      <span style="color: #3b82f6;">$${detailedReport.costo_apartados_pedidos_liquidados.toFixed(2)}</span>
+      <span>$${detailedReport.costo_apartados_pedidos_liquidados.toFixed(2)}</span>
     </div>
     <div class="row">
       <span>Utilidades de Productos Liquidados (Apartados + Pedidos):</span>
-      <span style="color: #6366f1;">$${detailedReport.utilidad_productos_liquidados.toFixed(2)}</span>
+      <span>$${detailedReport.utilidad_productos_liquidados.toFixed(2)}</span>
     </div>
-    <div class="row" style="font-weight: bold; border-top: 2px solid #333; margin-top: 8px; padding-top: 8px;">
+    <div class="row">
       <span>Utilidades de Ventas Activas:</span>
-      <span style="color: #16a34a;">$${detailedReport.utilidad_ventas_activas.toFixed(2)}</span>
+      <span>$${detailedReport.utilidad_ventas_activas.toFixed(2)}</span>
     </div>
   </div>
 
@@ -819,11 +478,11 @@ export default function ReportsPage() {
     </div>
     <div class="row">
       <span>Anticipos:</span>
-      <span style="color: green;">$${detailedReport.pedidos_anticipos.toFixed(2)}</span>
+      <span>$${detailedReport.pedidos_anticipos.toFixed(2)}</span>
     </div>
     <div class="row">
       <span>Saldo Pendiente:</span>
-      <span style="color: orange;">$${detailedReport.pedidos_saldo.toFixed(2)}</span>
+      <span>$${detailedReport.pedidos_saldo.toFixed(2)}</span>
     </div>
   </div>
 
@@ -834,26 +493,42 @@ export default function ReportsPage() {
       <thead>
         <tr>
           <th>Vendedor</th>
-          <th>Ventas</th>
-          <th>Contado</th>
-          <th>Crédito</th>
+          <th>#Ventas</th>
+          <th>#Contado</th>
+          <th>#Crédito</th>
           <th>Total Contado</th>
           <th>Total Crédito</th>
-          <th>Total Venta</th>
-          <th>Utilidad</th>
+          <th>Efectivo Contado</th>
+          <th>Tarjeta Neto (-3%)</th>
+          <th>Anticipo Apartado</th>
+          <th>Anticipo Pedido</th>
+          <th>Abonos Apartado</th>
+          <th>Abonos Pedido</th>
+          <th>Ventas Activas</th>
+          <th>Ventas Pasivas</th>
+          <th>Ctas por Cobrar</th>
+          <th>Productos Liquidados</th>
         </tr>
       </thead>
       <tbody>
         ${detailedReport.vendedores.map(v => `
         <tr>
           <td>${v.vendedor_name}</td>
-          <td>${v.sales_count}</td>
-          <td>${v.contado_count}</td>
-          <td>${v.credito_count}</td>
-          <td>$${v.total_contado.toFixed(2)}</td>
-          <td>$${v.total_credito.toFixed(2)}</td>
-          <td><strong>$${(v.total_contado + v.total_credito).toFixed(2)}</strong></td>
-          <td>$${v.total_profit.toFixed(2)}</td>
+          <td style="text-align:center;">${v.sales_count}</td>
+          <td style="text-align:center;">${v.contado_count}</td>
+          <td style="text-align:center;">${v.credito_count}</td>
+          <td style="text-align:right;">$${(v.total_contado ?? 0).toFixed(2)}</td>
+          <td style="text-align:right;">$${(v.total_credito ?? 0).toFixed(2)}</td>
+          <td style="text-align:right;">$${(v.total_efectivo_contado ?? 0).toFixed(2)}</td>
+          <td style="text-align:right;">$${(v.total_tarjeta_neto ?? 0).toFixed(2)}</td>
+          <td style="text-align:right;">$${(v.anticipos_apartados ?? 0).toFixed(2)}</td>
+          <td style="text-align:right;">$${(v.anticipos_pedidos ?? 0).toFixed(2)}</td>
+          <td style="text-align:right;">$${(v.abonos_apartados ?? 0).toFixed(2)}</td>
+          <td style="text-align:right;">$${(v.abonos_pedidos ?? 0).toFixed(2)}</td>
+          <td style="text-align:right; font-weight:600;">$${(v.ventas_total_activa ?? 0).toFixed(2)}</td>
+          <td style="text-align:right; font-weight:600;">$${(v.venta_total_pasiva ?? 0).toFixed(2)}</td>
+          <td style="text-align:right; font-weight:600;">$${(v.cuentas_por_cobrar ?? 0).toFixed(2)}</td>
+          <td style="text-align:right; font-weight:600;">$${(v.productos_liquidados ?? 0).toFixed(2)}</td>
         </tr>
         `).join('')}
       </tbody>
@@ -861,25 +536,33 @@ export default function ReportsPage() {
   </div>
   ` : ''}
 
-  ${detailedReport.daily_summaries.length > 0 ? `
+  ${detailedReport.resumen_piezas && detailedReport.resumen_piezas.length > 0 ? `
   <div class="section">
-    <div class="section-title">RESUMEN DIARIO</div>
+    <div class="section-title">📦 RESUMEN DE PIEZAS</div>
     <table>
       <thead>
         <tr>
-          <th>Fecha</th>
-          <th>Costo</th>
-          <th>Venta</th>
-          <th>Utilidad</th>
+          <th style="text-align: left;">Nombre</th>
+          <th style="text-align: left;">Modelo</th>
+          <th style="text-align: left;">Quilataje</th>
+          <th style="text-align: center; background-color: #f0fdf4;">Vendidas</th>
+          <th style="text-align: center; background-color: #eff6ff;">Pedidas</th>
+          <th style="text-align: center; background-color: #faf5ff;">Apartadas</th>
+          <th style="text-align: center; background-color: #fefce8;">Liquidadas</th>
+          <th style="text-align: center; background-color: #e5e7eb; font-weight: bold;">Total</th>
         </tr>
       </thead>
       <tbody>
-        ${detailedReport.daily_summaries.map(d => `
-        <tr>
-          <td>${new Date(d.fecha).toLocaleDateString('es-ES')}</td>
-          <td>$${d.costo.toFixed(2)}</td>
-          <td>$${d.venta.toFixed(2)}</td>
-          <td>$${d.utilidad.toFixed(2)}</td>
+        ${detailedReport.resumen_piezas.map((p, idx) => `
+        <tr style="background-color: ${idx % 2 === 0 ? '#fff' : '#f9fafb'};">
+          <td style="font-weight: 600;">${p.nombre}</td>
+          <td>${p.modelo || 'N/A'}</td>
+          <td>${p.quilataje || 'N/A'}</td>
+          <td style="text-align: center; background-color: #f0fdf4;">${p.piezas_vendidas}</td>
+          <td style="text-align: center; background-color: #eff6ff;">${p.piezas_pedidas}</td>
+          <td style="text-align: center; background-color: #faf5ff;">${p.piezas_apartadas}</td>
+          <td style="text-align: center; background-color: #fefce8;">${p.piezas_liquidadas}</td>
+          <td style="text-align: center; background-color: #f3f4f6; font-weight: bold;">${p.total_piezas}</td>
         </tr>
         `).join('')}
       </tbody>
@@ -944,8 +627,8 @@ export default function ReportsPage() {
           <td>${new Date(a.fecha).toLocaleDateString('es-ES')}</td>
           <td>${a.cliente}</td>
           <td>$${a.total.toFixed(2)}</td>
-          <td style="color: green;">$${a.anticipo.toFixed(2)}</td>
-          <td style="color: orange;">$${a.saldo.toFixed(2)}</td>
+          <td>$${a.anticipo.toFixed(2)}</td>
+          <td>$${a.saldo.toFixed(2)}</td>
           <td>${a.estado}</td>
           <td>${a.vendedor}</td>
         </tr>
@@ -980,8 +663,8 @@ export default function ReportsPage() {
           <td>${p.producto}</td>
           <td>${p.cantidad}</td>
           <td>$${p.total.toFixed(2)}</td>
-          <td style="color: green;">$${p.anticipo.toFixed(2)}</td>
-          <td style="color: orange;">$${p.saldo.toFixed(2)}</td>
+          <td>$${p.anticipo.toFixed(2)}</td>
+          <td>$${p.saldo.toFixed(2)}</td>
           <td>${p.estado}</td>
           <td>${p.vendedor}</td>
         </tr>
@@ -1009,7 +692,7 @@ export default function ReportsPage() {
         <tr>
           <td>${new Date(a.fecha).toLocaleDateString('es-ES')}</td>
           <td>${a.cliente}</td>
-          <td style="color: green;">$${a.monto.toFixed(2)}</td>
+          <td>$${a.monto.toFixed(2)}</td>
           <td>${a.metodo_pago}</td>
           <td>${a.vendedor}</td>
         </tr>
@@ -1039,7 +722,7 @@ export default function ReportsPage() {
           <td>${new Date(a.fecha).toLocaleDateString('es-ES')}</td>
           <td>${a.cliente}</td>
           <td>${a.producto}</td>
-          <td style="color: green;">$${a.monto.toFixed(2)}</td>
+          <td>$${a.monto.toFixed(2)}</td>
           <td>${a.metodo_pago}</td>
           <td>${a.vendedor}</td>
         </tr>
@@ -1051,7 +734,7 @@ export default function ReportsPage() {
   
   ${detailedReport.resumen_ventas_activas && detailedReport.resumen_ventas_activas.length > 0 ? `
   <div class="section">
-    <div class="section-title">📊 RESUMEN DE VENTAS ACTIVAS</div>
+    <div class="section-title">RESUMEN DE VENTAS ACTIVAS</div>
     <table>
       <thead>
         <tr>
@@ -1064,12 +747,12 @@ export default function ReportsPage() {
       </thead>
       <tbody>
         ${detailedReport.resumen_ventas_activas.map(r => `
-        <tr style="${r.metodo_pago === 'SUBTOTAL' ? 'background-color: #f0fdf4; font-weight: bold;' : ''}">
+        <tr>
           <td>${r.tipo_movimiento}</td>
           <td>${r.metodo_pago}</td>
           <td style="text-align: center;">${r.cantidad_operaciones}</td>
           <td style="text-align: right;">$${r.subtotal.toFixed(2)}</td>
-          <td style="text-align: right; ${r.metodo_pago === 'SUBTOTAL' ? 'color: #16a34a;' : ''}">$${r.total.toFixed(2)}</td>
+          <td style="text-align: right;">$${r.total.toFixed(2)}</td>
         </tr>
         `).join('')}
       </tbody>
@@ -1092,12 +775,12 @@ export default function ReportsPage() {
       </thead>
       <tbody>
         ${detailedReport.resumen_pagos.map(r => `
-        <tr style="${r.metodo_pago === 'SUBTOTAL' ? 'background-color: #ede9fe; font-weight: bold;' : ''}">
+        <tr>
           <td>${r.tipo_movimiento}</td>
           <td>${r.metodo_pago}</td>
           <td style="text-align: center;">${r.cantidad_operaciones}</td>
           <td style="text-align: right;">$${r.subtotal.toFixed(2)}</td>
-          <td style="text-align: right; ${r.metodo_pago === 'SUBTOTAL' ? 'color: #7c3aed;' : ''}">$${r.total.toFixed(2)}</td>
+          <td style="text-align: right;">$${r.total.toFixed(2)}</td>
         </tr>
         `).join('')}
       </tbody>
@@ -1198,59 +881,81 @@ export default function ReportsPage() {
 
   return (
     <Layout>
-      <div className="max-w-7xl mx-auto font-['Poppins',sans-serif]">
-        <h1 className="text-3xl font-bold text-gray-800 mb-6">Corte de Caja</h1>
+      <div className="max-w-7xl mx-auto font-['Poppins',sans-serif]" style={{ backgroundColor: '#f0f7f7', minHeight: 'calc(100vh - 64px)', padding: '2rem', borderRadius: '8px' }}>
+        <h1 className="text-3xl font-['Exo_2',sans-serif] font-bold mb-8" style={{ color: '#2e4354' }}>Corte de Caja</h1>
 
         {/* Date Selection */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6 print:hidden">
+        <div className="rounded-xl shadow-lg p-6 mb-6 print:hidden" style={{ backgroundColor: '#ffffff', border: '1px solid rgba(46, 67, 84, 0.1)' }}>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium mb-1" style={{ color: '#2e4354' }}>
                 Fecha Inicio
               </label>
               <input
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                className="w-full rounded-lg px-3 py-2 transition-all"
+                style={{ border: '2px solid rgba(46, 67, 84, 0.2)', outline: 'none' }}
+                onFocus={(e) => e.target.style.border = '2px solid #2e4354'}
+                onBlur={(e) => e.target.style.border = '2px solid rgba(46, 67, 84, 0.2)'}
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium mb-1" style={{ color: '#2e4354' }}>
                 Fecha Fin
               </label>
               <input
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                className="w-full rounded-lg px-3 py-2 transition-all"
+                style={{ border: '2px solid rgba(46, 67, 84, 0.2)', outline: 'none' }}
+                onFocus={(e) => e.target.style.border = '2px solid #2e4354'}
+                onBlur={(e) => e.target.style.border = '2px solid rgba(46, 67, 84, 0.2)'}
               />
             </div>
 
             <div className="flex items-end">
               <button
                 onClick={generateReport}
-                disabled={loading}
-                className="w-full bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
+                disabled={loading || (isDayClosed === true && startDate === endDate)}
+                className="w-full text-white px-6 py-2.5 rounded-lg transition-all shadow-md hover:shadow-lg disabled:cursor-not-allowed"
+                style={{ backgroundColor: (isDayClosed === true && startDate === endDate) || loading ? '#2e4354' : '#2e4354', opacity: loading || (isDayClosed === true && startDate === endDate) ? 0.7 : 1 }}
               >
                 {loading ? 'Generando...' : 'Generar Reporte'}
               </button>
             </div>
+
+            {(isDayClosed === true && startDate === endDate) && (
+              <div className="flex items-end">
+                <button
+                  onClick={viewClosedDay}
+                  disabled={loading}
+                  className="w-full text-white px-6 py-2.5 rounded-lg transition-all shadow-md hover:shadow-lg disabled:opacity-50"
+                  style={{ backgroundColor: '#ffe98e', color: '#000000' }}
+                >
+                  📦 Ver Caja Cerrada
+                </button>
+              </div>
+            )}
           </div>
 
           {(report || detailedReport) && (
-            <div className="flex gap-2">
+            <div className="flex gap-3">
               <button
                 onClick={printReport}
-                className="bg-gray-800 text-white px-4 py-2 rounded-lg hover:bg-gray-900"
+                className="px-5 py-2.5 rounded-lg font-medium transition-all shadow-md hover:shadow-lg hover:scale-105"
+                style={{ backgroundColor: '#2e4354', color: '#ffffff' }}
               >
                 🖨️ Imprimir Reporte
               </button>
               <button
-                onClick={downloadCSV}
-                className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+                onClick={downloadCsv}
+                className="px-5 py-2.5 rounded-lg font-medium transition-all shadow-md hover:shadow-lg hover:scale-105"
+                style={{ backgroundColor: '#ffe98e', color: '#000000' }}
               >
                 📥 Descargar CSV
               </button>
@@ -1260,379 +965,200 @@ export default function ReportsPage() {
 
         {/* Report */}
         {report && reportType === 'summary' && (
-          <div className="bg-white rounded-lg shadow-md p-8">
+          <SummaryReportView report={report} />
+        )}
+
+        {/* Detailed Report */}
+        {detailedReport && reportType === 'detailed' && (
+          <div className="rounded-xl shadow-xl" style={{ backgroundColor: '#ffffff', border: '1px solid rgba(46, 67, 84, 0.1)' }}>
             {/* Header */}
-            <div className="text-center mb-8">
-              <h2 className="text-2xl font-bold text-gray-900">CORTE DE CAJA</h2>
-              <p className="text-gray-600 mt-2">
-                Del {new Date(report.start_date).toLocaleDateString()} 
-                {' al '}
-                {new Date(report.end_date).toLocaleDateString()}
+            <div className="text-center p-8" style={{ borderBottom: '3px solid #2e4354' }}>
+              <h2 className="text-3xl font-['Exo_2',sans-serif] font-bold mb-2" style={{ color: '#2e4354' }}>CORTE DE CAJA</h2>
+              <p className="text-lg" style={{ color: '#2e4354', opacity: 0.8 }}>
+                Rango: {new Date(detailedReport.start_date).toLocaleDateString()} a {new Date(detailedReport.end_date).toLocaleDateString()}
               </p>
+              <p className="text-sm" style={{ color: '#2e4354', opacity: 0.6 }}>
+                Generado: {detailedReport.generated_at}
+              </p>
+
+              {isDayClosed === true && (
+                <div className="mt-3 inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium shadow-sm" style={{ backgroundColor: 'rgba(255, 233, 142, 0.3)', color: '#000000', border: '1px solid rgba(255, 233, 142, 0.6)' }}>
+                  ✅ Caja cerrada
+                </div>
+              )}
+              {usingClosure && (
+                <div className="mt-3 inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium shadow-sm" style={{ backgroundColor: 'rgba(46, 67, 84, 0.1)', color: '#2e4354' }}>
+                  📦 Mostrando cierre guardado
+                </div>
+              )}
+
+              {(userRole === 'admin' || userRole === 'owner') && (
+                <div className="mt-4 flex justify-center gap-3">
+                  <button
+                    onClick={closeDay}
+                    disabled={closing || isDayClosed === true}
+                    className="px-6 py-2.5 rounded-lg text-white font-medium transition-all shadow-md hover:shadow-lg disabled:opacity-50"
+                    style={{ backgroundColor: (closing || isDayClosed === true) ? '#2e4354' : '#2e4354' }}
+                  >
+                    {closing ? 'Cerrando...' : (isDayClosed === true ? '✅ Cash Register Closed' : '🔒 Cerrar Caja (día actual)')}
+                  </button>
+                </div>
+              )}
+              {closeMsg && (
+                <div className="mt-3 text-sm font-medium" style={{ color: '#2e4354' }}>{closeMsg}</div>
+              )}
             </div>
 
-            {/* Sales Summary */}
-            <div className="mb-8">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4 border-b-2 border-gray-300 pb-2">
-                RESUMEN DE VENTAS
-              </h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <p className="text-sm text-gray-600">Ventas activas totales</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {report.ventas_contado_count}
-                  </p>
-                  <p className="text-lg text-green-600">
-                    ${report.ventas_contado_total.toFixed(2)}
-                  </p>
+            {/* Resumen General */}
+            <div className="p-6" style={{ borderBottom: '2px solid rgba(46, 67, 84, 0.1)' }}>
+              <h3 className="text-xl font-['Exo_2',sans-serif] font-bold mb-4" style={{ color: '#2e4354' }}>Resumen General</h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="text-center p-4 rounded-xl shadow-lg transition-all duration-200 hover:shadow-xl hover:-translate-y-1" style={{ backgroundColor: '#f0f7f7', border: '1px solid rgba(46, 67, 84, 0.1)' }}>
+                  <p className="text-sm font-medium" style={{ color: '#2e4354' }}>Ventas activas totales</p>
+                  <p className="text-lg font-semibold" style={{ color: '#000000' }}>{detailedReport.contado_count} ventas</p>
+                  <p className="text-2xl font-bold" style={{ color: '#000000' }}>${detailedReport.total_contado.toFixed(2)}</p>
                 </div>
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <p className="text-sm text-gray-600">Ventas a Crédito</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {report.ventas_credito_count}
-                  </p>
-                  <p className="text-lg text-amber-600">
-                    ${report.ventas_credito_total.toFixed(2)}
-                  </p>
+                <div className="text-center p-4 rounded-xl shadow-lg transition-all duration-200 hover:shadow-xl hover:-translate-y-1" style={{ backgroundColor: '#e0fdff', border: '1px solid rgba(224, 253, 255, 0.6)' }}>
+                  <p className="text-sm font-medium" style={{ color: '#2e4354' }}>Ventas de liquidación</p>
+                  <p className="text-lg font-semibold" style={{ color: '#000000' }}>{detailedReport.liquidacion_count} (Apartados + Pedidos)</p>
+                  <p className="text-2xl font-bold" style={{ color: '#2e4354' }}>${detailedReport.liquidacion_total.toFixed(2)}</p>
                 </div>
+                <div className="text-center p-4 rounded-xl shadow-lg transition-all duration-200 hover:shadow-xl hover:-translate-y-1" style={{ backgroundColor: '#f0f7f7', border: '1px solid rgba(46, 67, 84, 0.1)' }}>
+                  <p className="text-sm font-medium" style={{ color: '#2e4354' }}>Ventas pasivas totales</p>
+                  <p className="text-2xl font-bold" style={{ color: '#000000' }}>${detailedReport.ventas_pasivas_total.toFixed(2)}</p>
+                </div>
+                <div className="text-center p-4 rounded-xl shadow-lg transition-all duration-200 hover:shadow-xl hover:-translate-y-1" style={{ backgroundColor: '#2e4354', border: '1px solid rgba(46, 67, 84, 0.8)' }}>
+                  <p className="text-sm font-medium" style={{ color: '#ffffff', opacity: 0.9 }}>Cuentas por Cobrar</p>
+                  <p className="text-2xl font-bold" style={{ color: '#ffffff' }}>${detailedReport.cuentas_por_cobrar.toFixed(2)}</p>
+                  <p className="text-xs font-medium mt-1" style={{ color: '#ffffff', opacity: 0.8 }}>Saldo pendiente</p>
               </div>
             </div>
 
-            {/* Payment Methods */}
-            <div className="mb-8">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4 border-b-2 border-gray-300 pb-2">
-                POR MÉTODO DE PAGO
-              </h3>
-              <div className="space-y-3">
-                <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                  <span className="font-medium">Efectivo (Ventas)</span>
-                  <span className="text-lg font-bold text-green-600">
-                    ${report.efectivo_ventas.toFixed(2)}
-                  </span>
+              {/* Costos y Utilidades */}
+              <div className="mt-6 pt-6" style={{ borderTop: '2px solid rgba(46, 67, 84, 0.1)' }}>
+                <h4 className="text-lg font-['Exo_2',sans-serif] font-bold mb-4" style={{ color: '#2e4354' }}>Costos y Utilidades</h4>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="text-center p-4 rounded-xl shadow-lg transition-all duration-200 hover:shadow-xl hover:-translate-y-1" style={{ backgroundColor: '#f0f7f7', border: '1px solid rgba(46, 67, 84, 0.1)' }}>
+                    <p className="text-sm font-medium" style={{ color: '#2e4354' }}>Costos Total de Ventas Activas</p>
+                    <p className="text-2xl font-bold" style={{ color: '#2e4354' }}>${detailedReport.costo_ventas_contado.toFixed(2)}</p>
+                    <p className="text-xs font-medium mt-1" style={{ color: '#2e4354', opacity: 0.7 }}>Productos vendidos</p>
                 </div>
-                <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                  <span className="font-medium">Tarjeta (Ventas)</span>
-                  <span className="text-lg font-bold text-blue-600">
-                    ${report.tarjeta_ventas.toFixed(2)}
-                  </span>
+                  <div className="text-center p-4 rounded-xl shadow-lg transition-all duration-200 hover:shadow-xl hover:-translate-y-1" style={{ backgroundColor: '#e0fdff', border: '1px solid rgba(224, 253, 255, 0.6)' }}>
+                    <p className="text-sm font-medium" style={{ color: '#2e4354' }}>Costo de productos liquidados</p>
+                    <p className="text-2xl font-bold" style={{ color: '#2e4354' }}>${detailedReport.costo_apartados_pedidos_liquidados.toFixed(2)}</p>
+                    <p className="text-xs font-medium mt-1" style={{ color: '#2e4354', opacity: 0.7 }}>Status liquidado/entregado</p>
                 </div>
-                <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                  <span className="font-medium">Crédito</span>
-                  <span className="text-lg font-bold text-amber-600">
-                    ${report.credito_ventas.toFixed(2)}
-                  </span>
+                  <div className="text-center p-4 rounded-xl shadow-lg transition-all duration-200 hover:shadow-xl hover:-translate-y-1" style={{ backgroundColor: '#f0f7f7', border: '1px solid rgba(46, 67, 84, 0.1)' }}>
+                    <p className="text-sm font-medium" style={{ color: '#2e4354' }}>Utilidades de productos liquidados</p>
+                    <p className="text-2xl font-bold" style={{ color: '#000000' }}>${detailedReport.utilidad_productos_liquidados.toFixed(2)}</p>
+                    <p className="text-xs font-medium mt-1" style={{ color: '#2e4354', opacity: 0.7 }}>Apartados + Pedidos</p>
                 </div>
+                  <div className="text-center p-4 rounded-xl shadow-lg transition-all duration-200 hover:shadow-xl hover:-translate-y-1" style={{ backgroundColor: '#2e4354', border: '1px solid rgba(46, 67, 84, 0.8)' }}>
+                    <p className="text-sm font-medium" style={{ color: '#ffffff', opacity: 0.9 }}>Utilidades de Ventas Activas</p>
+                    <p className="text-2xl font-bold" style={{ color: '#ffffff' }}>${detailedReport.utilidad_ventas_activas.toFixed(2)}</p>
+                    <p className="text-xs font-medium mt-1" style={{ color: '#ffffff', opacity: 0.8 }}>(Efectivo + Tarjeta -3%) - Costos</p>
               </div>
             </div>
 
-            {/* Credit Payments (Abonos) */}
-            <div className="mb-8">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4 border-b-2 border-gray-300 pb-2">
-                ABONOS A CRÉDITOS
-              </h3>
-              <div className="space-y-3">
-                <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                  <span className="font-medium">Abonos en Efectivo</span>
-                  <span className="text-lg font-bold text-green-600">
-                    ${report.abonos_efectivo.toFixed(2)}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                  <span className="font-medium">Abonos con Tarjeta</span>
-                  <span className="text-lg font-bold text-blue-600">
-                    ${report.abonos_tarjeta.toFixed(2)}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center p-3 bg-blue-100 rounded-lg">
-                  <span className="font-semibold">Total Abonos</span>
-                  <span className="text-xl font-bold text-blue-800">
-                    ${report.abonos_total.toFixed(2)}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Orders (Pedidos) */}
-            <div className="mb-8">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4 border-b-2 border-gray-300 pb-2">
-                PEDIDOS ESPECIALES
-              </h3>
-              <div className="space-y-3">
-                <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                  <span className="font-medium">Cantidad de Pedidos</span>
-                  <span className="text-lg font-bold text-purple-600">
-                    {report.pedidos_count}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                  <span className="font-medium">Total Pedidos</span>
-                  <span className="text-lg font-bold text-purple-600">
-                    ${report.pedidos_total.toFixed(2)}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                  <span className="font-medium">Anticipos Pagados</span>
-                  <span className="text-lg font-bold text-green-600">
-                    ${report.pedidos_anticipos.toFixed(2)}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                  <span className="font-medium">Saldo Pendiente</span>
-                  <span className="text-lg font-bold text-orange-600">
-                    ${report.pedidos_saldo.toFixed(2)}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                  <span className="font-medium">Pagos Pedidos Efectivo</span>
-                  <span className="text-lg font-bold text-green-600">
-                    ${report.pedidos_efectivo.toFixed(2)}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                  <span className="font-medium">Pagos Pedidos Tarjeta</span>
-                  <span className="text-lg font-bold text-blue-600">
-                    ${report.pedidos_tarjeta.toFixed(2)}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center p-3 bg-purple-100 rounded-lg">
-                  <span className="font-semibold">Total Pagos Pedidos</span>
-                  <span className="text-xl font-bold text-purple-800">
-                    ${report.pedidos_pagos_total.toFixed(2)}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Totals */}
-            <div className="mb-8">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4 border-b-2 border-gray-300 pb-2">
-                TOTALES EN CAJA
-              </h3>
-              <div className="space-y-3">
-                <div className="flex justify-between items-center p-4 bg-green-50 rounded-lg">
-                  <span className="text-lg font-semibold">Total Efectivo</span>
-                  <span className="text-2xl font-bold text-green-700">
-                    ${report.total_efectivo.toFixed(2)}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center p-4 bg-blue-50 rounded-lg">
-                  <span className="text-lg font-semibold">Total Tarjeta</span>
-                  <span className="text-2xl font-bold text-blue-700">
-                    ${report.total_tarjeta.toFixed(2)}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center p-4 bg-purple-50 rounded-lg border-2 border-purple-300">
-                  <span className="text-xl font-bold">INGRESO TOTAL</span>
-                  <span className="text-3xl font-bold text-purple-700">
-                    ${report.total_revenue.toFixed(2)}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Profit Analysis */}
-            <div className="mb-8">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4 border-b-2 border-gray-300 pb-2">
-                ANÁLISIS DE UTILIDAD
-              </h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-red-50 p-4 rounded-lg">
-                  <p className="text-sm text-gray-600">Costo Total</p>
-                  <p className="text-2xl font-bold text-red-600">
-                    ${report.total_cost.toFixed(2)}
-                  </p>
-                </div>
-                <div className="bg-green-50 p-4 rounded-lg">
-                  <p className="text-sm text-gray-600">Utilidad Total</p>
-                  <p className="text-2xl font-bold text-green-600">
-                    ${report.total_profit.toFixed(2)}
-                  </p>
-                </div>
-              </div>
-              <div className="mt-4 p-4 bg-indigo-50 rounded-lg">
-                <div className="flex justify-between items-center">
-                  <span className="text-lg font-semibold">Margen de Utilidad</span>
-                  <span className="text-2xl font-bold text-indigo-700">
-                    {report.profit_margin.toFixed(2)}%
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Returns */}
-            {report.returns_count > 0 && (
-              <div className="mb-8">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4 border-b-2 border-gray-300 pb-2">
-                  DEVOLUCIONES
-                </h3>
-                <div className="bg-orange-50 p-4 rounded-lg">
-                  <div className="flex justify-between items-center">
-                    <span className="font-medium">Total Devoluciones ({report.returns_count})</span>
-                    <span className="text-lg font-bold text-orange-600">
-                      ${report.returns_total.toFixed(2)}
-                    </span>
-                  </div>
+                {/* Total de Piezas por Nombre (sin liquidadas) */}
+            {detailedReport.total_piezas_por_nombre_sin_liquidadas && Object.keys(detailedReport.total_piezas_por_nombre_sin_liquidadas).length > 0 && (
+              <div className="mt-6 pt-6" style={{ borderTop: '2px solid rgba(46, 67, 84, 0.1)' }}>
+                <h4 className="text-lg font-['Exo_2',sans-serif] font-bold mb-4" style={{ color: '#2e4354' }}>Total de Piezas por Nombre (Excluyendo Liquidadas)</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {Object.entries(detailedReport.total_piezas_por_nombre_sin_liquidadas)
+                    .sort(([a], [b]) => a.localeCompare(b))
+                    .map(([nombre, total]) => (
+                      <div 
+                        key={nombre}
+                        className="text-center p-4 rounded-xl shadow-lg transition-all duration-200 hover:shadow-xl hover:-translate-y-1" 
+                        style={{ backgroundColor: '#f0f7f7', border: '1px solid rgba(46, 67, 84, 0.1)' }}
+                      >
+                        <p className="text-sm font-medium mb-2" style={{ color: '#2e4354' }}>{nombre}</p>
+                        <p className="text-2xl font-bold" style={{ color: '#000000' }}>{total}</p>
+                        <p className="text-xs font-medium mt-1" style={{ color: '#2e4354', opacity: 0.7 }}>piezas</p>
+                      </div>
+                    ))}
                 </div>
               </div>
             )}
 
-            {/* Vendors Summary */}
-            {report.vendedores && report.vendedores.length > 0 && (
-              <div className="mb-8">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4 border-b-2 border-gray-300 pb-2">
-                  RESUMEN DE VENDEDORES
-                </h3>
+                {/* Resumen de Piezas */}
+            {detailedReport.resumen_piezas && detailedReport.resumen_piezas.length > 0 ? (
+                  <div className="mt-6 pt-6" style={{ borderTop: '2px solid rgba(46, 67, 84, 0.1)' }}>
+                    <h5 className="text-lg font-['Exo_2',sans-serif] font-bold mb-4" style={{ color: '#2e4354' }}>📦 Resumen de Piezas ({detailedReport.resumen_piezas.length} registros)</h5>
                 <div className="overflow-x-auto">
-                  <table className="min-w-full">
-                    <thead className="bg-gray-50">
+                      <table className="min-w-full border-collapse rounded-lg overflow-hidden shadow-sm" style={{ border: '1px solid rgba(46, 67, 84, 0.2)' }}>
+                        <thead style={{ backgroundColor: '#2e4354' }}>
                       <tr>
-                        <th className="px-4 py-2 text-left text-sm font-medium text-gray-500">Vendedor</th>
-                        <th className="px-4 py-2 text-center text-sm font-medium text-gray-500">#Ventas</th>
-                        <th className="px-4 py-2 text-center text-sm font-medium text-gray-500">Contado</th>
-                        <th className="px-4 py-2 text-center text-sm font-medium text-gray-500">Crédito</th>
-                        <th className="px-4 py-2 text-center text-sm font-medium text-gray-500">Total Contado ($)</th>
-                        <th className="px-4 py-2 text-center text-sm font-medium text-gray-500">Total Crédito ($)</th>
-                        <th className="px-4 py-2 text-center text-sm font-medium text-gray-500">Total ($)</th>
+                            <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider" style={{ color: '#ffffff', borderRight: '1px solid rgba(255, 255, 255, 0.1)' }}>Nombre</th>
+                            <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider" style={{ color: '#ffffff', borderRight: '1px solid rgba(255, 255, 255, 0.1)' }}>Modelo</th>
+                            <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider" style={{ color: '#ffffff', borderRight: '1px solid rgba(255, 255, 255, 0.1)' }}>Quilataje</th>
+                            <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider" style={{ color: '#ffffff', borderRight: '1px solid rgba(255, 255, 255, 0.1)' }}>Vendidas</th>
+                            <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider" style={{ color: '#ffffff', borderRight: '1px solid rgba(255, 255, 255, 0.1)' }}>Pedidas</th>
+                            <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider" style={{ color: '#ffffff', borderRight: '1px solid rgba(255, 255, 255, 0.1)' }}>Apartadas</th>
+                            <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider" style={{ color: '#ffffff', borderRight: '1px solid rgba(255, 255, 255, 0.1)' }}>Liquidadas</th>
+                            <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider" style={{ color: '#ffffff', backgroundColor: 'rgba(0, 0, 0, 0.2)' }}>Total</th>
                       </tr>
                     </thead>
-                    <tbody className="bg-white">
-                      {report.vendedores.map((vendedor, idx) => (
-                        <tr key={`${vendedor.vendedor_id}-${idx}`} className="border-t">
-                          <td className="px-4 py-2 text-sm font-medium">{vendedor.vendedor_name}</td>
-                          <td className="px-4 py-2 text-center text-sm">{vendedor.sales_count}</td>
-                          <td className="px-4 py-2 text-center text-sm">{vendedor.contado_count}</td>
-                          <td className="px-4 py-2 text-center text-sm">{vendedor.credito_count}</td>
-                          <td className="px-4 py-2 text-center text-sm font-bold text-green-600">${vendedor.total_contado.toFixed(2)}</td>
-                          <td className="px-4 py-2 text-center text-sm font-bold text-yellow-600">${vendedor.total_credito.toFixed(2)}</td>
-                          <td className="px-4 py-2 text-center text-sm font-bold text-blue-600">${(vendedor.total_contado + vendedor.total_credito).toFixed(2)}</td>
+                        <tbody>
+                          {detailedReport.resumen_piezas.map((pieza, idx) => (
+                            <tr key={`${pieza.nombre}-${pieza.modelo}-${pieza.quilataje}-${idx}`} style={{ backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f0f7f7', borderBottom: '1px solid rgba(46, 67, 84, 0.08)' }}>
+                              <td className="px-4 py-3 text-sm font-semibold" style={{ color: '#000000', borderRight: '1px solid rgba(46, 67, 84, 0.05)' }}>{pieza.nombre}</td>
+                              <td className="px-4 py-3 text-sm" style={{ color: '#2e4354', borderRight: '1px solid rgba(46, 67, 84, 0.05)' }}>{pieza.modelo || 'N/A'}</td>
+                              <td className="px-4 py-3 text-sm" style={{ color: '#2e4354', borderRight: '1px solid rgba(46, 67, 84, 0.05)' }}>{pieza.quilataje || 'N/A'}</td>
+                              <td className="px-4 py-3 text-sm text-right font-medium" style={{ color: '#2e4354', borderRight: '1px solid rgba(46, 67, 84, 0.05)' }}>{pieza.piezas_vendidas}</td>
+                              <td className="px-4 py-3 text-sm text-right font-medium" style={{ color: '#2e4354', borderRight: '1px solid rgba(46, 67, 84, 0.05)' }}>{pieza.piezas_pedidas}</td>
+                              <td className="px-4 py-3 text-sm text-right font-medium" style={{ color: '#2e4354', borderRight: '1px solid rgba(46, 67, 84, 0.05)' }}>{pieza.piezas_apartadas}</td>
+                              <td className="px-4 py-3 text-sm text-right font-medium" style={{ color: '#2e4354', borderRight: '1px solid rgba(46, 67, 84, 0.05)' }}>{pieza.piezas_liquidadas}</td>
+                              <td className="px-4 py-3 text-sm text-right font-bold" style={{ color: '#000000', backgroundColor: 'rgba(46, 67, 84, 0.1)' }}>{pieza.total_piezas}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
               </div>
-            )}
-
-            {/* Print Button */}
-            <div className="mt-8 pt-6 border-t-2 border-gray-200 print:hidden">
-              <div className="flex gap-4">
-              <button
-                onClick={printReport}
-                  className="flex-1 bg-gray-800 text-white px-6 py-3 rounded-lg hover:bg-gray-900"
-              >
-                🖨️ Imprimir Reporte
-              </button>
-                <button
-                  onClick={downloadCSV}
-                  className="flex-1 bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700"
-                >
-                  📥 Descargar CSV
-              </button>
-              </div>
-            </div>
+            ) : (
+              <div className="mt-6 pt-6" style={{ borderTop: '2px solid rgba(46, 67, 84, 0.1)' }}>
+                <h5 className="text-lg font-['Exo_2',sans-serif] font-bold mb-3" style={{ color: '#2e4354' }}>📦 Resumen de Piezas</h5>
+                <p className="text-sm" style={{ color: '#2e4354', opacity: 0.7 }}>No hay datos de piezas para mostrar en este período. (Debug: {detailedReport.resumen_piezas ? `Array con ${detailedReport.resumen_piezas.length} elementos` : 'resumen_piezas es undefined'})</p>
           </div>
         )}
 
-        {/* Detailed Report */}
-        {detailedReport && reportType === 'detailed' && (
-          <div className="bg-white shadow-md">
-            {/* Header */}
-            <div className="text-center p-8 border-b-4 border-gray-800">
-              <h2 className="text-3xl font-bold text-gray-900 mb-2">CORTE DE CAJA</h2>
-              <p className="text-lg text-gray-600">
-                Rango: {new Date(detailedReport.start_date).toLocaleDateString()} a {new Date(detailedReport.end_date).toLocaleDateString()}
-              </p>
-              <p className="text-sm text-gray-500">
-                Generado: {detailedReport.generated_at}
-              </p>
-            </div>
-
-            {/* Resumen General */}
-            <div className="p-6 border-b-2 border-gray-300">
-              <h3 className="text-xl font-bold text-gray-800 mb-4">Resumen General</h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="text-center p-3 bg-green-100 rounded">
-                  <p className="text-sm text-gray-600">Ventas activas totales</p>
-                  <p className="text-lg font-semibold text-gray-700">{detailedReport.contado_count} ventas</p>
-                  <p className="text-2xl font-bold text-green-700">${detailedReport.total_contado.toFixed(2)}</p>
-                </div>
-                <div className="text-center p-3 bg-blue-100 rounded">
-                  <p className="text-sm text-gray-600">Ventas de liquidación</p>
-                  <p className="text-lg font-semibold text-gray-700">{detailedReport.liquidacion_count} (Apartados + Pedidos)</p>
-                  <p className="text-2xl font-bold text-blue-700">${detailedReport.liquidacion_total.toFixed(2)}</p>
-                </div>
-                <div className="text-center p-3 bg-purple-100 rounded">
-                  <p className="text-sm text-gray-600">Ventas pasivas totales</p>
-                  <p className="text-2xl font-bold text-purple-700">${detailedReport.ventas_pasivas_total.toFixed(2)}</p>
-                </div>
-                <div className="text-center p-3 bg-red-100 rounded">
-                  <p className="text-sm text-gray-600">Cuentas por Cobrar</p>
-                  <p className="text-2xl font-bold text-red-700">${detailedReport.cuentas_por_cobrar.toFixed(2)}</p>
-                  <p className="text-xs text-gray-600 mt-1">Saldo pendiente</p>
-                </div>
-                </div>
-
-              {/* Costos y Utilidades */}
-              <div className="mt-6 pt-6 border-t-2 border-gray-200">
-                <h4 className="text-lg font-bold text-gray-800 mb-3">Costos y Utilidades</h4>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="text-center p-3 bg-orange-100 rounded">
-                    <p className="text-sm text-gray-600">Costos Total de Ventas Activas</p>
-                    <p className="text-2xl font-bold text-orange-700">${detailedReport.costo_ventas_contado.toFixed(2)}</p>
-                    <p className="text-xs text-gray-500 mt-1">Productos vendidos</p>
-                </div>
-                  <div className="text-center p-3 bg-blue-100 rounded">
-                    <p className="text-sm text-gray-600">Costo de productos liquidados</p>
-                    <p className="text-2xl font-bold text-blue-700">${detailedReport.costo_apartados_pedidos_liquidados.toFixed(2)}</p>
-                    <p className="text-xs text-gray-500 mt-1">Status liquidado/entregado</p>
-                  </div>
-                  <div className="text-center p-3 bg-indigo-100 rounded">
-                    <p className="text-sm text-gray-600">Utilidades de productos liquidados</p>
-                    <p className="text-2xl font-bold text-indigo-700">${detailedReport.utilidad_productos_liquidados.toFixed(2)}</p>
-                    <p className="text-xs text-gray-500 mt-1">Apartados + Pedidos</p>
-                  </div>
-                  <div className="text-center p-3 bg-green-100 rounded">
-                    <p className="text-sm text-gray-600">Utilidades de Ventas Activas</p>
-                    <p className="text-2xl font-bold text-green-700">${detailedReport.utilidad_ventas_activas.toFixed(2)}</p>
-                    <p className="text-xs text-gray-500 mt-1">(Efectivo + Tarjeta -3%) - Costos</p>
-              </div>
-            </div>
-
                 {/* Resumen por Vendedores */}
             {detailedReport.vendedores.length > 0 && (
-                  <div className="mt-6 pt-6 border-t-2 border-gray-200">
-                    <h5 className="text-lg font-bold text-gray-800 mb-3">👥 Resumen por Vendedores</h5>
+                  <div className="mt-6 pt-6" style={{ borderTop: '2px solid rgba(46, 67, 84, 0.1)' }}>
+                    <h5 className="text-lg font-['Exo_2',sans-serif] font-bold mb-4" style={{ color: '#2e4354' }}>👥 Resumen por Vendedores</h5>
                 <div className="overflow-x-auto">
-                      <table className="min-w-full border-collapse border border-gray-300">
-                        <thead className="bg-gray-100">
+                      <table className="min-w-full border-collapse rounded-lg overflow-hidden shadow-sm" style={{ border: '1px solid rgba(46, 67, 84, 0.2)' }}>
+                        <thead style={{ backgroundColor: '#2e4354' }}>
                       <tr>
-                            <th className="border border-gray-300 px-3 py-2 text-left text-xs font-medium text-gray-700">Vendedor</th>
-                            <th className="border border-gray-300 px-3 py-2 text-right text-xs font-medium text-gray-700">Efectivo</th>
-                            <th className="border border-gray-300 px-3 py-2 text-right text-xs font-medium text-gray-700">Tarjeta (-3%)</th>
-                            <th className="border border-gray-300 px-3 py-2 text-right text-xs font-medium text-gray-700">Anticipo Apart.</th>
-                            <th className="border border-gray-300 px-3 py-2 text-right text-xs font-medium text-gray-700">Anticipo Ped.</th>
-                            <th className="border border-gray-300 px-3 py-2 text-right text-xs font-medium text-gray-700">Abono Apart.</th>
-                            <th className="border border-gray-300 px-3 py-2 text-right text-xs font-medium text-gray-700">Abono Ped.</th>
-                            <th className="border border-gray-300 px-3 py-2 text-right text-xs font-medium text-gray-700 bg-green-50">Venta Activa</th>
-                            <th className="border border-gray-300 px-3 py-2 text-right text-xs font-medium text-gray-700 bg-purple-50">Venta Pasiva</th>
-                            <th className="border border-gray-300 px-3 py-2 text-right text-xs font-medium text-gray-700 bg-orange-50">Cuentas x Cobrar</th>
-                            <th className="border border-gray-300 px-3 py-2 text-right text-xs font-medium text-gray-700 bg-blue-50">Productos Liquidados</th>
+                            <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider" style={{ color: '#ffffff', borderRight: '1px solid rgba(255, 255, 255, 0.1)' }}>Vendedor</th>
+                            <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider" style={{ color: '#ffffff', borderRight: '1px solid rgba(255, 255, 255, 0.1)' }}>Efectivo</th>
+                            <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider" style={{ color: '#ffffff', borderRight: '1px solid rgba(255, 255, 255, 0.1)' }}>Tarjeta (-3%)</th>
+                            <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider" style={{ color: '#ffffff', borderRight: '1px solid rgba(255, 255, 255, 0.1)' }}>Antic. Apart.</th>
+                            <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider" style={{ color: '#ffffff', borderRight: '1px solid rgba(255, 255, 255, 0.1)' }}>Antic. Ped.</th>
+                            <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider" style={{ color: '#ffffff', borderRight: '1px solid rgba(255, 255, 255, 0.1)' }}>Abono Apart.</th>
+                            <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider" style={{ color: '#ffffff', borderRight: '1px solid rgba(255, 255, 255, 0.1)' }}>Abono Ped.</th>
+                            <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider" style={{ color: '#ffffff', borderRight: '1px solid rgba(255, 255, 255, 0.1)' }}>Venta Activa</th>
+                            <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider" style={{ color: '#ffffff', borderRight: '1px solid rgba(255, 255, 255, 0.1)' }}>Venta Pasiva</th>
+                            <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider" style={{ color: '#ffffff', borderRight: '1px solid rgba(255, 255, 255, 0.1)' }}>Cuentas x Cobrar</th>
+                            <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider" style={{ color: '#ffffff', backgroundColor: 'rgba(0, 0, 0, 0.2)' }}>Prod. Liquidados</th>
                       </tr>
                     </thead>
                         <tbody>
                           {detailedReport.vendedores.map((vendedor, idx) => (
-                            <tr key={`${vendedor.vendedor_id}-${idx}`} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                              <td className="border border-gray-300 px-3 py-2 text-sm font-medium text-gray-900">{vendedor.vendedor_name}</td>
-                              <td className="border border-gray-300 px-3 py-2 text-sm text-right text-gray-700">${vendedor.total_efectivo_contado.toFixed(2)}</td>
-                              <td className="border border-gray-300 px-3 py-2 text-sm text-right text-gray-700">${vendedor.total_tarjeta_neto.toFixed(2)}</td>
-                              <td className="border border-gray-300 px-3 py-2 text-sm text-right text-gray-700">${vendedor.anticipos_apartados.toFixed(2)}</td>
-                              <td className="border border-gray-300 px-3 py-2 text-sm text-right text-gray-700">${vendedor.anticipos_pedidos.toFixed(2)}</td>
-                              <td className="border border-gray-300 px-3 py-2 text-sm text-right text-gray-700">${vendedor.abonos_apartados.toFixed(2)}</td>
-                              <td className="border border-gray-300 px-3 py-2 text-sm text-right text-gray-700">${vendedor.abonos_pedidos.toFixed(2)}</td>
-                              <td className="border border-gray-300 px-3 py-2 text-sm text-right font-bold text-green-700 bg-green-50">${vendedor.ventas_total_activa.toFixed(2)}</td>
-                              <td className="border border-gray-300 px-3 py-2 text-sm text-right font-bold text-purple-700 bg-purple-50">${vendedor.venta_total_pasiva.toFixed(2)}</td>
-                              <td className="border border-gray-300 px-3 py-2 text-sm text-right font-bold text-orange-700 bg-orange-50">${vendedor.cuentas_por_cobrar.toFixed(2)}</td>
-                              <td className="border border-gray-300 px-3 py-2 text-sm text-right font-bold text-blue-700 bg-blue-50">${(vendedor.productos_liquidados ?? 0).toFixed(2)}</td>
+                            <tr key={`${vendedor.vendedor_id}-${idx}`} style={{ backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f0f7f7', borderBottom: '1px solid rgba(46, 67, 84, 0.08)' }}>
+                              <td className="px-4 py-3 text-sm font-semibold" style={{ color: '#000000', borderRight: '1px solid rgba(46, 67, 84, 0.05)' }}>{vendedor.vendedor_name}</td>
+                              <td className="px-4 py-3 text-sm text-right" style={{ color: '#2e4354', borderRight: '1px solid rgba(46, 67, 84, 0.05)' }}>${vendedor.total_efectivo_contado.toFixed(2)}</td>
+                              <td className="px-4 py-3 text-sm text-right" style={{ color: '#2e4354', borderRight: '1px solid rgba(46, 67, 84, 0.05)' }}>${vendedor.total_tarjeta_neto.toFixed(2)}</td>
+                              <td className="px-4 py-3 text-sm text-right" style={{ color: '#2e4354', borderRight: '1px solid rgba(46, 67, 84, 0.05)' }}>${vendedor.anticipos_apartados.toFixed(2)}</td>
+                              <td className="px-4 py-3 text-sm text-right" style={{ color: '#2e4354', borderRight: '1px solid rgba(46, 67, 84, 0.05)' }}>${vendedor.anticipos_pedidos.toFixed(2)}</td>
+                              <td className="px-4 py-3 text-sm text-right" style={{ color: '#2e4354', borderRight: '1px solid rgba(46, 67, 84, 0.05)' }}>${vendedor.abonos_apartados.toFixed(2)}</td>
+                              <td className="px-4 py-3 text-sm text-right" style={{ color: '#2e4354', borderRight: '1px solid rgba(46, 67, 84, 0.05)' }}>${vendedor.abonos_pedidos.toFixed(2)}</td>
+                              <td className="px-4 py-3 text-sm text-right font-bold" style={{ color: '#2e4354', borderRight: '1px solid rgba(46, 67, 84, 0.05)' }}>${vendedor.ventas_total_activa.toFixed(2)}</td>
+                              <td className="px-4 py-3 text-sm text-right font-bold" style={{ color: '#2e4354', borderRight: '1px solid rgba(46, 67, 84, 0.05)' }}>${vendedor.venta_total_pasiva.toFixed(2)}</td>
+                              <td className="px-4 py-3 text-sm text-right font-bold" style={{ color: '#2e4354', borderRight: '1px solid rgba(46, 67, 84, 0.05)' }}>${vendedor.cuentas_por_cobrar.toFixed(2)}</td>
+                              <td className="px-4 py-3 text-sm text-right font-bold" style={{ color: '#2e4354', backgroundColor: 'rgba(46, 67, 84, 0.1)' }}>${(vendedor.productos_liquidados ?? 0).toFixed(2)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1643,310 +1169,10 @@ export default function ReportsPage() {
               </div>
 
               {/* Resumen Detallado */}
-              <div className="mt-6 pt-6 border-t-2 border-gray-200">
-                <h4 className="text-lg font-bold text-gray-800 mb-4">Resumen Detallado</h4>
-                
-                {/* Abonos y Anticipos */}
-                <div className="mb-4">
-                  <h5 className="font-semibold text-gray-700 mb-2">💰 Abonos y Anticipos</h5>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <div className="text-center p-2 bg-purple-50 rounded border">
-                      <p className="text-xs text-gray-600">Abonos de apartados</p>
-                      <p className="text-lg font-bold text-purple-700">${detailedReport.apartados_pendientes_abonos_adicionales.toFixed(2)}</p>
-                </div>
-                    <div className="text-center p-2 bg-purple-50 rounded border">
-                      <p className="text-xs text-gray-600">Anticipos de apartados</p>
-                      <p className="text-lg font-bold text-purple-700">${detailedReport.apartados_pendientes_anticipos.toFixed(2)}</p>
-              </div>
-                    <div className="text-center p-2 bg-indigo-50 rounded border">
-                      <p className="text-xs text-gray-600">Abonos de pedidos</p>
-                      <p className="text-lg font-bold text-indigo-700">${detailedReport.pedidos_pendientes_abonos.toFixed(2)}</p>
-                    </div>
-                    <div className="text-center p-2 bg-indigo-50 rounded border">
-                      <p className="text-xs text-gray-600">Anticipos de pedidos</p>
-                      <p className="text-lg font-bold text-indigo-700">${detailedReport.pedidos_pendientes_anticipos.toFixed(2)}</p>
-                    </div>
-                  </div>
-                </div>
+              <div className="mt-6 pt-6" style={{ borderTop: '2px solid rgba(46, 67, 84, 0.1)' }}>
+                <h4 className="text-lg font-['Exo_2',sans-serif] font-bold mb-4" style={{ color: '#2e4354' }}>Resumen Detallado</h4>
+                <AnalyticsDashboard dashboard={detailedReport.dashboard} />
 
-                {/* Ventas Activas */}
-                <div className="mb-4">
-                  <h5 className="font-semibold text-gray-700 mb-2">💵 Ventas Activas</h5>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <div className="text-center p-2 bg-green-50 rounded border">
-                      <p className="text-xs text-gray-600">Efectivo de contado</p>
-                      <p className="text-lg font-bold text-green-700">${detailedReport.total_efectivo_contado.toFixed(2)}</p>
-                    </div>
-                    <div className="text-center p-2 bg-blue-50 rounded border">
-                      <p className="text-xs text-gray-600">Subtotal tarjeta</p>
-                      <p className="text-lg font-bold text-blue-700">${detailedReport.subtotal_venta_tarjeta.toFixed(2)}</p>
-                    </div>
-                    <div className="text-center p-2 bg-blue-50 rounded border">
-                      <p className="text-xs text-gray-600">Tarjeta neto (-3%)</p>
-                      <p className="text-lg font-bold text-blue-700">${detailedReport.total_tarjeta_neto.toFixed(2)}</p>
-                    </div>
-                    <div className="text-center p-2 bg-purple-50 rounded border">
-                      <p className="text-xs text-gray-600">Apartados liquidados ({detailedReport.credito_count})</p>
-                      <p className="text-lg font-bold text-purple-700">${detailedReport.total_credito.toFixed(2)}</p>
-                    </div>
-                    <div className="text-center p-2 bg-indigo-50 rounded border">
-                      <p className="text-xs text-gray-600">Pedidos liquidados ({detailedReport.pedidos_liquidados_count})</p>
-                      <p className="text-lg font-bold text-indigo-700">${detailedReport.pedidos_liquidados_total.toFixed(2)}</p>
-                    </div>
-                    <div className="text-center p-2 bg-yellow-50 rounded border">
-                      <p className="text-xs text-gray-600">Total liquidados</p>
-                      <p className="text-lg font-bold text-yellow-700">${detailedReport.liquidacion_total.toFixed(2)}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Piezas */}
-                <div className="mb-4">
-                  <h5 className="font-semibold text-gray-700 mb-2">📦 Piezas</h5>
-                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                    <div className="text-center p-2 bg-green-50 rounded border">
-                      <p className="text-xs text-gray-600">Piezas vendidas</p>
-                      <p className="text-lg font-bold text-green-700">{detailedReport.num_piezas_vendidas}</p>
-                    </div>
-                    <div className="text-center p-2 bg-blue-50 rounded border">
-                      <p className="text-xs text-gray-600">Piezas entregadas</p>
-                      <p className="text-lg font-bold text-blue-700">{detailedReport.num_piezas_entregadas}</p>
-                    </div>
-                    <div className="text-center p-2 bg-purple-50 rounded border">
-                      <p className="text-xs text-gray-600">Apartadas pagadas</p>
-                      <p className="text-lg font-bold text-purple-700">{detailedReport.num_piezas_apartadas_pagadas}</p>
-                    </div>
-                    <div className="text-center p-2 bg-indigo-50 rounded border">
-                      <p className="text-xs text-gray-600">Pedidos pagados</p>
-                      <p className="text-lg font-bold text-indigo-700">{detailedReport.num_piezas_pedidos_pagados}</p>
-                    </div>
-                    <div className="text-center p-2 bg-orange-50 rounded border">
-                      <p className="text-xs text-gray-600">Pedidos apartados liquidados</p>
-                      <p className="text-lg font-bold text-orange-700">{detailedReport.num_piezas_pedidos_apartados_liquidados}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Contadores */}
-                <div className="mb-4">
-                  <h5 className="font-semibold text-gray-700 mb-2">📊 Contadores</h5>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <div className="text-center p-2 bg-purple-50 rounded border">
-                      <p className="text-xs text-gray-600">Solicitudes apartado</p>
-                      <p className="text-lg font-bold text-purple-700">{detailedReport.num_solicitudes_apartado}</p>
-                    </div>
-                    <div className="text-center p-2 bg-indigo-50 rounded border">
-                      <p className="text-xs text-gray-600">Pedidos hechos</p>
-                      <p className="text-lg font-bold text-indigo-700">{detailedReport.num_pedidos_hechos}</p>
-                    </div>
-                    <div className="text-center p-2 bg-red-50 rounded border">
-                      <p className="text-xs text-gray-600">Cancelaciones</p>
-                      <p className="text-lg font-bold text-red-700">{detailedReport.num_cancelaciones}</p>
-                    </div>
-                    <div className="text-center p-2 bg-orange-50 rounded border">
-                      <p className="text-xs text-gray-600">Apartados vencidos</p>
-                      <p className="text-lg font-bold text-orange-700">{detailedReport.num_apartados_vencidos}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Abonos y Vencimientos */}
-                <div className="mb-4">
-                  <h5 className="font-semibold text-gray-700 mb-2">📝 Abonos y Vencimientos</h5>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <div className="text-center p-2 bg-purple-50 rounded border">
-                      <p className="text-xs text-gray-600">Abonos a apartados</p>
-                      <p className="text-lg font-bold text-purple-700">{detailedReport.num_abonos_apartados}</p>
-                    </div>
-                    <div className="text-center p-2 bg-indigo-50 rounded border">
-                      <p className="text-xs text-gray-600">Abonos a pedidos</p>
-                      <p className="text-lg font-bold text-indigo-700">{detailedReport.num_abonos_pedidos}</p>
-                    </div>
-                    <div className="text-center p-2 bg-orange-50 rounded border">
-                      <p className="text-xs text-gray-600">Pedidos vencidos</p>
-                      <p className="text-lg font-bold text-orange-700">{detailedReport.num_pedidos_vencidos}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Reembolsos y Saldos Vencidos */}
-                <div className="mb-4">
-                  <h5 className="font-semibold text-gray-700 mb-2">💸 Reembolsos y Saldos Vencidos</h5>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <div className="text-center p-2 bg-red-50 rounded border">
-                      <p className="text-xs text-gray-600">Reembolso apartados cancelados</p>
-                      <p className="text-lg font-bold text-red-700">${(detailedReport.reembolso_apartados_cancelados ?? 0).toFixed(2)}</p>
-                    </div>
-                    <div className="text-center p-2 bg-orange-50 rounded border">
-                      <p className="text-xs text-gray-600">Reembolso pedidos cancelados</p>
-                      <p className="text-lg font-bold text-orange-700">${(detailedReport.reembolso_pedidos_cancelados ?? 0).toFixed(2)}</p>
-                    </div>
-                    <div className="text-center p-2 bg-amber-50 rounded border">
-                      <p className="text-xs text-gray-600">Saldo vencido apartados</p>
-                      <p className="text-lg font-bold text-amber-700">${(detailedReport.saldo_vencido_apartados ?? 0).toFixed(2)}</p>
-                    </div>
-                    <div className="text-center p-2 bg-yellow-50 rounded border">
-                      <p className="text-xs text-gray-600">Saldo vencido pedidos</p>
-                      <p className="text-lg font-bold text-yellow-700">${(detailedReport.saldo_vencido_pedidos ?? 0).toFixed(2)}</p>
-                    </div>
-                  </div>
-                </div>
-                
-                {/* Resumen de Ventas Activas */}
-                {detailedReport.resumen_ventas_activas && detailedReport.resumen_ventas_activas.length > 0 && (
-                  <div className="mb-6">
-                    <h5 className="font-bold text-gray-800 mb-3 text-lg flex items-center">
-                      <span className="text-2xl mr-2">🛒</span>
-                      Resumen de Ventas Activas
-                    </h5>
-                    <div className="overflow-x-auto shadow-lg rounded-lg border border-gray-200">
-                      <table className="min-w-full bg-white text-sm">
-                        <thead>
-                          <tr className="bg-gradient-to-r from-green-600 to-emerald-500 text-white">
-                            <th className="px-4 py-3 text-left font-semibold uppercase tracking-wide text-xs">
-                              Tipo de movimiento
-                            </th>
-                            <th className="px-4 py-3 text-left font-semibold uppercase tracking-wide text-xs">
-                              Método de pago
-                            </th>
-                            <th className="px-4 py-3 text-center font-semibold uppercase tracking-wide text-xs">
-                              Operaciones
-                            </th>
-                            <th className="px-4 py-3 text-right font-semibold uppercase tracking-wide text-xs">
-                              Subtotal
-                            </th>
-                            <th className="px-4 py-3 text-right font-semibold uppercase tracking-wide text-xs">
-                              Total
-                            </th>
-                      </tr>
-                    </thead>
-                        <tbody className="divide-y divide-gray-200">
-                          {detailedReport.resumen_ventas_activas.map((row, idx) => {
-                            const isSubtotal = row.metodo_pago === 'SUBTOTAL';
-                            return (
-                              <tr 
-                                key={idx} 
-                                className={
-                                  isSubtotal 
-                                    ? 'bg-gradient-to-r from-emerald-50 to-green-50 hover:from-emerald-100 hover:to-green-100 transition-colors border-t-2 border-b-2 border-emerald-300' 
-                                    : 'hover:bg-gray-50 transition-colors'
-                                }
-                              >
-                                <td className={`px-4 py-3 ${isSubtotal ? 'font-bold text-gray-800' : 'text-gray-700'}`}>
-                                  {row.tipo_movimiento}
-                                </td>
-                                <td className="px-4 py-3">
-                                  {isSubtotal ? (
-                                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-gradient-to-r from-emerald-600 to-green-600 text-white shadow-sm">
-                                      {row.metodo_pago}
-                                    </span>
-                                  ) : row.metodo_pago === 'Efectivo' ? (
-                                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800 border border-green-300">
-                                      💵 {row.metodo_pago}
-                                    </span>
-                                  ) : (
-                                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-300">
-                                      💳 {row.metodo_pago}
-                                    </span>
-                                  )}
-                                </td>
-                                <td className={`px-4 py-3 text-center ${isSubtotal ? 'font-bold text-gray-800' : 'text-gray-600'}`}>
-                                  <span className={isSubtotal ? 'inline-flex items-center justify-center w-8 h-8 rounded-full bg-emerald-600 text-white text-xs font-bold' : ''}>
-                                    {row.cantidad_operaciones}
-                                  </span>
-                                </td>
-                                <td className={`px-4 py-3 text-right ${isSubtotal ? 'font-bold text-gray-800 text-base' : 'text-gray-700'}`}>
-                                  ${row.subtotal.toFixed(2)}
-                                </td>
-                                <td className={`px-4 py-3 text-right ${isSubtotal ? 'font-extrabold text-lg bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent' : 'font-semibold text-gray-900'}`}>
-                                  ${row.total.toFixed(2)}
-                                </td>
-                        </tr>
-                            );
-                          })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-                
-                {/* Resumen de Pagos - Ventas Pasivas */}
-                {detailedReport.resumen_pagos && detailedReport.resumen_pagos.length > 0 && (
-                  <div className="mb-6">
-                    <h5 className="font-bold text-gray-800 mb-3 text-lg flex items-center">
-                      <span className="text-2xl mr-2">💳</span>
-                      Resumen de Pagos - Ventas Pasivas
-                    </h5>
-                    <div className="overflow-x-auto shadow-lg rounded-lg border border-gray-200">
-                      <table className="min-w-full bg-white text-sm">
-                        <thead>
-                          <tr className="bg-gradient-to-r from-purple-600 to-purple-500 text-white">
-                            <th className="px-4 py-3 text-left font-semibold uppercase tracking-wide text-xs">
-                              Tipo de movimiento
-                            </th>
-                            <th className="px-4 py-3 text-left font-semibold uppercase tracking-wide text-xs">
-                              Método de pago
-                            </th>
-                            <th className="px-4 py-3 text-center font-semibold uppercase tracking-wide text-xs">
-                              Operaciones
-                            </th>
-                            <th className="px-4 py-3 text-right font-semibold uppercase tracking-wide text-xs">
-                              Subtotal
-                            </th>
-                            <th className="px-4 py-3 text-right font-semibold uppercase tracking-wide text-xs">
-                              Total
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-200">
-                          {detailedReport.resumen_pagos.map((row, idx) => {
-                            const isSubtotal = row.metodo_pago === 'SUBTOTAL';
-                            return (
-                              <tr 
-                                key={idx} 
-                                className={
-                                  isSubtotal 
-                                    ? 'bg-gradient-to-r from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100 transition-colors border-t-2 border-b-2 border-blue-300' 
-                                    : 'hover:bg-gray-50 transition-colors'
-                                }
-                              >
-                                <td className={`px-4 py-3 ${isSubtotal ? 'font-bold text-gray-800' : 'text-gray-700'}`}>
-                                  {row.tipo_movimiento}
-                                </td>
-                                <td className="px-4 py-3">
-                                  {isSubtotal ? (
-                                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm">
-                                      {row.metodo_pago}
-                                    </span>
-                                  ) : row.metodo_pago === 'Efectivo' ? (
-                                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800 border border-green-300">
-                                      💵 {row.metodo_pago}
-                                    </span>
-                                  ) : (
-                                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-300">
-                                      💳 {row.metodo_pago}
-                                    </span>
-                                  )}
-                                </td>
-                                <td className={`px-4 py-3 text-center ${isSubtotal ? 'font-bold text-gray-800' : 'text-gray-600'}`}>
-                                  <span className={isSubtotal ? 'inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-600 text-white text-xs font-bold' : ''}>
-                                    {row.cantidad_operaciones}
-                                  </span>
-                                </td>
-                                <td className={`px-4 py-3 text-right ${isSubtotal ? 'font-bold text-gray-800 text-base' : 'text-gray-700'}`}>
-                                  ${row.subtotal.toFixed(2)}
-                                </td>
-                                <td className={`px-4 py-3 text-right ${isSubtotal ? 'font-extrabold text-lg bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent' : 'font-semibold text-gray-900'}`}>
-                                  ${row.total.toFixed(2)}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
 

@@ -33,7 +33,9 @@ export default function SalesHistoryPage() {
       qs.set('skip', String(nextPage * pageSize))
       qs.set('limit', String(pageSize))
       const r = await api.get(`/sales?${qs.toString()}`)
-      setSales(r.data)
+      // Filter to show only "contado" sales in the sidebar history
+      const contadoSales = r.data.filter((sale: Sale) => sale.tipo_venta === 'contado' || !sale.tipo_venta)
+      setSales(contadoSales)
     } catch (e: any) {
       const errorMsg = e?.response?.data?.detail || e?.message || 'Error cargando ventas'
       setMsg(typeof errorMsg === 'string' ? errorMsg : 'Error cargando ventas')
@@ -312,19 +314,25 @@ export default function SalesHistoryPage() {
       </thead>
       <tbody>
         ${items.map((item: any) => {
-          const precioConDescuento = parseFloat(item.unit_price || '0')
           const discountPct = parseFloat(item.discount_pct || '0')
-          const quantity = parseInt(item.quantity || '1')
-          // Si hay descuento, calcular precio original
-          const precioOriginal = discountPct > 0 && discountPct < 100 ? precioConDescuento / (1 - discountPct / 100) : precioConDescuento
-          const importe = precioConDescuento * quantity
-          
+          const quantity = Math.max(1, parseInt(item.quantity || '1'))
+          // Precio unitario neto (con descuento) preferentemente desde total_price/quantity; fallback a unit_price
+          const netUnit = (() => {
+            const totalPrice = parseFloat(item.total_price || 'NaN')
+            if (!Number.isNaN(totalPrice) && quantity > 0) return totalPrice / quantity
+            const up = parseFloat(item.unit_price || '0')
+            // si viene unit_price pero ya neto, será coherente con discount=0 o igual a neto
+            return up
+          })()
+          // Precio original (sin descuento) calculado desde neto y porcentaje
+          const originalUnit = discountPct > 0 && discountPct < 100 ? (netUnit / (1 - discountPct / 100)) : netUnit
+          const importe = netUnit * quantity
           return `
           <tr>
             <td>${quantity}</td>
             <td>${item.codigo || ''}</td>
             <td>${item.name || 'Producto sin descripción'}</td>
-            <td>$${precioOriginal.toFixed(2)}</td>
+            <td>$${originalUnit.toFixed(2)}</td>
             <td>${discountPct > 0 ? discountPct.toFixed(1) + '%' : '-'}</td>
             <td>$${importe.toFixed(2)}</td>
           </tr>
@@ -366,6 +374,17 @@ export default function SalesHistoryPage() {
 
       w.document.write(html)
       w.document.close()
+
+      // Guardar ticket persistente
+      try {
+        await api.post('/tickets', {
+          sale_id: saleData.id,
+          kind: saleData.tipo_venta === 'credito' ? 'payment' : 'sale',
+          html
+        })
+      } catch (persistErr) {
+        console.warn('No se pudo guardar el ticket desde historial:', persistErr)
+      }
       
       // Wait for images to load before printing
       w.addEventListener('load', () => {
@@ -387,6 +406,21 @@ export default function SalesHistoryPage() {
 
   const ticket = async (id: number) => {
     try {
+      // Intentar obtener ticket persistido
+      const saved = await api.get(`/tickets/by-sale/${id}`)
+      const tickets = saved.data || []
+      if (tickets.length > 0) {
+        const last = tickets[tickets.length - 1]
+        const w = window.open('', '_blank')
+        if (!w) return
+        w.document.write(last.html)
+        w.document.close()
+        // Asegurar impresión
+        w.addEventListener('load', () => setTimeout(() => w.print(), 300))
+        setTimeout(() => { if (!w.closed) w.print() }, 1000)
+        return
+      }
+      // Fallback: reconstruir desde venta
       const r = await api.get(`/sales/${id}`)
       printSaleTicket(r.data)
     } catch (e: any) {
@@ -408,9 +442,9 @@ export default function SalesHistoryPage() {
             <input className="input" type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} />
           </div>
           <div>
-            <div className="text-xs text-slate-600">Usuario</div>
+            <div className="text-xs text-slate-600">Vendedor</div>
             <select className="input" value={userId} onChange={e => setUserId(e.target.value)}>
-              <option value="">Todos los usuarios</option>
+              <option value="">Todos los vendedores</option>
               {users.map(user => (
                 <option key={user.id} value={user.id.toString()}>
                   {user.email.split('@')[0]} (ID: {user.id})
@@ -447,7 +481,7 @@ export default function SalesHistoryPage() {
           }}>Exportar CSV</button>
         </div>
         <table className="w-full text-left">
-          <thead><tr><th className="p-2">Folio</th><th className="p-2">Fecha</th><th className="p-2">Total</th><th className="p-2">Tipo</th><th className="p-2">Usuario</th><th className="p-2">Acciones</th></tr></thead>
+          <thead><tr><th className="p-2">Folio</th><th className="p-2">Fecha</th><th className="p-2">Total</th><th className="p-2">Tipo</th><th className="p-2">Vendedor</th><th className="p-2">Acciones</th></tr></thead>
           <tbody>
             {sales.map(s => (
               <tr key={s.id} className="border-t">
