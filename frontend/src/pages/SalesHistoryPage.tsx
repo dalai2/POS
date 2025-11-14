@@ -24,6 +24,13 @@ export default function SalesHistoryPage() {
     }
   }
 
+  const getVendedorName = (sale: Sale) => {
+    // Try vendedor_id first, then user_id as fallback
+    const vendedorUserId = sale.vendedor_id || sale.user_id
+    const vendedorUser = vendedorUserId ? users.find(u => u.id === vendedorUserId) : null
+    return vendedorUser ? vendedorUser.email.split('@')[0] : 'N/A'
+  }
+
   const load = async (nextPage = page) => {
     try {
       const qs = new URLSearchParams()
@@ -489,7 +496,7 @@ export default function SalesHistoryPage() {
                 <td className="p-2">{new Date(s.created_at).toLocaleString()}</td>
                 <td className="p-2">${Number(s.total).toFixed(2)}</td>
                 <td className="p-2">{s.tipo_venta === 'credito' ? 'abono' : (s.tipo_venta || 'contado')}</td>
-                <td className="p-2">{s.user?.email ? s.user.email.split('@')[0] : 'N/A'}</td>
+                <td className="p-2">{getVendedorName(s)}</td>
                 <td className="p-2 flex gap-2">
                   <button className="btn" onClick={() => ticket(s.id)}>Ticket</button>
                   <button className="btn" onClick={async () => { if (!confirm('¿Devolver venta completa?')) return; try { await api.post(`/sales/${s.id}/return`); await load(0); setMsg('Venta devuelta exitosamente') } catch (e:any) { setMsg(e?.response?.data?.detail || 'Error al devolver venta') } }}>Devolver</button>

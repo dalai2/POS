@@ -41,6 +41,7 @@ export default function InventoryControlPage() {
 
   useEffect(() => {
     if (activeTab === 'stock') {
+      // En tab stock, no pasar fecha (mostrar stock actual)
       getStockGrouped();
     } else if (activeTab === 'pedidos') {
       getStockPedidos();
@@ -53,6 +54,15 @@ export default function InventoryControlPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
+
+  // Cargar stock agrupado cuando se genera un reporte
+  useEffect(() => {
+    if (report && activeTab === 'control') {
+      // Pasar endDate para calcular stock histórico
+      getStockGrouped(endDate);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [report]);
 
   // Verificar permisos
   if (userRole !== 'admin' && userRole !== 'owner') {
@@ -271,7 +281,7 @@ export default function InventoryControlPage() {
             </div>
 
             {/* Report */}
-            {report && <InventoryReportView report={report} />}
+            {report && <InventoryReportView report={report} stockGrouped={stockGrouped} stockDate={endDate} />}
           </div>
         )}
 
@@ -287,6 +297,27 @@ export default function InventoryControlPage() {
                 {loading ? 'Cargando...' : '🔄 Actualizar'}
               </button>
             </div>
+
+            {/* Total Agrupaciones Card */}
+            {stockGrouped && stockGrouped.length > 0 && (
+              <div className="mb-6">
+                <div className="rounded-xl shadow-lg p-6" style={{ backgroundColor: '#ffffff', border: '1px solid rgba(46, 67, 84, 0.1)' }}>
+                  <div className="text-sm font-medium mb-1" style={{ color: '#2e4354', opacity: 0.7 }}>
+                    Total de Agrupaciones
+                  </div>
+                  <div className="text-4xl font-bold" style={{ color: '#2e4354' }}>
+                    {stockGrouped.length}
+                  </div>
+                  <div className="text-xs mt-2" style={{ color: '#2e4354', opacity: 0.6 }}>
+                    grupos por nombre y quilataje
+                  </div>
+                  <div className="text-xs mt-1" style={{ color: '#2e4354', opacity: 0.6 }}>
+                    Total piezas: {stockGrouped.reduce((sum, group) => sum + group.cantidad_total, 0)}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {stockGrouped && <StockGroupedView stock={stockGrouped} loading={loading} />}
           </div>
         )}

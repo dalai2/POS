@@ -155,10 +155,14 @@ export const useInventoryReport = (
     }
   }, [generateReport]);
 
-  const getStockGrouped = useCallback(async () => {
+  const getStockGrouped = useCallback(async (forDate?: string) => {
     setLoading(true);
     try {
-      const response = await api.get('/inventory/stock-grouped');
+      const params: any = {};
+      if (forDate) {
+        params.for_date = forDate;
+      }
+      const response = await api.get('/inventory/stock-grouped', { params });
       setStockGrouped(response.data);
     } catch (error) {
       console.error('Error getting stock grouped:', error);

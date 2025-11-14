@@ -14,6 +14,7 @@ from app.models.inventory_closure import InventoryClosure
 from app.services.inventory_service import (
     get_inventory_report,
     get_stock_grouped,
+    get_stock_grouped_historical,
     get_stock_pedidos,
     get_stock_eliminado,
     get_stock_devuelto,
@@ -340,17 +341,22 @@ def remove_pieces(
 
 
 @router.get("/stock-grouped")
-def get_stock_grouped(
+def get_stock_grouped_endpoint(
+    for_date: Optional[date] = Query(None, description="Calculate historical stock for this date (YYYY-MM-DD)"),
     db: Session = Depends(get_db),
     tenant: Tenant = Depends(get_tenant),
     current_user: User = Depends(get_current_user),
 ):
     """
-    Get current stock grouped by nombre, modelo, quilataje, marca, color, base, tipo_joya, talla.
+    Get stock grouped by nombre, modelo, quilataje, marca, color, base, tipo_joya, talla.
+    If for_date is provided, calculates historical stock for that date.
+    Otherwise, returns current stock.
     """
-    from app.services.inventory_service import get_stock_grouped as service_get_stock_grouped
+    if for_date:
+        stock = get_stock_grouped_historical(target_date=for_date, db=db, tenant=tenant)
+    else:
+        stock = get_stock_grouped(db=db, tenant=tenant)
     
-    stock = service_get_stock_grouped(db=db, tenant=tenant)
     return stock
 
 

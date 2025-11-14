@@ -539,6 +539,132 @@ def get_stock_grouped(
     return list(groups.values())
 
 
+def get_stock_grouped_historical(
+    target_date: date,
+    db: Session,
+    tenant: Tenant
+) -> List[Dict[str, Any]]:
+    """
+    Calculate historical stock grouped by nombre, modelo, quilataje, marca, color, base, tipo_joya, talla
+    for a specific date by working backwards from current stock.
+    
+    Args:
+        target_date: The date to calculate stock for
+        db: Database session
+        tenant: Tenant for filtering
+        
+    Returns:
+        List of grouped stock entries with total quantities as they were on target_date
+    """
+    from datetime import timedelta
+    
+    # If target_date is today or future, use current stock
+    if target_date >= date.today():
+        return get_stock_grouped(db=db, tenant=tenant)
+    
+    # Convert target_date to datetime with Mexico timezone adjustment (UTC-6)
+    # We want to include all movements UP TO the end of target_date in Mexico time
+    # End of day in Mexico = 23:59:59 Mexico = 05:59:59 UTC next day
+    target_datetime_end = datetime.combine(
+        target_date + timedelta(days=1), 
+        datetime.min.time()
+    ).replace(tzinfo=tz.utc) + timedelta(hours=6) - timedelta(seconds=1)
+    
+    # Get all products that existed on or before target_date
+    products = db.query(Product).filter(
+        Product.tenant_id == tenant.id,
+        Product.active == True
+    ).all()
+    
+    # Calculate historical stock for each product
+    historical_stocks: Dict[int, int] = {}
+    
+    for product in products:
+        current_stock = int(product.stock) if product.stock else 0
+        
+        # Get movements that happened AFTER target_date
+        movements_after = db.query(InventoryMovement).filter(
+            InventoryMovement.tenant_id == tenant.id,
+            InventoryMovement.product_id == product.id,
+            InventoryMovement.created_at > target_datetime_end
+        ).all()
+        
+        # Get sale items that happened AFTER target_date
+        sales_after = db.query(SaleItem).join(Sale).filter(
+            Sale.tenant_id == tenant.id,
+            SaleItem.product_id == product.id,
+            Sale.created_at > target_datetime_end,
+            Sale.return_of_id == None  # Don't count returned sales
+        ).all()
+        
+        # Calculate historical stock by reversing future changes
+        historical_stock = current_stock
+        
+        # Reverse movements after target date
+        for movement in movements_after:
+            if movement.movement_type == 'entrada':
+                # If it was an entrada (addition), subtract it to get historical stock
+                historical_stock -= movement.quantity
+            else:  # salida
+                # If it was a salida (removal), add it back to get historical stock
+                historical_stock += movement.quantity
+        
+        # Reverse sales after target date
+        for sale_item in sales_after:
+            # Sales reduce stock, so add them back
+            historical_stock += sale_item.quantity
+        
+        # Stock can't be negative (data inconsistency protection)
+        historical_stocks[product.id] = max(0, historical_stock)
+    
+    # Now group products with their historical stocks
+    groups: Dict[str, Dict[str, Any]] = {}
+    
+    for product in products:
+        historical_stock = historical_stocks.get(product.id, 0)
+        
+        # Skip products with no historical stock
+        if historical_stock <= 0:
+            continue
+        
+        # Create grouping key from all relevant attributes
+        key = "|".join([
+            str(product.name or ''),
+            str(product.modelo or ''),
+            str(product.quilataje or ''),
+            str(product.marca or ''),
+            str(product.color or ''),
+            str(product.base or ''),
+            str(product.tipo_joya or ''),
+            str(product.talla or ''),
+        ])
+        
+        if key not in groups:
+            groups[key] = {
+                'nombre': product.name,
+                'modelo': product.modelo,
+                'quilataje': product.quilataje,
+                'marca': product.marca,
+                'color': product.color,
+                'base': product.base,
+                'tipo_joya': product.tipo_joya,
+                'talla': product.talla,
+                'cantidad_total': 0,
+                'productos': []
+            }
+        
+        groups[key]['cantidad_total'] += historical_stock
+        groups[key]['productos'].append({
+            'id': product.id,
+            'codigo': product.codigo,
+            'stock': historical_stock,
+            'precio': float(product.price),
+            'costo': float(product.cost_price),
+        })
+    
+    return list(groups.values())
+
+
 def get_stock_pedidos(
     db: Session,
     tenant: Tenant
