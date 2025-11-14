@@ -464,7 +464,14 @@ def list_sales(
 ):
     q = db.query(Sale).filter(Sale.tenant_id == tenant.id)
     if user_id is not None:
-        q = q.filter(Sale.user_id == user_id)
+        # Filter by vendedor_id first, fallback to user_id if vendedor_id is null
+        from sqlalchemy import or_, and_
+        q = q.filter(
+            or_(
+                Sale.vendedor_id == user_id,
+                and_(Sale.vendedor_id == None, Sale.user_id == user_id)
+            )
+        )
     if date_from:
         try:
             df = datetime.fromisoformat(date_from)
