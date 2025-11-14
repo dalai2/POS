@@ -17,6 +17,7 @@ from app.models.payment import Payment
 from app.models.shift import Shift
 from app.models.metal_rate import MetalRate
 from app.models.inventory_movement import InventoryMovement
+from app.models.inventory_closure import InventoryClosure
 from app.models.credit_payment import CreditPayment
 from app.models.producto_pedido import ProductoPedido, Pedido, PagoPedido
 

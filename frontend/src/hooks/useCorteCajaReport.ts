@@ -35,7 +35,13 @@ export interface UseCorteCajaReport {
   setReport: (report: CorteDeCajaReport | null) => void;
 }
 
-const todayIso = () => new Date().toISOString().split('T')[0];
+const todayIso = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 export const useCorteCajaReport = (
   options: UseCorteCajaReportOptions = {},

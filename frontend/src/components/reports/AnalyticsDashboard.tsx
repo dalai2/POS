@@ -158,7 +158,7 @@ interface AnalyticsDashboardProps {
 export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
   dashboard,
 }) => {
-  if (!dashboard) {
+  if (!dashboard || !dashboard.ventas) {
     return null;
   }
 

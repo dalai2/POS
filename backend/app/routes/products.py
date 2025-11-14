@@ -148,6 +148,12 @@ def update_product(
     product = db.query(Product).filter(Product.id == product_id, Product.tenant_id == tenant.id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Not found")
+    
+    # Track stock changes to create inventory movements
+    old_stock = int(product.stock) if product.stock else 0
+    new_stock = int(data.stock) if data.stock else 0
+    stock_diff = new_stock - old_stock
+    
     product.name = data.name
     product.price = data.price
     product.cost_price = data.cost_price
@@ -169,6 +175,22 @@ def update_product(
     product.precio_manual = data.precio_manual
     product.costo = data.costo
     product.precio_venta = data.precio_venta
+    
+    # Create inventory movement if stock changed
+    if stock_diff != 0:
+        from app.models.inventory_movement import InventoryMovement
+        movement_type = "entrada" if stock_diff > 0 else "salida"
+        movement = InventoryMovement(
+            tenant_id=tenant.id,
+            product_id=product_id,
+            user_id=user.id,
+            movement_type=movement_type,
+            quantity=abs(stock_diff),
+            cost=float(data.cost_price) if data.cost_price and stock_diff > 0 else None,
+            notes=f"Ajuste manual de inventario desde página de productos"
+        )
+        db.add(movement)
+    
     try:
         db.commit()
     except IntegrityError as e:

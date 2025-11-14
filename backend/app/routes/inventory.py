@@ -1,8 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, date
 
 from app.core.database import get_db
 from app.core.deps import get_tenant, get_current_user, require_admin
@@ -10,6 +10,15 @@ from app.models.tenant import Tenant
 from app.models.user import User
 from app.models.inventory_movement import InventoryMovement
 from app.models.product import Product
+from app.models.inventory_closure import InventoryClosure
+from app.services.inventory_service import (
+    get_inventory_report,
+    get_stock_grouped,
+    get_stock_pedidos,
+    get_stock_eliminado,
+    get_stock_devuelto,
+    get_stock_apartado,
+)
 
 router = APIRouter()
 
@@ -114,4 +123,291 @@ def get_all_movements(
         InventoryMovement.tenant_id == tenant.id
     ).order_by(InventoryMovement.created_at.desc()).offset(skip).limit(limit).all()
     return movements
+
+
+def _ensure_inventory_closure_table(db: Session) -> None:
+    """Ensure inventory_closures table exists"""
+    try:
+        InventoryClosure.__table__.create(bind=db.get_bind(), checkfirst=True)
+    except Exception:
+        # If creation fails, proceed; subsequent operations may still work if table exists
+        pass
+
+
+@router.get("/report")
+def get_inventory_report(
+    start_date: date = Query(...),
+    end_date: date = Query(...),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_tenant),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Generate inventory report for the specified date range.
+    If a closure exists for the date range, return it. Otherwise, generate new report.
+    """
+    from app.services.inventory_service import get_inventory_report as service_get_inventory_report
+    
+    # Check if using closure (single day)
+    if start_date == end_date:
+        _ensure_inventory_closure_table(db)
+        closure = (
+            db.query(InventoryClosure)
+            .filter(
+                InventoryClosure.tenant_id == tenant.id,
+                InventoryClosure.closure_date == start_date,
+            )
+            .first()
+        )
+        if closure:
+            return closure.data
+    
+    # Generate new report
+    report = service_get_inventory_report(
+        start_date=start_date,
+        end_date=end_date,
+        db=db,
+        tenant=tenant
+    )
+    return report
+
+
+@router.post("/close-day")
+def close_inventory_day(
+    for_date: Optional[date] = None,
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_tenant),
+    current_user: User = Depends(require_admin),
+):
+    """
+    Close inventory for a day: calculates inventory metrics for the day and saves them once.
+    If a closure already exists for that day, returns a 400 error.
+    """
+    _ensure_inventory_closure_table(db)
+
+    target_date = for_date or date.today()
+
+    # Check if already closed
+    existing = (
+        db.query(InventoryClosure)
+        .filter(
+            InventoryClosure.tenant_id == tenant.id,
+            InventoryClosure.closure_date == target_date,
+        )
+        .first()
+    )
+    if existing:
+        raise HTTPException(status_code=400, detail="El cierre de inventario de este día ya fue realizado")
+
+    # Generate report for that day
+    from app.services.inventory_service import get_inventory_report as service_get_inventory_report
+    from app.services.inventory_service import _build_inventory_snapshot
+    
+    report = service_get_inventory_report(
+        start_date=target_date, end_date=target_date, db=db, tenant=tenant
+    )
+    
+    snapshot = _build_inventory_snapshot(report)
+
+    # Save complete JSON
+    closure = InventoryClosure(
+        tenant_id=tenant.id,
+        closure_date=target_date,
+        data=snapshot,
+    )
+    db.add(closure)
+    db.commit()
+    db.refresh(closure)
+
+    return {"status": "ok", "message": "Cierre de inventario guardado", "date": target_date.isoformat(), "closure_id": closure.id}
+
+
+@router.get("/closure")
+def get_day_closure(
+    for_date: Optional[date] = None,
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_tenant),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    View Inventory: read saved metrics from inventory closure for the day.
+    If no closure exists, return 404.
+    """
+    _ensure_inventory_closure_table(db)
+
+    target_date = for_date or date.today()
+    closure = (
+        db.query(InventoryClosure)
+        .filter(
+            InventoryClosure.tenant_id == tenant.id,
+            InventoryClosure.closure_date == target_date,
+        )
+        .first()
+    )
+    if not closure:
+        raise HTTPException(status_code=404, detail="Cierre de inventario pendiente para este día")
+
+    return closure.data
+
+
+@router.get("/closure-range")
+def get_closure_range(
+    start_date: date = Query(...),
+    end_date: date = Query(...),
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_tenant),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    View Period: aggregate saved closures in the range. Does not recalculate anything.
+    Days without closures are omitted.
+    """
+    _ensure_inventory_closure_table(db)
+
+    closures = (
+        db.query(InventoryClosure)
+        .filter(
+            InventoryClosure.tenant_id == tenant.id,
+            InventoryClosure.closure_date >= start_date,
+            InventoryClosure.closure_date <= end_date,
+        )
+        .order_by(InventoryClosure.closure_date.asc())
+        .all()
+    )
+
+    if not closures:
+        raise HTTPException(status_code=404, detail="No hay cierres de inventario en este período")
+
+    # Aggregate closures (for now, return list of closures)
+    # In the future, could aggregate metrics
+    return [closure.data for closure in closures]
+
+
+class RemovePiecesRequest(BaseModel):
+    product_id: int
+    quantity: int
+    notes: str
+
+
+@router.post("/remove-pieces")
+def remove_pieces(
+    data: RemovePiecesRequest,
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_tenant),
+    current_user: User = Depends(require_admin),
+):
+    """
+    Remove pieces from inventory (create salida movement with notes).
+    """
+    # Verify product exists
+    product = db.query(Product).filter(
+        Product.id == data.product_id,
+        Product.tenant_id == tenant.id
+    ).first()
+    
+    if not product:
+        raise HTTPException(status_code=404, detail="Producto no encontrado")
+    
+    if product.stock < data.quantity:
+        raise HTTPException(status_code=400, detail="Stock insuficiente")
+    
+    # Create salida movement
+    movement = InventoryMovement(
+        tenant_id=tenant.id,
+        product_id=data.product_id,
+        user_id=current_user.id,
+        movement_type="salida",
+        quantity=data.quantity,
+        notes=data.notes
+    )
+    db.add(movement)
+    
+    # Update product stock
+    product.stock -= data.quantity
+    
+    db.commit()
+    db.refresh(movement)
+    
+    return {
+        "id": movement.id,
+        "product_id": movement.product_id,
+        "user_id": movement.user_id,
+        "movement_type": movement.movement_type,
+        "quantity": movement.quantity,
+        "notes": movement.notes,
+        "created_at": movement.created_at.isoformat() if movement.created_at else "",
+    }
+
+
+@router.get("/stock-grouped")
+def get_stock_grouped(
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_tenant),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Get current stock grouped by nombre, modelo, quilataje, marca, color, base, tipo_joya, talla.
+    """
+    from app.services.inventory_service import get_stock_grouped as service_get_stock_grouped
+    
+    stock = service_get_stock_grouped(db=db, tenant=tenant)
+    return stock
+
+
+@router.get("/stock-pedidos")
+def get_stock_pedidos(
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_tenant),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Get stock from pedidos recibidos.
+    """
+    from app.services.inventory_service import get_stock_pedidos as service_get_stock_pedidos
+    
+    stock = service_get_stock_pedidos(db=db, tenant=tenant)
+    return stock
+
+
+@router.get("/stock-eliminado")
+def get_stock_eliminado(
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_tenant),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Get stock from eliminated products (active=False).
+    """
+    from app.services.inventory_service import get_stock_eliminado as service_get_stock_eliminado
+    
+    stock = service_get_stock_eliminado(db=db, tenant=tenant)
+    return stock
+
+
+@router.get("/stock-devuelto")
+def get_stock_devuelto(
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_tenant),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Get stock from returned products.
+    """
+    from app.services.inventory_service import get_stock_devuelto as service_get_stock_devuelto
+    
+    stock = service_get_stock_devuelto(db=db, tenant=tenant)
+    return stock
+
+
+@router.get("/stock-apartado")
+def get_stock_apartado_endpoint(
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_tenant),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Get stock from ventas de apartado with credit_status 'pendiente' or 'pagado'.
+    """
+    stock = get_stock_apartado(db=db, tenant=tenant)
+    return stock
 

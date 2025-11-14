@@ -503,9 +503,6 @@ def update_pedido(
     for field, value in update_data.items():
         setattr(pedido, field, value)
     
-    db.commit()
-    db.refresh(pedido)
-    
     # Registrar cambio de estado si cambió
     if old_estado is not None and old_estado != pedido.estado:
         create_status_history(
@@ -519,6 +516,67 @@ def update_pedido(
             user_email=user.email,
             notes=f"Estado cambiado manualmente de {old_estado} a {pedido.estado}"
         )
+        
+        # Si el pedido cambió a "recibido", crear movimiento de inventario
+        if pedido.estado == 'recibido':
+            from app.models.inventory_movement import InventoryMovement
+            from app.models.product import Product
+            
+            # Buscar producto relacionado (por código o crear uno nuevo si no existe)
+            producto_pedido = db.query(ProductoPedido).filter(
+                ProductoPedido.id == pedido.producto_pedido_id
+            ).first()
+            
+            if producto_pedido:
+                # Buscar producto en inventario por código o crear uno nuevo
+                product = None
+                if producto_pedido.codigo:
+                    product = db.query(Product).filter(
+                        Product.tenant_id == tenant.id,
+                        Product.codigo == producto_pedido.codigo
+                    ).first()
+                
+                # Si no existe, crear producto nuevo
+                if not product:
+                    product = Product(
+                        tenant_id=tenant.id,
+                        name=producto_pedido.nombre or producto_pedido.modelo,
+                        codigo=producto_pedido.codigo,
+                        modelo=producto_pedido.modelo,
+                        marca=producto_pedido.marca,
+                        color=producto_pedido.color,
+                        quilataje=producto_pedido.quilataje,
+                        base=producto_pedido.base,
+                        tipo_joya=producto_pedido.nombre,
+                        talla=producto_pedido.talla,
+                        peso_gramos=producto_pedido.peso_gramos,
+                        price=producto_pedido.precio,
+                        cost_price=producto_pedido.cost_price,
+                        stock=0,
+                        active=True
+                    )
+                    db.add(product)
+                    db.flush()
+                
+                # Crear movimiento de inventario tipo "entrada"
+                movement = InventoryMovement(
+                    tenant_id=tenant.id,
+                    product_id=product.id,
+                    user_id=user.id,
+                    movement_type="entrada",
+                    quantity=pedido.cantidad,
+                    cost=float(producto_pedido.cost_price) if producto_pedido.cost_price else None,
+                    notes=f"Pedido recibido: {pedido.folio_pedido or f'PED-{pedido.id}'}"
+                )
+                db.add(movement)
+                
+                # Actualizar stock del producto
+                product.stock += pedido.cantidad
+                
+                db.flush()
+    
+    db.commit()
+    db.refresh(pedido)
     return pedido
 
 @router.get("/pedidos/{pedido_id}/pagos")
