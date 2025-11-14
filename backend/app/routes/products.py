@@ -49,6 +49,18 @@ class ProductOut(ProductBase):
         from_attributes = True
 
 
+class BulkUpdateRequest(BaseModel):
+    product_ids: List[int]
+    stock_adjustment: Optional[int] = None  # Add this amount to existing stock
+    descuento_porcentaje: Optional[condecimal(max_digits=5, decimal_places=2)] = None  # Replace value
+    quilataje: Optional[str] = None  # Replace value
+
+
+class BulkUpdateResponse(BaseModel):
+    updated_count: int
+    message: str
+
+
 @router.get("/", response_model=List[ProductOut])
 def list_products(
     db: Session = Depends(get_db),
@@ -266,5 +278,81 @@ def delete_product(
     db.delete(product)
     db.commit()
     return {"ok": True}
+
+
+@router.post("/bulk-update", response_model=BulkUpdateResponse, dependencies=[Depends(require_admin)])
+def bulk_update_products(
+    data: BulkUpdateRequest,
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_tenant),
+    user: User = Depends(get_current_user),
+):
+    """
+    Bulk update products by IDs.
+    - stock_adjustment: adds to existing stock (can be negative)
+    - descuento_porcentaje: replaces existing value
+    - quilataje: replaces existing value
+    """
+    if not data.product_ids:
+        raise HTTPException(status_code=400, detail="No product IDs provided")
+    
+    # Validate all products belong to tenant
+    products = db.query(Product).filter(
+        Product.id.in_(data.product_ids),
+        Product.tenant_id == tenant.id
+    ).all()
+    
+    if len(products) != len(data.product_ids):
+        raise HTTPException(status_code=404, detail="Some products not found or don't belong to tenant")
+    
+    updated_count = 0
+    
+    for product in products:
+        # Update stock if adjustment provided
+        if data.stock_adjustment is not None:
+            old_stock = int(product.stock) if product.stock else 0
+            new_stock = old_stock + data.stock_adjustment
+            
+            # Don't allow negative stock
+            if new_stock < 0:
+                new_stock = 0
+            
+            if new_stock != old_stock:
+                product.stock = new_stock
+                
+                # Create inventory movement
+                from app.models.inventory_movement import InventoryMovement
+                movement_type = "entrada" if data.stock_adjustment > 0 else "salida"
+                movement = InventoryMovement(
+                    tenant_id=tenant.id,
+                    product_id=product.id,
+                    user_id=user.id,
+                    movement_type=movement_type,
+                    quantity=abs(data.stock_adjustment),
+                    cost=float(product.cost_price) if product.cost_price and data.stock_adjustment > 0 else None,
+                    notes=f"Actualización masiva de inventario"
+                )
+                db.add(movement)
+        
+        # Update descuento_porcentaje if provided
+        if data.descuento_porcentaje is not None:
+            product.descuento_porcentaje = data.descuento_porcentaje
+        
+        # Update quilataje if provided
+        if data.quilataje is not None:
+            product.quilataje = data.quilataje
+        
+        updated_count += 1
+    
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=f"Error updating products: {str(e)}")
+    
+    return BulkUpdateResponse(
+        updated_count=updated_count,
+        message=f"Successfully updated {updated_count} product(s)"
+    )
 
 

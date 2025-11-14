@@ -61,6 +61,13 @@ export default function ProductsPage() {
   const [importFile, setImportFile] = useState<File | null>(null)
   const [importMode, setImportMode] = useState<'add' | 'replace'>('add')
   const [importResult, setImportResult] = useState<any>(null)
+  const [selectedProductIds, setSelectedProductIds] = useState<number[]>([])
+  const [showBulkUpdateModal, setShowBulkUpdateModal] = useState(false)
+  const [bulkUpdateForm, setBulkUpdateForm] = useState({
+    stock_adjustment: '',
+    descuento_porcentaje: '',
+    quilataje: '',
+  })
 
   // Form state
   const [form, setForm] = useState({
@@ -320,6 +327,60 @@ export default function ProductsPage() {
     }
   }
 
+  const toggleProductSelection = (productId: number) => {
+    setSelectedProductIds(prev => 
+      prev.includes(productId) 
+        ? prev.filter(id => id !== productId)
+        : [...prev, productId]
+    )
+  }
+
+  const toggleSelectAll = () => {
+    if (selectedProductIds.length === products.length) {
+      setSelectedProductIds([])
+    } else {
+      setSelectedProductIds(products.map(p => p.id))
+    }
+  }
+
+  const handleBulkUpdate = async () => {
+    if (selectedProductIds.length === 0) {
+      alert('Por favor selecciona al menos un producto')
+      return
+    }
+
+    const payload: any = {
+      product_ids: selectedProductIds
+    }
+
+    if (bulkUpdateForm.stock_adjustment) {
+      payload.stock_adjustment = parseInt(bulkUpdateForm.stock_adjustment)
+    }
+    if (bulkUpdateForm.descuento_porcentaje) {
+      payload.descuento_porcentaje = parseFloat(bulkUpdateForm.descuento_porcentaje)
+    }
+    if (bulkUpdateForm.quilataje) {
+      payload.quilataje = bulkUpdateForm.quilataje
+    }
+
+    if (!payload.stock_adjustment && !payload.descuento_porcentaje && !payload.quilataje) {
+      alert('Por favor ingresa al menos un valor para actualizar')
+      return
+    }
+
+    try {
+      const response = await api.post('/products/bulk-update', payload)
+      setMessage(`✅ ${response.data.message}`)
+      setShowBulkUpdateModal(false)
+      setBulkUpdateForm({ stock_adjustment: '', descuento_porcentaje: '', quilataje: '' })
+      setSelectedProductIds([])
+      await load()
+    } catch (error: any) {
+      console.error('Error bulk updating:', error)
+      alert(error.response?.data?.detail || 'Error al actualizar productos')
+    }
+  }
+
   return (
     <Layout>
     <div className="space-y-6">
@@ -328,6 +389,14 @@ export default function ProductsPage() {
           <div className="flex gap-2">
             {(userRole === 'owner' || userRole === 'admin') && (
               <>
+                {selectedProductIds.length > 0 && (
+                  <button
+                    onClick={() => setShowBulkUpdateModal(true)}
+                    className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700"
+                  >
+                    🔄 Actualizar {selectedProductIds.length} producto(s)
+                  </button>
+                )}
                 <button
                   onClick={handleExportProducts}
                   className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
@@ -508,6 +577,90 @@ export default function ProductsPage() {
                     className="flex-1 bg-gray-300 text-gray-700 px-6 py-2 rounded-lg hover:bg-gray-400"
                   >
                     Cerrar
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Bulk Update Modal */}
+        {showBulkUpdateModal && (userRole === 'owner' || userRole === 'admin') && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full">
+              <h2 className="text-xl font-semibold mb-4">Actualización Masiva</h2>
+              <p className="text-sm text-gray-600 mb-4">
+                Actualizando {selectedProductIds.length} producto(s). Deja en blanco los campos que no deseas modificar.
+              </p>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Ajuste de Stock
+                  </label>
+                  <input
+                    type="number"
+                    value={bulkUpdateForm.stock_adjustment}
+                    onChange={(e) => setBulkUpdateForm({...bulkUpdateForm, stock_adjustment: e.target.value})}
+                    placeholder="Ej: +10 o -5"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-1.5"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Este valor se suma al stock actual (puede ser negativo)
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Descuento %
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={bulkUpdateForm.descuento_porcentaje}
+                    onChange={(e) => setBulkUpdateForm({...bulkUpdateForm, descuento_porcentaje: e.target.value})}
+                    placeholder="Ej: 10.5"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-1.5"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Este valor reemplaza el descuento actual
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Quilataje
+                  </label>
+                  <select
+                    value={bulkUpdateForm.quilataje}
+                    onChange={(e) => setBulkUpdateForm({...bulkUpdateForm, quilataje: e.target.value})}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-1.5"
+                  >
+                    <option value="">-- No modificar --</option>
+                    {metalTypes.map(mt => (
+                      <option key={mt.value} value={mt.value}>{mt.label}</option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Este valor reemplaza el quilataje actual
+                  </p>
+                </div>
+
+                <div className="flex gap-2 mt-6">
+                  <button
+                    onClick={handleBulkUpdate}
+                    className="flex-1 bg-orange-600 text-white px-6 py-2 rounded-lg hover:bg-orange-700"
+                  >
+                    Actualizar
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowBulkUpdateModal(false);
+                      setBulkUpdateForm({ stock_adjustment: '', descuento_porcentaje: '', quilataje: '' });
+                    }}
+                    className="flex-1 bg-gray-300 text-gray-700 px-6 py-2 rounded-lg hover:bg-gray-400"
+                  >
+                    Cancelar
                   </button>
                 </div>
               </div>
@@ -700,6 +853,16 @@ export default function ProductsPage() {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
+                {(userRole === 'owner' || userRole === 'admin') && (
+                  <th className="px-4 py-3 text-center">
+                    <input
+                      type="checkbox"
+                      checked={products.length > 0 && selectedProductIds.length === products.length}
+                      onChange={toggleSelectAll}
+                      className="w-4 h-4 text-blue-600 rounded"
+                    />
+                  </th>
+                )}
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Código</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nombre</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Quilataje</th>
@@ -712,13 +875,23 @@ export default function ProductsPage() {
             <tbody className="bg-white divide-y divide-gray-200">
               {products.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-4 text-center text-gray-500">
+                  <td colSpan={8} className="px-6 py-4 text-center text-gray-500">
                     No hay productos
                 </td>
                 </tr>
               ) : (
                 products.map(p => (
                   <tr key={p.id} className="hover:bg-gray-50">
+                    {(userRole === 'owner' || userRole === 'admin') && (
+                      <td className="px-4 py-3 text-center">
+                        <input
+                          type="checkbox"
+                          checked={selectedProductIds.includes(p.id)}
+                          onChange={() => toggleProductSelection(p.id)}
+                          className="w-4 h-4 text-blue-600 rounded"
+                        />
+                      </td>
+                    )}
                     <td className="px-4 py-3 whitespace-nowrap text-sm">{p.codigo || '-'}</td>
                     <td className="px-4 py-3">
                       <div className="font-medium text-gray-900">{p.name}</div>

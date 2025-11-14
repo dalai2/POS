@@ -33,12 +33,18 @@ type User = {
 
 export default function SalesPage() {
   const [products, setProducts] = useState<Product[]>([])
+  const [allProducts, setAllProducts] = useState<Product[]>([])
   const [users, setUsers] = useState<User[]>([])
   const [cart, setCart] = useState<CartItem[]>([])
   const [msg, setMsg] = useState('')
   const [cash, setCash] = useState('')
   const [card, setCard] = useState('')
   const [discount, setDiscount] = useState('0')
+  
+  // Filtros
+  const [modeloFilter, setModeloFilter] = useState('')
+  const [quilatajeFilter, setQuilatajeFilter] = useState('')
+  const [tallaFilter, setTallaFilter] = useState('')
   
   // Jewelry store fields
   const [saleType, setSaleType] = useState<'contado' | 'credito'>('contado')
@@ -66,17 +72,49 @@ export default function SalesPage() {
     loadUsers()
   }, [])
 
+  useEffect(() => {
+    applyLocalFilters(allProducts)
+  }, [modeloFilter, quilatajeFilter, tallaFilter])
+
   const loadProducts = async (q = '') => {
     const qs = new URLSearchParams()
-    qs.set('limit', '50')
+    qs.set('limit', '200')
     qs.set('active', 'true')
     if (q) qs.set('q', q)
     try {
       const r = await api.get(`/products/?${qs.toString()}`)
-      setProducts(r.data)
+      setAllProducts(r.data)
+      applyLocalFilters(r.data)
     } catch (e: any) {
       setMsg(e?.response?.data?.detail || 'Error cargando productos')
     }
+  }
+
+  const applyLocalFilters = (productList: Product[]) => {
+    let filtered = [...productList]
+    
+    if (modeloFilter) {
+      const modeloLower = modeloFilter.toLowerCase()
+      filtered = filtered.filter(p => 
+        p.modelo?.toLowerCase().includes(modeloLower)
+      )
+    }
+    
+    if (quilatajeFilter) {
+      const quilatajeLower = quilatajeFilter.toLowerCase()
+      filtered = filtered.filter(p => 
+        p.quilataje?.toLowerCase().includes(quilatajeLower)
+      )
+    }
+    
+    if (tallaFilter) {
+      const tallaLower = tallaFilter.toLowerCase()
+      filtered = filtered.filter(p => 
+        p.talla?.toLowerCase().includes(tallaLower)
+      )
+    }
+    
+    setProducts(filtered)
   }
 
   const loadUsers = async () => {
@@ -991,6 +1029,52 @@ export default function SalesPage() {
               onChange={e => loadProducts(e.target.value)}
             />
           </div>
+
+          {/* Filters */}
+          <div className="bg-white rounded-lg shadow p-3">
+            <div className="grid grid-cols-4 gap-2">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Modelo</label>
+                <input
+                  className="w-full border border-gray-300 rounded-lg px-2 py-1 text-sm"
+                  placeholder="Filtrar..."
+                  value={modeloFilter}
+                  onChange={e => setModeloFilter(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Quilataje</label>
+                <input
+                  className="w-full border border-gray-300 rounded-lg px-2 py-1 text-sm"
+                  placeholder="Filtrar..."
+                  value={quilatajeFilter}
+                  onChange={e => setQuilatajeFilter(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Talla</label>
+                <input
+                  className="w-full border border-gray-300 rounded-lg px-2 py-1 text-sm"
+                  placeholder="Filtrar..."
+                  value={tallaFilter}
+                  onChange={e => setTallaFilter(e.target.value)}
+                />
+              </div>
+              <div className="flex items-end">
+                <button
+                  className="w-full bg-gray-500 text-white px-2 py-1 rounded-lg hover:bg-gray-600 text-xs"
+                  onClick={() => {
+                    setModeloFilter('')
+                    setQuilatajeFilter('')
+                    setTallaFilter('')
+                  }}
+                >
+                  🔄 Limpiar
+                </button>
+              </div>
+            </div>
+          </div>
+
           {/* Product List */}
           <div className="flex-1 overflow-y-auto border rounded-lg p-2 bg-gray-50">
             <div className="grid grid-cols-2 gap-2">
@@ -1001,8 +1085,13 @@ export default function SalesPage() {
                   className="bg-white border border-gray-300 rounded-lg p-3 hover:bg-blue-50 text-left"
                 >
                   <div className="font-medium text-sm">{p.name}</div>
+                  {p.modelo && <div className="text-xs text-gray-600 font-medium">Modelo: {p.modelo}</div>}
                   <div className="text-green-600 font-bold">${parseFloat(p.price || '0').toFixed(2)}</div>
                   {p.codigo && <div className="text-xs text-gray-500">Código: {p.codigo}</div>}
+                  <div className="flex gap-2 text-xs text-gray-500 mt-1">
+                    {p.quilataje && <span>🔶 {p.quilataje}</span>}
+                    {p.talla && <span>📏 {p.talla}</span>}
+                  </div>
                 </button>
               ))}
             </div>
@@ -1019,6 +1108,11 @@ export default function SalesPage() {
               <p className="text-gray-700 mb-2">
                 <strong>Producto:</strong> {productToAdd.name}
               </p>
+              {productToAdd.modelo && (
+                <p className="text-gray-700 mb-2">
+                  <strong>Modelo:</strong> {productToAdd.modelo}
+                </p>
+              )}
               <p className="text-gray-700 mb-2">
                 <strong>Precio:</strong> ${parseFloat(productToAdd.price || '0').toFixed(2)}
               </p>
@@ -1027,9 +1121,24 @@ export default function SalesPage() {
                   <strong>Código:</strong> {productToAdd.codigo}
                 </p>
               )}
-              {productToAdd.sku && (
-                <p className="text-gray-700">
-                  <strong>SKU:</strong> {productToAdd.sku}
+              {productToAdd.quilataje && (
+                <p className="text-gray-700 mb-2">
+                  <strong>Quilataje:</strong> {productToAdd.quilataje}
+                </p>
+              )}
+              {productToAdd.talla && (
+                <p className="text-gray-700 mb-2">
+                  <strong>Talla:</strong> {productToAdd.talla}
+                </p>
+              )}
+              {productToAdd.color && (
+                <p className="text-gray-700 mb-2">
+                  <strong>Color:</strong> {productToAdd.color}
+                </p>
+              )}
+              {productToAdd.peso_gramos && (
+                <p className="text-gray-700 mb-2">
+                  <strong>Peso:</strong> {productToAdd.peso_gramos}g
                 </p>
               )}
             </div>
