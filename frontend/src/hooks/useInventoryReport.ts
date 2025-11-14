@@ -27,7 +27,7 @@ export interface UseInventoryReport {
   closeDay: () => Promise<void>;
   viewClosedDay: () => Promise<void>;
   removePieces: (productId: number, quantity: number, notes: string) => Promise<void>;
-  getStockGrouped: () => Promise<void>;
+  getStockGrouped: (forDate?: string) => Promise<void>;
   getStockPedidos: () => Promise<void>;
   getStockEliminado: () => Promise<void>;
   getStockDevuelto: () => Promise<void>;
