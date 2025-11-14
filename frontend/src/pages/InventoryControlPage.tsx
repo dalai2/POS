@@ -289,7 +289,7 @@ export default function InventoryControlPage() {
           <div>
             <div className="mb-4 flex justify-between items-center">
               <button
-                onClick={getStockGrouped}
+                onClick={() => getStockGrouped()}
                 disabled={loading}
                 className="px-5 py-2.5 rounded-lg font-medium transition-all shadow-md hover:shadow-lg disabled:opacity-50"
                 style={{ backgroundColor: '#2e4354', color: '#ffffff' }}
