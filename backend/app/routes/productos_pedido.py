@@ -784,7 +784,7 @@ def import_productos_pedido(
         df = df.rename(columns=column_mapping)
         
         # Validar columnas requeridas
-        required_cols = ['modelo', 'precio']
+        required_cols = ['codigo']
         missing_cols = [col for col in required_cols if col not in df.columns]
         if missing_cols:
             raise HTTPException(
@@ -801,31 +801,23 @@ def import_productos_pedido(
         productos_actualizados = 0
         
         for _, row in df.iterrows():
-            # Validar datos requeridos
-            if pd.isna(row['modelo']) or pd.isna(row['precio']):
+            # Validar datos requeridos (solo codigo es obligatorio)
+            if pd.isna(row['codigo']):
                 continue
             
-            # Buscar producto existente por código o nombre
-            existing_product = None
-            if 'codigo' in df.columns and not pd.isna(row.get('codigo')):
-                existing_product = db.query(ProductoPedido).filter(
-                    ProductoPedido.tenant_id == tenant.id,
-                    ProductoPedido.codigo == str(row['codigo']).strip()
-                ).first()
-            
-            if not existing_product:
-                existing_product = db.query(ProductoPedido).filter(
-                    ProductoPedido.tenant_id == tenant.id,
-                    ProductoPedido.modelo == str(row['modelo']).strip()
-                ).first()
+            # Buscar producto existente por código
+            existing_product = db.query(ProductoPedido).filter(
+                ProductoPedido.tenant_id == tenant.id,
+                ProductoPedido.codigo == str(row['codigo']).strip()
+            ).first()
             
             # Preparar datos del producto
             producto_data = {
                 'tenant_id': tenant.id,
-                'modelo': str(row['modelo']).strip(),
-                'precio': float(row['precio']),
+                'modelo': str(row['modelo']).strip() if 'modelo' in df.columns and not pd.isna(row.get('modelo')) else None,
+                'precio': float(row['precio']) if 'precio' in df.columns and not pd.isna(row.get('precio')) else 0.0,
                 'nombre': str(row['nombre']).strip() if 'nombre' in df.columns and not pd.isna(row.get('nombre')) else None,
-                'codigo': str(row['codigo']).strip() if 'codigo' in df.columns and not pd.isna(row.get('codigo')) else None,
+                'codigo': str(row['codigo']).strip(),
                 'marca': str(row['marca']).strip() if 'marca' in df.columns and not pd.isna(row.get('marca')) else None,
                 'color': str(row['color']).strip() if 'color' in df.columns and not pd.isna(row.get('color')) else None,
                 'quilataje': str(row['quilataje']).strip() if 'quilataje' in df.columns and not pd.isna(row.get('quilataje')) else None,
