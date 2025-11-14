@@ -494,6 +494,7 @@ def list_sales(
             "total": sale.total,
             "created_at": sale.created_at,
             "user_id": sale.user_id,
+            "vendedor_id": sale.vendedor_id,
             "tipo_venta": "abono" if sale.tipo_venta == "credito" else sale.tipo_venta,
             "user": user_info
         })
