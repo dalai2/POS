@@ -802,7 +802,7 @@ def import_productos_pedido(
         
         for _, row in df.iterrows():
             # Validar datos requeridos
-            if pd.isna(row['name']) or pd.isna(row['price']):
+            if pd.isna(row['modelo']) or pd.isna(row['precio']):
                 continue
             
             # Buscar producto existente por código o nombre
