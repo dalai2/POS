@@ -444,6 +444,7 @@ class SaleSummary(BaseModel):
     total: condecimal(max_digits=10, decimal_places=2)
     created_at: datetime | None = None
     user_id: int | None = None
+    vendedor_id: int | None = None
     tipo_venta: str | None = None
     user: dict | None = None
 
