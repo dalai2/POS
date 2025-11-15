@@ -35,12 +35,14 @@ class ProductoPedido(Base):
     anticipo_sugerido = Column(Numeric(10, 2))  # Anticipo sugerido, no obligatorio
     disponible = Column(Boolean, default=True)  # Si está disponible para pedidos
 
+    pedido_items = relationship("PedidoItem", back_populates="producto", cascade="all, delete-orphan")
+
 class Pedido(Base):
     __tablename__ = "pedidos"
     
     id = Column(Integer, primary_key=True, index=True)
     tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False)
-    producto_pedido_id = Column(Integer, ForeignKey("productos_pedido.id"), nullable=False)
+    producto_pedido_id = Column(Integer, ForeignKey("productos_pedido.id"), nullable=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     
     # Información del cliente
@@ -71,6 +73,36 @@ class Pedido(Base):
     # Metadatos
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    items = relationship("PedidoItem", back_populates="pedido", cascade="all, delete-orphan")
+
+
+class PedidoItem(Base):
+    __tablename__ = "pedido_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    pedido_id = Column(Integer, ForeignKey("pedidos.id", ondelete="CASCADE"), nullable=False, index=True)
+    producto_pedido_id = Column(Integer, ForeignKey("productos_pedido.id", ondelete="SET NULL"), nullable=True, index=True)
+
+    modelo = Column(String(255), nullable=True)
+    nombre = Column(String(50), nullable=True)
+    codigo = Column(String(100), nullable=True)
+    color = Column(String(50), nullable=True)
+    quilataje = Column(String(20), nullable=True)
+    base = Column(String(50), nullable=True)
+    talla = Column(String(20), nullable=True)
+    peso = Column(String(100), nullable=True)
+    peso_gramos = Column(Numeric(10, 3), nullable=True)
+
+    cantidad = Column(Integer, default=1)
+    precio_unitario = Column(Numeric(10, 2), nullable=False, default=0)
+    total = Column(Numeric(10, 2), nullable=False, default=0)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    pedido = relationship("Pedido", back_populates="items")
+    producto = relationship("ProductoPedido", back_populates="pedido_items")
 
 class PagoPedido(Base):
     __tablename__ = "pagos_pedido"

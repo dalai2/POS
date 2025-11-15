@@ -495,87 +495,84 @@ export default function PedidosPage() {
       console.log('Access token:', localStorage.getItem('access'))
       console.log('Tenant:', localStorage.getItem('tenant'))
       
-      // Crear pedido para cada producto en el carrito
-      for (const item of cart) {
-        const pedidoData = {
+      // Crear un solo pedido con todos los productos del carrito
+      const pedidoData = {
+        items: cart.map(item => ({
           producto_pedido_id: item.producto.id,
-          cliente_nombre: clienteNombre,
-          cliente_telefono: clienteTelefono || null,
-          cantidad: item.cantidad,
-          tipo_pedido: tipoPedido,
-          anticipo_pagado: (parseFloat(metodoPagoEfectivo) || 0) + (parseFloat(metodoPagoTarjeta) || 0),
-          metodo_pago_efectivo: parseFloat(metodoPagoEfectivo) || 0,
-          metodo_pago_tarjeta: parseFloat(metodoPagoTarjeta) || 0,
-          notas_cliente: notasCliente || null,
-          user_id: vendedorId ? parseInt(vendedorId) : undefined
-        }
-        
-        console.log('Sending pedido data:', pedidoData)
-        const response = await api.post('/productos-pedido/pedidos/', pedidoData)
-        
-        // Generate ticket for all pedidos (both apartado and contado)
-        if (response.data) {
-          try {
-            const pedido = response.data
-            const producto = cart[0]?.producto // Get first product (assuming single item pedidos)
-            
-            if (producto) {
-              const logoBase64 = await getLogoAsBase64()
-              const vendedorEmail = users.find(u => u.id === pedido.user_id)?.email
-              
-              // Determine payment method for initial ticket
-              const efectivo = parseFloat(metodoPagoEfectivo) || 0
-              const tarjeta = parseFloat(metodoPagoTarjeta) || 0
-              let paymentMethod = 'N/A'
-              
-              if (efectivo > 0 && tarjeta > 0) {
-                paymentMethod = 'mixto'
-              } else if (efectivo > 0) {
-                paymentMethod = 'efectivo'
-              } else if (tarjeta > 0) {
-                paymentMethod = 'tarjeta'
-              }
-              
-              const ticketHTML = generatePedidoTicketHTML({
-                pedido,
-                producto,
-                vendedorEmail,
-                paymentData: tipoPedido === 'apartado' ? {
-                  amount: pedido.anticipo_pagado,
-                  method: paymentMethod,
-                  previousPaid: 0,
-                  newPaid: pedido.anticipo_pagado,
-                  previousBalance: pedido.total,
-                  newBalance: pedido.saldo_pendiente,
-                  efectivo: efectivo > 0 ? efectivo : undefined,
-                  tarjeta: tarjeta > 0 ? tarjeta : undefined
-                } : {
-                  amount: pedido.total,
-                  method: paymentMethod,
-                  previousPaid: 0,
-                  newPaid: pedido.total,
-                  previousBalance: pedido.total,
-                  newBalance: 0,
-                  efectivo: efectivo > 0 ? efectivo : undefined,
-                  tarjeta: tarjeta > 0 ? tarjeta : undefined
-                },
-                logoBase64
-              })
-              
-              // Save ticket to database
-              await saveTicket({
-                saleId: pedido.id,
-                kind: 'payment',
-                html: ticketHTML
-              })
-              
-              // Print ticket
-              openAndPrintTicket(ticketHTML)
-            }
-          } catch (ticketError) {
-            console.error('Error generating initial ticket:', ticketError)
-            // Don't fail the order if ticket fails
+          cantidad: item.cantidad
+        })),
+        cliente_nombre: clienteNombre,
+        cliente_telefono: clienteTelefono || null,
+        tipo_pedido: tipoPedido,
+        anticipo_pagado: (parseFloat(metodoPagoEfectivo) || 0) + (parseFloat(metodoPagoTarjeta) || 0),
+        metodo_pago_efectivo: parseFloat(metodoPagoEfectivo) || 0,
+        metodo_pago_tarjeta: parseFloat(metodoPagoTarjeta) || 0,
+        notas_cliente: notasCliente || null,
+        user_id: vendedorId ? parseInt(vendedorId) : undefined
+      }
+      
+      console.log('Sending pedido data:', pedidoData)
+      const response = await api.post('/productos-pedido/pedidos/', pedidoData)
+      
+      // Generate ticket for the pedido (both apartado and contado)
+      if (response.data) {
+        try {
+          const pedido = response.data
+          
+          const logoBase64 = await getLogoAsBase64()
+          const vendedorEmail = users.find(u => u.id === pedido.user_id)?.email
+          
+          // Determine payment method for initial ticket
+          const efectivo = parseFloat(metodoPagoEfectivo) || 0
+          const tarjeta = parseFloat(metodoPagoTarjeta) || 0
+          let paymentMethod = 'N/A'
+          
+          if (efectivo > 0 && tarjeta > 0) {
+            paymentMethod = 'mixto'
+          } else if (efectivo > 0) {
+            paymentMethod = 'efectivo'
+          } else if (tarjeta > 0) {
+            paymentMethod = 'tarjeta'
           }
+          
+          const ticketHTML = generatePedidoTicketHTML({
+            pedido,
+            items: pedido.items || (pedido.producto ? [pedido.producto] : []),
+            vendedorEmail,
+            paymentData: tipoPedido === 'apartado' ? {
+              amount: pedido.anticipo_pagado,
+              method: paymentMethod,
+              previousPaid: 0,
+              newPaid: pedido.anticipo_pagado,
+              previousBalance: pedido.total,
+              newBalance: pedido.saldo_pendiente,
+              efectivo: efectivo > 0 ? efectivo : undefined,
+              tarjeta: tarjeta > 0 ? tarjeta : undefined
+            } : {
+              amount: pedido.total,
+              method: paymentMethod,
+              previousPaid: 0,
+              newPaid: pedido.total,
+              previousBalance: pedido.total,
+              newBalance: 0,
+              efectivo: efectivo > 0 ? efectivo : undefined,
+              tarjeta: tarjeta > 0 ? tarjeta : undefined
+            },
+            logoBase64
+          })
+          
+          // Save ticket to database
+          await saveTicket({
+            saleId: pedido.id,
+            kind: 'payment',
+            html: ticketHTML
+          })
+          
+          // Print ticket
+          openAndPrintTicket(ticketHTML)
+        } catch (ticketError) {
+          console.error('Error generating initial ticket:', ticketError)
+          // Don't fail the order if ticket fails
         }
       }
       

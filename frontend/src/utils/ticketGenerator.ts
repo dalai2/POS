@@ -50,7 +50,8 @@ export const openAndPrintTicket = (html: string) => {
  */
 export const generatePedidoTicketHTML = (params: {
   pedido: any
-  producto: any
+  producto?: any  // Opcional para compatibilidad hacia atrás
+  items?: any[]   // Array de items para múltiples productos
   vendedorEmail?: string
   paymentData?: {
     amount: number
@@ -64,28 +65,47 @@ export const generatePedidoTicketHTML = (params: {
   }
   logoBase64: string
 }): string => {
-  const { pedido, producto, vendedorEmail, paymentData, logoBase64 } = params
+  const { pedido, producto, items, vendedorEmail, paymentData, logoBase64 } = params
 
-  // Build product description
-  const descParts = []
-  if (producto.nombre) descParts.push(producto.nombre)
-  if (producto.modelo) descParts.push(producto.modelo)
-  if (producto.color) descParts.push(producto.color)
-  if (producto.quilataje) descParts.push(producto.quilataje)
-  if (producto.peso_gramos) {
-    const peso = Number(producto.peso_gramos)
-    if (peso === Math.floor(peso)) {
-      descParts.push(`${peso}g`)
-    } else {
-      descParts.push(peso.toFixed(3).replace(/\.?0+$/, '') + 'g')
+  // Determinar si usar items o producto (compatibilidad hacia atrás)
+  const itemsToShow = items && items.length > 0 ? items : (producto ? [producto] : [])
+
+  // Build items HTML
+  let itemsHTML = ''
+  let totalItems = 0
+
+  itemsToShow.forEach((item) => {
+    const descParts = []
+    if (item.nombre) descParts.push(item.nombre)
+    if (item.modelo) descParts.push(item.modelo)
+    if (item.color) descParts.push(item.color)
+    if (item.quilataje) descParts.push(item.quilataje)
+    if (item.peso_gramos) {
+      const peso = Number(item.peso_gramos)
+      if (peso === Math.floor(peso)) {
+        descParts.push(`${peso}g`)
+      } else {
+        descParts.push(peso.toFixed(3).replace(/\.?0+$/, '') + 'g')
+      }
     }
-  }
-  if (producto.talla) descParts.push(producto.talla)
-  const description = descParts.length > 0 ? descParts.join('-') : 'Producto sin descripción'
+    if (item.talla) descParts.push(item.talla)
+    const description = descParts.length > 0 ? descParts.join('-') : 'Producto sin descripción'
 
-  const unitPrice = Number(pedido.precio_unitario || 0)
-  const quantity = Number(pedido.cantidad || 1)
-  const itemTotal = unitPrice * quantity
+    const unitPrice = Number(item.precio_unitario || item.precio || pedido.precio_unitario || 0)
+    const quantity = Number(item.cantidad || pedido.cantidad || 1)
+    totalItems += quantity
+    const itemTotal = unitPrice * quantity
+
+    itemsHTML += `
+      <tr>
+        <td>${quantity}</td>
+        <td>${item.codigo || ''}</td>
+        <td>${description}</td>
+        <td>$${unitPrice.toFixed(2)}</td>
+        <td>-</td>
+        <td>$${itemTotal.toFixed(2)}</td>
+      </tr>`
+  })
 
   const vendedorInfo = vendedorEmail ? vendedorEmail.split('@')[0].toUpperCase() : 'N/A'
   const formattedDate = new Date(pedido.created_at).toLocaleDateString('es-ES', {
@@ -307,14 +327,7 @@ export const generatePedidoTicketHTML = (params: {
         </tr>
       </thead>
       <tbody>
-        <tr>
-          <td>${quantity}</td>
-          <td>${producto.codigo || ''}</td>
-          <td>${description}</td>
-          <td>$${unitPrice.toFixed(2)}</td>
-          <td>-</td>
-          <td>$${itemTotal.toFixed(2)}</td>
-        </tr>
+        ${itemsHTML}
       </tbody>
     </table>
 
@@ -327,7 +340,7 @@ export const generatePedidoTicketHTML = (params: {
     <div class="footer-section">
       <!-- Footer -->
       <div class="footer-info">
-        <div>${quantity} Articulo(s)</div>
+        <div>${totalItems || quantity} Articulo(s)</div>
         <div class="policy">
           SU PIEZA TIENE UNA GARANTÍA DE POR VIDA DE AUTENTICIDAD<br>
           NO SE ACEPTAN CAMBIOS NI DEVOLUCIONES EN MERCANCÍA DAÑADA

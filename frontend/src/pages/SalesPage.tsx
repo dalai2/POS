@@ -13,6 +13,7 @@ type Product = {
   cost_price?: string
   costo?: string
   active?: boolean
+  stock?: number
   peso_gramos?: number
   color?: string
   quilataje?: string
@@ -92,6 +93,9 @@ export default function SalesPage() {
 
   const applyLocalFilters = (productList: Product[]) => {
     let filtered = [...productList]
+    
+    // Filtrar productos con stock > 0 (no mostrar productos sin stock)
+    filtered = filtered.filter(p => (p.stock ?? 0) > 0)
     
     if (modeloFilter) {
       const modeloLower = modeloFilter.toLowerCase()

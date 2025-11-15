@@ -8,7 +8,7 @@ import pandas as pd
 import io
 
 from ..core.deps import get_db, get_tenant, get_current_user
-from ..models.producto_pedido import ProductoPedido, Pedido, PagoPedido
+from ..models.producto_pedido import ProductoPedido, Pedido, PagoPedido, PedidoItem
 from ..models.tenant import Tenant
 from ..models.user import User
 from ..routes.status_history import create_status_history
@@ -71,17 +71,44 @@ class ProductoPedidoOut(ProductoPedidoBase):
     class Config:
         from_attributes = True
 
-class PedidoBase(BaseModel):
+class PedidoItemCreate(BaseModel):
     producto_pedido_id: int
+    cantidad: int = 1
+
+class PedidoItemOut(BaseModel):
+    id: int
+    pedido_id: int
+    producto_pedido_id: Optional[int] = None
+    modelo: Optional[str] = None
+    nombre: Optional[str] = None
+    codigo: Optional[str] = None
+    color: Optional[str] = None
+    quilataje: Optional[str] = None
+    base: Optional[str] = None
+    talla: Optional[str] = None
+    peso: Optional[str] = None
+    peso_gramos: Optional[float] = None
+    cantidad: int
+    precio_unitario: float
+    total: float
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    
+    class Config:
+        from_attributes = True
+
+class PedidoBase(BaseModel):
+    producto_pedido_id: Optional[int] = None  # Opcional para compatibilidad hacia atrás
     cliente_nombre: str
     cliente_telefono: Optional[str] = None
     cliente_email: Optional[str] = None
-    cantidad: int = 1
+    cantidad: int = 1  # Mantener para compatibilidad
     anticipo_pagado: float = 0
     tipo_pedido: str = "apartado"  # 'contado' o 'apartado'
     metodo_pago_efectivo: Optional[float] = 0  # Para pedidos de contado
     metodo_pago_tarjeta: Optional[float] = 0  # Para pedidos de contado
     notas_cliente: Optional[str] = None
+    items: Optional[List[PedidoItemCreate]] = None  # Lista de items para múltiples productos
 
 class PedidoCreate(PedidoBase):
     user_id: Optional[int] = None  # Vendedor que realiza el pedido
@@ -94,7 +121,7 @@ class PedidoUpdate(BaseModel):
 
 class PedidoOut(BaseModel):
     id: int
-    producto_pedido_id: int
+    producto_pedido_id: Optional[int] = None
     user_id: int
     cliente_nombre: str
     cliente_telefono: Optional[str] = None
@@ -114,8 +141,10 @@ class PedidoOut(BaseModel):
     created_at: datetime
     updated_at: Optional[datetime] = None
     
-    # Información del producto
+    # Información del producto (para compatibilidad hacia atrás)
     producto: Optional[ProductoPedidoOut] = None
+    # Items del pedido (múltiples productos)
+    items: Optional[List[PedidoItemOut]] = None
     # Información del vendedor
     vendedor_email: Optional[str] = None
     
@@ -279,14 +308,19 @@ def list_pedidos(
     # Commit cambios de estados
     db.commit()
     
-    # Agregar información del producto y vendedor a cada pedido
+    # Agregar información del producto, items y vendedor a cada pedido
     from app.models.user import User
     for pedido in pedidos:
-        producto = db.query(ProductoPedido).filter(
-            ProductoPedido.id == pedido.producto_pedido_id,
-            ProductoPedido.tenant_id == tenant.id
-        ).first()
-        pedido.producto = producto
+        # Cargar items si existen
+        if pedido.items:
+            pedido.items = pedido.items  # Ya está cargado por la relación
+        elif pedido.producto_pedido_id:
+            # Compatibilidad hacia atrás: cargar producto
+            producto = db.query(ProductoPedido).filter(
+                ProductoPedido.id == pedido.producto_pedido_id,
+                ProductoPedido.tenant_id == tenant.id
+            ).first()
+            pedido.producto = producto
         
         # Agregar información del vendedor
         vendedor = db.query(User).filter(User.id == pedido.user_id).first()
@@ -304,20 +338,44 @@ def create_pedido(
 ):
     from decimal import Decimal
     
-    # Verificar que el producto existe
-    producto = db.query(ProductoPedido).filter(
-        ProductoPedido.id == pedido.producto_pedido_id,
-        ProductoPedido.tenant_id == tenant.id,
-        ProductoPedido.active == True,
-        ProductoPedido.disponible == True
-    ).first()
+    # Determinar si usar items o producto_pedido_id (compatibilidad hacia atrás)
+    items_to_create = []
     
-    if not producto:
-        raise HTTPException(status_code=404, detail="Producto no disponible")
+    if pedido.items and len(pedido.items) > 0:
+        # Nuevo modo: múltiples items
+        items_to_create = pedido.items
+    elif pedido.producto_pedido_id:
+        # Modo legacy: un solo producto
+        items_to_create = [PedidoItemCreate(
+            producto_pedido_id=pedido.producto_pedido_id,
+            cantidad=pedido.cantidad
+        )]
+    else:
+        raise HTTPException(status_code=400, detail="Debe proporcionar items o producto_pedido_id")
     
-    # Calcular totales
-    precio_unitario = float(producto.precio)
-    total = precio_unitario * pedido.cantidad
+    # Validar y cargar productos
+    productos_map = {}
+    total_pedido = Decimal("0")
+    cantidad_total = 0
+    
+    for item in items_to_create:
+        producto = db.query(ProductoPedido).filter(
+            ProductoPedido.id == item.producto_pedido_id,
+            ProductoPedido.tenant_id == tenant.id,
+            ProductoPedido.active == True,
+            ProductoPedido.disponible == True
+        ).first()
+        
+        if not producto:
+            raise HTTPException(status_code=404, detail=f"Producto no disponible: {item.producto_pedido_id}")
+        
+        productos_map[item.producto_pedido_id] = producto
+        precio_unitario = Decimal(str(producto.precio))
+        item_total = precio_unitario * item.cantidad
+        total_pedido += item_total
+        cantidad_total += item.cantidad
+    
+    total = float(total_pedido)
     
     # Usar el user_id proporcionado o el usuario autenticado
     vendedor_id = pedido.user_id if pedido.user_id else user.id
@@ -330,6 +388,9 @@ def create_pedido(
         ).first()
         if not vendedor:
             raise HTTPException(status_code=404, detail="Vendedor no encontrado")
+    
+    # Calcular precio unitario promedio (para compatibilidad)
+    precio_unitario_promedio = total / cantidad_total if cantidad_total > 0 else 0
     
     # Lógica según el tipo de pedido
     if pedido.tipo_pedido == "contado":
@@ -346,17 +407,17 @@ def create_pedido(
         db_pedido = Pedido(
             tenant_id=tenant.id,
             user_id=vendedor_id,
-            precio_unitario=precio_unitario,
+            precio_unitario=precio_unitario_promedio,
             total=total,
             anticipo_pagado=total,  # Total pagado
             saldo_pendiente=0,  # Sin saldo pendiente
             estado="pagado",
             tipo_pedido="contado",
-            producto_pedido_id=pedido.producto_pedido_id,
+            producto_pedido_id=pedido.producto_pedido_id,  # Mantener para compatibilidad
             cliente_nombre=pedido.cliente_nombre,
             cliente_telefono=pedido.cliente_telefono,
             cliente_email=pedido.cliente_email,
-            cantidad=pedido.cantidad,
+            cantidad=cantidad_total,
             notas_cliente=pedido.notas_cliente
         )
         
@@ -365,6 +426,30 @@ def create_pedido(
         
         # Generate folio_pedido
         db_pedido.folio_pedido = f"PED-{str(db_pedido.id).zfill(6)}"
+        
+        # Crear items del pedido
+        for item_create in items_to_create:
+            producto = productos_map[item_create.producto_pedido_id]
+            precio_unitario_item = Decimal(str(producto.precio))
+            item_total = float(precio_unitario_item * item_create.cantidad)
+            
+            pedido_item = PedidoItem(
+                pedido_id=db_pedido.id,
+                producto_pedido_id=producto.id,
+                modelo=producto.modelo,
+                nombre=producto.nombre,
+                codigo=producto.codigo,
+                color=producto.color,
+                quilataje=producto.quilataje,
+                base=producto.base,
+                talla=producto.talla,
+                peso=producto.peso,
+                peso_gramos=producto.peso_gramos,
+                cantidad=item_create.cantidad,
+                precio_unitario=float(precio_unitario_item),
+                total=item_total
+            )
+            db.add(pedido_item)
         
         db.commit()
         db.refresh(db_pedido)
@@ -410,17 +495,17 @@ def create_pedido(
         db_pedido = Pedido(
             tenant_id=tenant.id,
             user_id=vendedor_id,
-            precio_unitario=precio_unitario,
+            precio_unitario=precio_unitario_promedio,
             total=total,
             anticipo_pagado=pedido.anticipo_pagado,
             saldo_pendiente=saldo_pendiente,
             estado="pendiente",
             tipo_pedido="apartado",
-            producto_pedido_id=pedido.producto_pedido_id,
+            producto_pedido_id=pedido.producto_pedido_id,  # Mantener para compatibilidad
             cliente_nombre=pedido.cliente_nombre,
             cliente_telefono=pedido.cliente_telefono,
             cliente_email=pedido.cliente_email,
-            cantidad=pedido.cantidad,
+            cantidad=cantidad_total,
             notas_cliente=pedido.notas_cliente
         )
 
@@ -429,6 +514,30 @@ def create_pedido(
         
         # Generate folio_pedido
         db_pedido.folio_pedido = f"PED-{str(db_pedido.id).zfill(6)}"
+        
+        # Crear items del pedido
+        for item_create in items_to_create:
+            producto = productos_map[item_create.producto_pedido_id]
+            precio_unitario_item = Decimal(str(producto.precio))
+            item_total = float(precio_unitario_item * item_create.cantidad)
+            
+            pedido_item = PedidoItem(
+                pedido_id=db_pedido.id,
+                producto_pedido_id=producto.id,
+                modelo=producto.modelo,
+                nombre=producto.nombre,
+                codigo=producto.codigo,
+                color=producto.color,
+                quilataje=producto.quilataje,
+                base=producto.base,
+                talla=producto.talla,
+                peso=producto.peso,
+                peso_gramos=producto.peso_gramos,
+                cantidad=item_create.cantidad,
+                precio_unitario=float(precio_unitario_item),
+                total=item_total
+            )
+            db.add(pedido_item)
         
         db.commit()
         db.refresh(db_pedido)
@@ -468,6 +577,18 @@ def create_pedido(
         )
         
         # NOTE: Ticket generation moved to frontend to match sales logic
+    
+    # Cargar items y producto para la respuesta
+    db.refresh(db_pedido)
+    if db_pedido.items:
+        db_pedido.items = db_pedido.items  # Ya está cargado por la relación
+    elif db_pedido.producto_pedido_id:
+        # Compatibilidad hacia atrás: cargar producto
+        producto = db.query(ProductoPedido).filter(
+            ProductoPedido.id == db_pedido.producto_pedido_id
+        ).first()
+        db_pedido.producto = producto
+    
     return db_pedido
 
 @router.put("/pedidos/{pedido_id}", response_model=PedidoOut)

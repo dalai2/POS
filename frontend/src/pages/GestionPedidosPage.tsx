@@ -3,9 +3,27 @@ import Layout from '../components/Layout'
 import { api } from '../utils/api'
 import { getLogoAsBase64, generatePedidoTicketHTML, openAndPrintTicket, saveTicket } from '../utils/ticketGenerator'
 
+type PedidoItem = {
+  id: number
+  pedido_id: number
+  producto_pedido_id?: number
+  modelo?: string
+  nombre?: string
+  codigo?: string
+  color?: string
+  quilataje?: string
+  base?: string
+  talla?: string
+  peso?: string
+  peso_gramos?: number
+  cantidad: number
+  precio_unitario: number
+  total: number
+}
+
 type Pedido = {
   id: number
-  producto_pedido_id: number
+  producto_pedido_id?: number
   user_id: number
   cliente_nombre: string
   cliente_telefono?: string
@@ -24,7 +42,7 @@ type Pedido = {
   created_at: string
   updated_at?: string
   vendedor_email?: string
-  producto: {
+  producto?: {
     id: number
     modelo: string  // Renombrado de "name"
     nombre?: string  // Renombrado de "tipo_joya"
@@ -38,6 +56,7 @@ type Pedido = {
     peso_gramos?: number
     codigo?: string
   }
+  items?: PedidoItem[]
 }
 
 type PagoPedido = {
@@ -795,12 +814,35 @@ export default function GestionPedidosPage() {
                       </td>
                       <td className="px-4 py-3 text-sm">
                         <div>
-                          <div className="font-medium">{p.producto?.modelo || 'Producto no encontrado'}</div>
-                          <div className="text-gray-500">
-                            {p.producto?.nombre && `${p.producto.nombre} - `}
-                            {p.producto?.color && `${p.producto.color} - `}
-                            {p.producto?.quilataje && `${p.producto.quilataje}`}
-                          </div>
+                          {p.items && p.items.length > 0 ? (
+                            // Múltiples productos
+                            <>
+                              {p.items.map((item, idx) => (
+                                <div key={item.id || idx} className={idx > 0 ? 'mt-2 pt-2 border-t border-gray-200' : ''}>
+                                  <div className="font-medium">{item.modelo || 'Producto sin modelo'}</div>
+                                  <div className="text-gray-500 text-xs">
+                                    {item.nombre && `${item.nombre} - `}
+                                    {item.color && `${item.color} - `}
+                                    {item.quilataje && `${item.quilataje}`}
+                                    {item.cantidad > 1 && ` (x${item.cantidad})`}
+                                  </div>
+                                </div>
+                              ))}
+                              <div className="text-gray-400 text-xs mt-1">
+                                Quilatajes: {p.items.map(item => item.quilataje).filter(q => q).join(', ') || 'N/A'}
+                              </div>
+                            </>
+                          ) : (
+                            // Un solo producto (compatibilidad hacia atrás)
+                            <>
+                              <div className="font-medium">{p.producto?.modelo || 'Producto no encontrado'}</div>
+                              <div className="text-gray-500">
+                                {p.producto?.nombre && `${p.producto.nombre} - `}
+                                {p.producto?.color && `${p.producto.color} - `}
+                                {p.producto?.quilataje && `${p.producto.quilataje}`}
+                              </div>
+                            </>
+                          )}
                         </div>
                       </td>
                       <td className="px-4 py-3 text-sm">
