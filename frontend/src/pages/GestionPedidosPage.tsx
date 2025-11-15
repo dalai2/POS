@@ -824,7 +824,8 @@ export default function GestionPedidosPage() {
                                     {[
                                       item.nombre,
                                       item.color,
-                                      item.quilataje
+                                      item.quilataje,
+                                      item.talla && `Talla: ${item.talla}`
                                     ].filter(Boolean).join(' - ')}
                                     {item.cantidad > 1 && ` (x${item.cantidad})`}
                                   </div>

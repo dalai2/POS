@@ -5,7 +5,7 @@ This service contains the business logic extracted from routes/reports.py
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_
 from typing import Dict, List, Any, Tuple, Optional, TypedDict
-from datetime import datetime, date, timezone as tz, timedelta
+from datetime import datetime, date, timedelta, timezone
 
 from app.models.tenant import Tenant
 from app.models.user import User
@@ -99,9 +99,14 @@ def get_detailed_corte_caja(
         raise ValueError("start_date must be <= end_date")
     
     # Convert to datetime for queries (timezone-aware)
-    # Note: After running fix_all_timestamps_timezone.sql, dates are already in Mexico time
-    start_datetime = datetime.combine(start_date, datetime.min.time()).replace(tzinfo=tz.utc)
-    end_datetime = datetime.combine(end_date, datetime.max.time()).replace(tzinfo=tz.utc)
+    # The dates from frontend are in Mexico local time
+    # Database timestamps are stored with timezone (after migration)
+    # We need to interpret the dates as Mexico time (-6 hours from UTC)
+    mexico_offset = timedelta(hours=-6)  # CST (Central Standard Time)
+    mexico_tz = timezone(mexico_offset)
+    
+    start_datetime = datetime.combine(start_date, datetime.min.time()).replace(tzinfo=mexico_tz)
+    end_datetime = datetime.combine(end_date, datetime.max.time()).replace(tzinfo=mexico_tz)
     
     # Get base data
     sales_data = _get_sales_by_payment_date(db, tenant, start_datetime, end_datetime)
@@ -605,6 +610,14 @@ def _process_pedidos_contado(
     pedidos_contado_ids: Any
 ) -> None:
     """Process cash orders (pedidos de contado) for active sales."""
+    # Initialize pedidos contado counters if not exist
+    if 'pedidos_contado_efectivo' not in counters:
+        counters['pedidos_contado_efectivo'] = 0.0
+    if 'pedidos_contado_tarjeta_neto' not in counters:
+        counters['pedidos_contado_tarjeta_neto'] = 0.0
+    if 'costo_pedidos_contado' not in counters:
+        counters['costo_pedidos_contado'] = 0.0
+    
     for pedido in pedidos_contado:
         pagos_pedido_contado = db.query(PagoPedido).filter(
             PagoPedido.pedido_id == pedido.id
@@ -612,6 +625,11 @@ def _process_pedidos_contado(
         
         efectivo_pedido = sum(float(p.monto) for p in pagos_pedido_contado if p.metodo_pago in ['efectivo', 'transferencia'])
         tarjeta_pedido = sum(float(p.monto) for p in pagos_pedido_contado if p.metodo_pago == 'tarjeta')
+        tarjeta_pedido_neto = tarjeta_pedido * TARJETA_DISCOUNT_RATE
+        
+        # Acumular para ventas activas
+        counters['pedidos_contado_efectivo'] += efectivo_pedido
+        counters['pedidos_contado_tarjeta_neto'] += tarjeta_pedido_neto
         
         counters['total_efectivo_contado'] += efectivo_pedido
         counters['total_tarjeta_contado'] += tarjeta_pedido
@@ -622,7 +640,9 @@ def _process_pedidos_contado(
         ).first()
         
         if producto and producto.cost_price:
-            counters['costo_ventas_contado'] += float(producto.cost_price) * pedido.cantidad
+            costo_pedido = float(producto.cost_price) * pedido.cantidad
+            counters['costo_ventas_contado'] += costo_pedido
+            counters['costo_pedidos_contado'] += costo_pedido
         
         counters['num_piezas_vendidas'] += pedido.cantidad
         counters['total_contado'] += float(pedido.total)
@@ -747,10 +767,26 @@ def _process_pedidos_pendientes(
 
 
 def _calculate_ventas_activas(counters: Dict[str, Any]) -> VentasActivas:
-    """Calculate active sales metrics."""
-    total_tarjeta_neto = counters['total_tarjeta_contado'] * TARJETA_DISCOUNT_RATE
-    total_ventas_activas_neto = counters['total_efectivo_contado'] + total_tarjeta_neto
-    utilidad_ventas_activas = total_ventas_activas_neto - counters['costo_ventas_contado']
+    """
+    Calculate active sales metrics.
+    
+    Ventas activas incluyen:
+    - Ventas de contado (efectivo y tarjeta)
+    - Pedidos de contado (efectivo y tarjeta)
+    """
+    # Ventas de contado
+    total_tarjeta_ventas_neto = counters['total_tarjeta_contado'] * TARJETA_DISCOUNT_RATE
+    ventas_contado_neto = counters['total_efectivo_contado'] + total_tarjeta_ventas_neto
+    
+    # Pedidos de contado (ya vienen con descuento de tarjeta aplicado en counters)
+    pedidos_contado_neto = counters.get('pedidos_contado_efectivo', 0) + counters.get('pedidos_contado_tarjeta_neto', 0)
+    
+    # Total de ventas activas
+    total_ventas_activas_neto = ventas_contado_neto + pedidos_contado_neto
+    
+    # Utilidad = total neto - (costo ventas contado + costo pedidos contado)
+    costo_total_activas = counters['costo_ventas_contado'] + counters.get('costo_pedidos_contado', 0)
+    utilidad_ventas_activas = total_ventas_activas_neto - costo_total_activas
     
     return {
         'neto': total_ventas_activas_neto,
@@ -793,7 +829,7 @@ def _calculate_ventas_pasivas(
         else:
             anticipos_apartados_dia_total += amount
     
-    # Abonos de apartados del día
+    # Abonos de apartados del día (EXCLUIR el último abono que liquida)
     abonos_apartados_dia = db.query(CreditPayment).join(Sale).filter(
         Sale.tenant_id == tenant.id,
         CreditPayment.created_at >= start_datetime,
@@ -802,11 +838,17 @@ def _calculate_ventas_pasivas(
     
     abonos_apartados_dia_total = 0.0
     for abono in abonos_apartados_dia:
-        amount = float(abono.amount or 0)
-        if abono.payment_method in ['tarjeta', 'card']:
-            abonos_apartados_dia_total += amount * TARJETA_DISCOUNT_RATE
-        else:
-            abonos_apartados_dia_total += amount
+        # Verificar si este abono liquidó el apartado
+        apartado = db.query(Sale).filter(Sale.id == abono.sale_id).first()
+        
+        # Solo incluir en ventas pasivas si el apartado NO está pagado/entregado
+        # Si está pagado/entregado, el último abono ya fue contado en ventas de liquidación
+        if apartado and apartado.credit_status not in ['pagado', 'entregado']:
+            amount = float(abono.amount or 0)
+            if abono.payment_method in ['tarjeta', 'card']:
+                abonos_apartados_dia_total += amount * TARJETA_DISCOUNT_RATE
+            else:
+                abonos_apartados_dia_total += amount
     
     # Anticipos de pedidos apartados del día
     anticipos_pedidos_dia = db.query(PagoPedido).join(Pedido).filter(
@@ -825,7 +867,7 @@ def _calculate_ventas_pasivas(
         else:
             anticipos_pedidos_dia_total += amount
     
-    # Abonos de pedidos apartados del día
+    # Abonos de pedidos apartados del día (EXCLUIR el último abono que liquida)
     abonos_pedidos_dia = db.query(PagoPedido).join(Pedido).filter(
         Pedido.tenant_id == tenant.id,
         Pedido.tipo_pedido == 'apartado',
@@ -836,11 +878,17 @@ def _calculate_ventas_pasivas(
     
     abonos_pedidos_dia_total = 0.0
     for abono in abonos_pedidos_dia:
-        amount = float(abono.monto or 0)
-        if abono.metodo_pago == TARJETA_METHOD:
-            abonos_pedidos_dia_total += amount * TARJETA_DISCOUNT_RATE
-        else:
-            abonos_pedidos_dia_total += amount
+        # Verificar si este abono liquidó el pedido
+        pedido = db.query(Pedido).filter(Pedido.id == abono.pedido_id).first()
+        
+        # Solo incluir en ventas pasivas si el pedido NO está pagado/entregado
+        # Si está pagado/entregado, el último abono ya fue contado en ventas de liquidación
+        if pedido and pedido.estado not in ['pagado', 'entregado']:
+            amount = float(abono.monto or 0)
+            if abono.metodo_pago == TARJETA_METHOD:
+                abonos_pedidos_dia_total += amount * TARJETA_DISCOUNT_RATE
+            else:
+                abonos_pedidos_dia_total += amount
     
     ventas_pasivas_total = (
         anticipos_apartados_dia_total +

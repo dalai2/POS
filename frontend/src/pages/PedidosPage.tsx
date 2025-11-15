@@ -71,9 +71,12 @@ export default function PedidosPage() {
   const [metodoPagoEfectivo, setMetodoPagoEfectivo] = useState('')
   const [metodoPagoTarjeta, setMetodoPagoTarjeta] = useState('')
   
-  // Modal de confirmación
+  // Modal de confirmación para agregar producto
   const [showConfirmModal, setShowConfirmModal] = useState(false)
   const [productoToAdd, setProductoToAdd] = useState<ProductoPedido | null>(null)
+  
+  // Modal de confirmación para crear pedido
+  const [showCheckoutModal, setShowCheckoutModal] = useState(false)
   
   // Modal para crear producto
   const [showCreateProductModal, setShowCreateProductModal] = useState(false)
@@ -799,7 +802,17 @@ export default function PedidosPage() {
           {/* Checkout Button */}
           {cart.length > 0 && (
             <button
-              onClick={checkout}
+              onClick={() => {
+                if (!clienteNombre.trim()) {
+                  setMsg('El nombre del cliente es requerido')
+                  return
+                }
+                if (!vendedorId) {
+                  setMsg('Debe seleccionar un vendedor')
+                  return
+                }
+                setShowCheckoutModal(true)
+              }}
               disabled={cart.length === 0 || !clienteNombre.trim() || !vendedorId}
               className="w-full bg-purple-600 text-white py-4 rounded-lg text-xl font-bold hover:bg-purple-700 disabled:bg-gray-400"
             >
@@ -957,6 +970,7 @@ export default function PedidosPage() {
                         {p.marca && `${p.marca} - `}
                         {p.color && `${p.color} - `}
                         {p.quilataje && `${p.quilataje}`}
+                        {p.talla && ` - Talla: ${p.talla}`}
                       </div>
                       {!p.disponible && (
                         <div className="text-xs text-red-600 font-bold">No disponible</div>
@@ -990,7 +1004,7 @@ export default function PedidosPage() {
         </div>
       </div>
 
-      {/* Modal de Confirmación */}
+      {/* Modal de Confirmación - Agregar Producto */}
       {showConfirmModal && productoToAdd && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
@@ -1026,6 +1040,62 @@ export default function PedidosPage() {
                 className="flex-1 bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700"
               >
                 Agregar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Confirmación - Crear Pedido */}
+      {showCheckoutModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-lg w-full mx-4">
+            <h3 className="text-lg font-semibold mb-4">⚠️ Confirmar Creación de Pedido</h3>
+            <div className="mb-4 space-y-2">
+              <p className="text-gray-700">
+                <strong>Cliente:</strong> {clienteNombre}
+              </p>
+              {clienteTelefono && (
+                <p className="text-gray-700">
+                  <strong>Teléfono:</strong> {clienteTelefono}
+                </p>
+              )}
+              <p className="text-gray-700">
+                <strong>Vendedor:</strong> {users.find(u => u.id.toString() === vendedorId)?.email || 'N/A'}
+              </p>
+              <p className="text-gray-700">
+                <strong>Tipo:</strong> {tipoPedido === 'contado' ? 'Contado' : 'Apartado'}
+              </p>
+              <p className="text-gray-700">
+                <strong>Productos:</strong> {cart.length} {cart.length === 1 ? 'producto' : 'productos'}
+              </p>
+              <p className="text-gray-700">
+                <strong>Total:</strong> ${cart.reduce((sum, item) => sum + (item.producto.precio * item.cantidad), 0).toFixed(2)}
+              </p>
+              {(parseFloat(metodoPagoEfectivo) > 0 || parseFloat(metodoPagoTarjeta) > 0) && (
+                <p className="text-gray-700">
+                  <strong>Anticipo:</strong> ${((parseFloat(metodoPagoEfectivo) || 0) + (parseFloat(metodoPagoTarjeta) || 0)).toFixed(2)}
+                </p>
+              )}
+            </div>
+            <p className="text-gray-600 mb-6">
+              ¿Confirmas que deseas crear este pedido? Esta acción generará el ticket correspondiente.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowCheckoutModal(false)}
+                className="flex-1 bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  setShowCheckoutModal(false)
+                  checkout()
+                }}
+                className="flex-1 bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700"
+              >
+                ✅ Confirmar Pedido
               </button>
             </div>
           </div>
