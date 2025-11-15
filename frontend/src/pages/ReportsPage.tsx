@@ -560,7 +560,7 @@ export default function ReportsPage() {
           <th style="text-align: left;">Modelo</th>
           <th style="text-align: left;">Quilataje</th>
           <th style="text-align: center; background-color: #f0fdf4;">Vendidas</th>
-          <th style="text-align: center; background-color: #eff6ff;">Pedidas</th>
+          <th style="text-align: center; background-color: #eff6ff;">Pedidas por el Cliente</th>
           <th style="text-align: center; background-color: #faf5ff;">Apartadas</th>
           <th style="text-align: center; background-color: #fefce8;">Liquidadas</th>
           <th style="text-align: center; background-color: #e5e7eb; font-weight: bold;">Total</th>

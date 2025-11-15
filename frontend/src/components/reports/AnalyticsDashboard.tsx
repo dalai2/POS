@@ -210,14 +210,14 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
         <div className="grid gap-5 md:grid-cols-3">
           <SummaryCard
             title="Anticipos de apartados"
-            amount={dashboard.anticipos.apartados.monto}
-            count={dashboard.anticipos.apartados.count}
+            amount={dashboard.anticipos.apartados.total.monto}
+            count={dashboard.anticipos.apartados.total.count}
             background="#ffffff"
           />
           <SummaryCard
             title="Anticipos de pedidos apartados"
-            amount={dashboard.anticipos.pedidos_apartados.monto}
-            count={dashboard.anticipos.pedidos_apartados.count}
+            amount={dashboard.anticipos.pedidos_apartados.total.monto}
+            count={dashboard.anticipos.pedidos_apartados.total.count}
             background="#f0f7f7"
           />
           <SummaryCard
@@ -243,14 +243,14 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
         <div className="grid gap-5 md:grid-cols-3">
           <SummaryCard
             title="Abonos a apartados"
-            amount={dashboard.abonos.apartados.monto}
-            count={dashboard.abonos.apartados.count}
+            amount={dashboard.abonos.apartados.total.monto}
+            count={dashboard.abonos.apartados.total.count}
             background="#ffffff"
           />
           <SummaryCard
             title="Abonos a pedidos apartados"
-            amount={dashboard.abonos.pedidos_apartados.monto}
-            count={dashboard.abonos.pedidos_apartados.count}
+            amount={dashboard.abonos.pedidos_apartados.total.monto}
+            count={dashboard.abonos.pedidos_apartados.total.count}
             background="#f0f7f7"
           />
           <SummaryCard

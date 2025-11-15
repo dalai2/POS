@@ -98,7 +98,7 @@ export const buildDetailedReportCsv = (
 
   if (report.resumen_piezas && report.resumen_piezas.length > 0) {
     rows.push(['RESUMEN DE PIEZAS']);
-    rows.push(['Nombre', 'Modelo', 'Quilataje', 'Vendidas', 'Pedidas', 'Apartadas', 'Liquidadas', 'Total']);
+    rows.push(['Nombre', 'Modelo', 'Quilataje', 'Vendidas', 'Pedidas por el Cliente', 'Apartadas', 'Liquidadas', 'Total']);
     report.resumen_piezas.forEach(p => {
       rows.push([
         p.nombre,
