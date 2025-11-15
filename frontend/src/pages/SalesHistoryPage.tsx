@@ -418,29 +418,43 @@ export default function SalesHistoryPage() {
       const allTickets = saved.data || []
       
       // DEBUG: Ver qué tickets están llegando
-      console.log(`[DEBUG] Tickets para sale_id ${id}:`, allTickets.map((t: any) => ({ id: t.id, kind: t.kind })))
+      console.log(`[DEBUG] Tickets para sale_id ${id}:`, allTickets.map((t: any) => ({ id: t.id, kind: t.kind, kindType: typeof t.kind })))
       
       // Filtrar solo tickets de ventas (excluir tickets de pedidos)
       const saleTickets = allTickets.filter((ticket: any) => {
+        console.log(`[DEBUG] Evaluando ticket:`, { id: ticket.id, kind: ticket.kind, kindType: typeof ticket.kind })
+        
         // Incluir tickets de ventas
-        if (ticket.kind === 'sale') return true
+        if (ticket.kind === 'sale') {
+          console.log(`[DEBUG] ✅ Ticket ${ticket.id} es 'sale'`)
+          return true
+        }
         
         // Incluir tickets de apartados (abonos con patrón 'payment-{id}')
-        if (ticket.kind.match(/^payment-\d+$/)) return true
+        if (ticket.kind && ticket.kind.match(/^payment-\d+$/)) {
+          console.log(`[DEBUG] ✅ Ticket ${ticket.id} es 'payment-{id}'`)
+          return true
+        }
         
         // Excluir EXPLÍCITAMENTE tickets de pedidos
-        if (ticket.kind.startsWith('pedido')) return false
+        if (ticket.kind && ticket.kind.startsWith('pedido')) {
+          console.log(`[DEBUG] ❌ Ticket ${ticket.id} es de pedido`)
+          return false
+        }
         
         // Incluir 'payment' solo si NO hay tickets de pedidos para este sale_id
-        // (para mantener compatibilidad con anticipos antiguos)
-        const hasPedidoTickets = allTickets.some((t: any) => t.kind.startsWith('pedido'))
-        if (ticket.kind === 'payment' && !hasPedidoTickets) return true
+        const hasPedidoTickets = allTickets.some((t: any) => t.kind && t.kind.startsWith('pedido'))
+        if (ticket.kind === 'payment' && !hasPedidoTickets) {
+          console.log(`[DEBUG] ✅ Ticket ${ticket.id} es 'payment' sin pedidos`)
+          return true
+        }
         
         // Excluir todo lo demás
+        console.log(`[DEBUG] ❌ Ticket ${ticket.id} no cumple ninguna condición`)
         return false
       })
       
-      console.log(`[DEBUG] Tickets filtrados para ventas:`, saleTickets.map((t: any) => ({ id: t.id, kind: t.kind })))
+      console.log(`[DEBUG] Tickets filtrados para ventas:`, saleTickets.length, saleTickets.map((t: any) => ({ id: t.id, kind: t.kind })))
       
       if (saleTickets.length > 0) {
         const last = saleTickets[saleTickets.length - 1]
