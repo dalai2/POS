@@ -930,7 +930,11 @@ export default function GestionPedidosPage() {
                 <strong>Cliente:</strong> {pedidoSeleccionado.cliente_nombre}
               </p>
               <p className="text-gray-700">
-                <strong>Producto:</strong> {pedidoSeleccionado.producto.modelo}
+                <strong>Producto:</strong> {
+                  pedidoSeleccionado.items && pedidoSeleccionado.items.length > 0
+                    ? pedidoSeleccionado.items.map(item => item.modelo).join(', ')
+                    : pedidoSeleccionado.producto?.modelo || 'Producto no encontrado'
+                }
               </p>
               <p className="text-gray-700">
                 <strong>Saldo pendiente:</strong> ${pedidoSeleccionado.saldo_pendiente.toFixed(2)}

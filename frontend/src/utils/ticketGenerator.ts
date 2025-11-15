@@ -340,7 +340,7 @@ export const generatePedidoTicketHTML = (params: {
     <div class="footer-section">
       <!-- Footer -->
       <div class="footer-info">
-        <div>${totalItems || quantity} Articulo(s)</div>
+        <div>${totalItems || pedido.cantidad || 1} Articulo(s)</div>
         <div class="policy">
           SU PIEZA TIENE UNA GARANTÍA DE POR VIDA DE AUTENTICIDAD<br>
           NO SE ACEPTAN CAMBIOS NI DEVOLUCIONES EN MERCANCÍA DAÑADA
