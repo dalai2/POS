@@ -205,7 +205,7 @@ def get_detailed_corte_caja(
     return {
         "start_date": start_date.isoformat(),
         "end_date": end_date.isoformat(),
-        "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "generated_at": datetime.now(mexico_tz).strftime("%Y-%m-%d %H:%M:%S"),
         "ventas_validas": counters['contado_count'],
         "contado_count": counters['contado_count'],
         "credito_count": counters['credito_count'],
