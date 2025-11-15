@@ -460,6 +460,8 @@ export default function SalesHistoryPage() {
         // Priorizar ticket 'sale' sobre 'payment' si ambos existen
         // (porque 'sale' es más específico para ventas)
         let selectedTicket = saleTickets.find((t: any) => t.kind === 'sale')
+        console.log(`[DEBUG] Ticket 'sale' encontrado:`, selectedTicket ? { id: selectedTicket.id, kind: selectedTicket.kind } : 'No encontrado')
+        
         if (!selectedTicket) {
           // Si no hay 'sale', verificar que el 'payment' sea realmente de una venta
           // Intentar obtener la venta para confirmar que existe
@@ -467,15 +469,22 @@ export default function SalesHistoryPage() {
             await api.get(`/sales/${id}`)
             // Si la venta existe, usar el ticket 'payment'
             selectedTicket = saleTickets[saleTickets.length - 1]
+            console.log(`[DEBUG] Usando ticket 'payment' (venta verificada):`, { id: selectedTicket.id, kind: selectedTicket.kind })
           } catch (e: any) {
             // Si no existe la venta (404), es un pedido, no mostrar ticket
             console.log(`[DEBUG] ❌ sale_id ${id} no es una venta, es un pedido. No mostrar ticket.`)
             setMsg('Este ticket corresponde a un pedido, no a una venta')
             return
           }
+        } else {
+          console.log(`[DEBUG] ✅ Usando ticket 'sale':`, { id: selectedTicket.id, kind: selectedTicket.kind })
         }
         
         if (selectedTicket) {
+          // DEBUG: Ver un preview del HTML para verificar que es el ticket correcto
+          const htmlPreview = selectedTicket.html.substring(0, 200)
+          console.log(`[DEBUG] HTML preview del ticket seleccionado:`, htmlPreview)
+          
           const w = window.open('', '_blank')
           if (!w) return
           w.document.write(selectedTicket.html)
