@@ -40,6 +40,19 @@ export default function ReportsPage() {
     )
   }
 
+  // Helper function to parse date string as local date (not UTC)
+  const formatLocalDateForPrint = (dateStr: string): string => {
+    if (!dateStr) return '';
+    // Parse YYYY-MM-DD as local date, not UTC
+    const [year, month, day] = dateStr.split('-').map(Number);
+    const date = new Date(year, month - 1, day);
+    return date.toLocaleDateString('es-ES', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+  };
+
   const printReport = () => {
     const w = window.open('', '_blank');
     if (!w) return;
@@ -149,11 +162,11 @@ export default function ReportsPage() {
     <div class="section-title">PERÍODO DEL REPORTE</div>
     <div class="row">
       <span class="label">Fecha Inicio:</span>
-      <span class="value">${new Date(report.start_date).toLocaleDateString('es-ES')}</span>
+      <span class="value">${formatLocalDateForPrint(report.start_date)}</span>
     </div>
     <div class="row">
       <span class="label">Fecha Fin:</span>
-      <span class="value">${new Date(report.end_date).toLocaleDateString('es-ES')}</span>
+      <span class="value">${formatLocalDateForPrint(report.end_date)}</span>
     </div>
   </div>
 

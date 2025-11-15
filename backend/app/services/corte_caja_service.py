@@ -822,12 +822,34 @@ def _calculate_ventas_pasivas(
     ).all()
     
     anticipos_apartados_dia_total = 0.0
+    anticipos_apartados_efectivo = 0.0
+    anticipos_apartados_tarjeta_bruto = 0.0
+    anticipos_apartados_tarjeta_neto = 0.0
+    anticipos_apartados_count = 0
+    anticipos_apartados_efectivo_count = 0
+    anticipos_apartados_tarjeta_count = 0
+    
     for pago in anticipos_apartados_dia:
         amount = float(pago.amount or 0)
         if pago.method in ['tarjeta', 'card']:
+            anticipos_apartados_tarjeta_bruto += amount
+            anticipos_apartados_tarjeta_neto += amount * TARJETA_DISCOUNT_RATE
             anticipos_apartados_dia_total += amount * TARJETA_DISCOUNT_RATE
+            anticipos_apartados_tarjeta_count += 1
         else:
+            anticipos_apartados_efectivo += amount
             anticipos_apartados_dia_total += amount
+            anticipos_apartados_efectivo_count += 1
+        anticipos_apartados_count += 1
+    
+    # Actualizar contadores
+    counters['anticipos_apartados_total_monto'] = anticipos_apartados_dia_total
+    counters['anticipos_apartados_count'] = anticipos_apartados_count
+    counters['anticipos_apartados_efectivo_monto'] = anticipos_apartados_efectivo
+    counters['anticipos_apartados_efectivo_count'] = anticipos_apartados_efectivo_count
+    counters['anticipos_apartados_tarjeta_bruto'] = anticipos_apartados_tarjeta_bruto
+    counters['anticipos_apartados_tarjeta_neto'] = anticipos_apartados_tarjeta_neto
+    counters['anticipos_apartados_tarjeta_count'] = anticipos_apartados_tarjeta_count
     
     # Abonos de apartados del día (EXCLUIR el último abono que liquida)
     abonos_apartados_dia = db.query(CreditPayment).join(Sale).filter(
@@ -837,6 +859,13 @@ def _calculate_ventas_pasivas(
     ).all()
     
     abonos_apartados_dia_total = 0.0
+    abonos_apartados_efectivo = 0.0
+    abonos_apartados_tarjeta_bruto = 0.0
+    abonos_apartados_tarjeta_neto = 0.0
+    abonos_apartados_count = 0
+    abonos_apartados_efectivo_count = 0
+    abonos_apartados_tarjeta_count = 0
+    
     for abono in abonos_apartados_dia:
         # Verificar si este abono liquidó el apartado
         apartado = db.query(Sale).filter(Sale.id == abono.sale_id).first()
@@ -846,9 +875,24 @@ def _calculate_ventas_pasivas(
         if apartado and apartado.credit_status not in ['pagado', 'entregado']:
             amount = float(abono.amount or 0)
             if abono.payment_method in ['tarjeta', 'card']:
+                abonos_apartados_tarjeta_bruto += amount
+                abonos_apartados_tarjeta_neto += amount * TARJETA_DISCOUNT_RATE
                 abonos_apartados_dia_total += amount * TARJETA_DISCOUNT_RATE
+                abonos_apartados_tarjeta_count += 1
             else:
+                abonos_apartados_efectivo += amount
                 abonos_apartados_dia_total += amount
+                abonos_apartados_efectivo_count += 1
+            abonos_apartados_count += 1
+    
+    # Actualizar contadores
+    counters['abonos_apartados_total_neto'] = abonos_apartados_dia_total
+    counters['abonos_apartados_count'] = abonos_apartados_count
+    counters['abonos_apartados_efectivo_monto'] = abonos_apartados_efectivo
+    counters['abonos_apartados_efectivo_count'] = abonos_apartados_efectivo_count
+    counters['abonos_apartados_tarjeta_bruto'] = abonos_apartados_tarjeta_bruto
+    counters['abonos_apartados_tarjeta_neto'] = abonos_apartados_tarjeta_neto
+    counters['abonos_apartados_tarjeta_count'] = abonos_apartados_tarjeta_count
     
     # Anticipos de pedidos apartados del día
     anticipos_pedidos_dia = db.query(PagoPedido).join(Pedido).filter(
@@ -860,12 +904,34 @@ def _calculate_ventas_pasivas(
     ).all()
     
     anticipos_pedidos_dia_total = 0.0
+    anticipos_pedidos_efectivo = 0.0
+    anticipos_pedidos_tarjeta_bruto = 0.0
+    anticipos_pedidos_tarjeta_neto = 0.0
+    anticipos_pedidos_count = 0
+    anticipos_pedidos_efectivo_count = 0
+    anticipos_pedidos_tarjeta_count = 0
+    
     for pago in anticipos_pedidos_dia:
         amount = float(pago.monto or 0)
         if pago.metodo_pago == TARJETA_METHOD:
+            anticipos_pedidos_tarjeta_bruto += amount
+            anticipos_pedidos_tarjeta_neto += amount * TARJETA_DISCOUNT_RATE
             anticipos_pedidos_dia_total += amount * TARJETA_DISCOUNT_RATE
+            anticipos_pedidos_tarjeta_count += 1
         else:
+            anticipos_pedidos_efectivo += amount
             anticipos_pedidos_dia_total += amount
+            anticipos_pedidos_efectivo_count += 1
+        anticipos_pedidos_count += 1
+    
+    # Actualizar contadores
+    counters['anticipos_pedidos_total_monto'] = anticipos_pedidos_dia_total
+    counters['anticipos_pedidos_count'] = anticipos_pedidos_count
+    counters['anticipos_pedidos_efectivo_monto'] = anticipos_pedidos_efectivo
+    counters['anticipos_pedidos_efectivo_count'] = anticipos_pedidos_efectivo_count
+    counters['anticipos_pedidos_tarjeta_bruto'] = anticipos_pedidos_tarjeta_bruto
+    counters['anticipos_pedidos_tarjeta_neto'] = anticipos_pedidos_tarjeta_neto
+    counters['anticipos_pedidos_tarjeta_count'] = anticipos_pedidos_tarjeta_count
     
     # Abonos de pedidos apartados del día (EXCLUIR el último abono que liquida)
     abonos_pedidos_dia = db.query(PagoPedido).join(Pedido).filter(
@@ -877,6 +943,13 @@ def _calculate_ventas_pasivas(
     ).all()
     
     abonos_pedidos_dia_total = 0.0
+    abonos_pedidos_efectivo = 0.0
+    abonos_pedidos_tarjeta_bruto = 0.0
+    abonos_pedidos_tarjeta_neto = 0.0
+    abonos_pedidos_count = 0
+    abonos_pedidos_efectivo_count = 0
+    abonos_pedidos_tarjeta_count = 0
+    
     for abono in abonos_pedidos_dia:
         # Verificar si este abono liquidó el pedido
         pedido = db.query(Pedido).filter(Pedido.id == abono.pedido_id).first()
@@ -886,9 +959,24 @@ def _calculate_ventas_pasivas(
         if pedido and pedido.estado not in ['pagado', 'entregado']:
             amount = float(abono.monto or 0)
             if abono.metodo_pago == TARJETA_METHOD:
+                abonos_pedidos_tarjeta_bruto += amount
+                abonos_pedidos_tarjeta_neto += amount * TARJETA_DISCOUNT_RATE
                 abonos_pedidos_dia_total += amount * TARJETA_DISCOUNT_RATE
+                abonos_pedidos_tarjeta_count += 1
             else:
+                abonos_pedidos_efectivo += amount
                 abonos_pedidos_dia_total += amount
+                abonos_pedidos_efectivo_count += 1
+            abonos_pedidos_count += 1
+    
+    # Actualizar contadores
+    counters['abonos_pedidos_total_neto'] = abonos_pedidos_dia_total
+    counters['abonos_pedidos_count'] = abonos_pedidos_count
+    counters['abonos_pedidos_efectivo_monto'] = abonos_pedidos_efectivo
+    counters['abonos_pedidos_efectivo_count'] = abonos_pedidos_efectivo_count
+    counters['abonos_pedidos_tarjeta_bruto'] = abonos_pedidos_tarjeta_bruto
+    counters['abonos_pedidos_tarjeta_neto'] = abonos_pedidos_tarjeta_neto
+    counters['abonos_pedidos_tarjeta_count'] = abonos_pedidos_tarjeta_count
     
     ventas_pasivas_total = (
         anticipos_apartados_dia_total +

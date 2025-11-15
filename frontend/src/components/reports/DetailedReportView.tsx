@@ -8,6 +8,19 @@ import { SalesDetailsTable } from './SalesDetailsTable';
 import { HistorialesSection } from './HistorialesSection';
 import { AnalyticsDashboard } from './AnalyticsDashboard';
 
+// Helper function to parse date string as local date (not UTC)
+const formatLocalDate = (dateStr: string): string => {
+  if (!dateStr) return '';
+  // Parse YYYY-MM-DD as local date, not UTC
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  return date.toLocaleDateString('es-ES', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  });
+};
+
 interface DetailedReportViewProps {
   detailedReport: any;
   isDayClosed: boolean | null;
@@ -33,7 +46,7 @@ export const DetailedReportView: React.FC<DetailedReportViewProps> = ({
       <div className="text-center p-8" style={{ borderBottom: '3px solid #2e4354' }}>
         <h2 className="text-3xl font-['Exo_2',sans-serif] font-bold mb-2" style={{ color: '#2e4354' }}>CORTE DE CAJA</h2>
         <p className="text-lg" style={{ color: '#2e4354', opacity: 0.8 }}>
-          Rango: {new Date(detailedReport.start_date).toLocaleDateString()} a {new Date(detailedReport.end_date).toLocaleDateString()}
+          Rango: {formatLocalDate(detailedReport.start_date)} a {formatLocalDate(detailedReport.end_date)}
         </p>
         <p className="text-sm" style={{ color: '#2e4354', opacity: 0.6 }}>
           Generado: {detailedReport.generated_at}
