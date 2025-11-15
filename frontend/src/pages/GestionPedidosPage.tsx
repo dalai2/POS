@@ -197,13 +197,29 @@ export default function GestionPedidosPage() {
         setStatusHistory([])
       }
       
-      // Cargar tickets de abonos
+      // Cargar tickets de abonos (solo tickets de pedidos, no de ventas)
       try {
         const ticketsResponse = await api.get(`/tickets/by-sale/${pedido.id}`)
-        setTicketsByPedido(prev => ({ ...prev, [pedido.id]: ticketsResponse.data || [] }))
+        const allTickets = ticketsResponse.data || []
+        
+        // Filtrar solo tickets de pedidos:
+        // - Tickets con kind que empiece con 'pedido' (pedido-payment-{id})
+        // - Excluir tickets de ventas (kind 'sale' que es específico de ventas)
+        // - Para 'payment': solo incluir si NO hay tickets con 'pedido' (compatibilidad con tickets antiguos)
+        const hasPedidoTickets = allTickets.some((t: TicketRecord) => t.kind.startsWith('pedido'))
+        const pedidoTickets = allTickets.filter((ticket: TicketRecord) => {
+          // Excluir tickets de ventas
+          if (ticket.kind === 'sale') return false
+          // Incluir tickets que empiecen con 'pedido'
+          if (ticket.kind.startsWith('pedido')) return true
+          // Incluir 'payment' solo si no hay tickets con 'pedido' (para compatibilidad)
+          if (ticket.kind === 'payment' && !hasPedidoTickets) return true
+          return false
+        })
+        setTicketsByPedido((prev: Record<number, TicketRecord[]>) => ({ ...prev, [pedido.id]: pedidoTickets }))
       } catch (error) {
         console.error('Error loading tickets:', error)
-        setTicketsByPedido(prev => ({ ...prev, [pedido.id]: [] }))
+        setTicketsByPedido((prev: Record<number, TicketRecord[]>) => ({ ...prev, [pedido.id]: [] }))
       }
       
       setShowHistorialModal(true)
