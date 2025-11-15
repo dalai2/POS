@@ -457,15 +457,34 @@ export default function SalesHistoryPage() {
       console.log(`[DEBUG] Tickets filtrados para ventas:`, saleTickets.length, saleTickets.map((t: any) => ({ id: t.id, kind: t.kind })))
       
       if (saleTickets.length > 0) {
-        const last = saleTickets[saleTickets.length - 1]
-        const w = window.open('', '_blank')
-        if (!w) return
-        w.document.write(last.html)
-        w.document.close()
-        // Asegurar impresión
-        w.addEventListener('load', () => setTimeout(() => w.print(), 300))
-        setTimeout(() => { if (!w.closed) w.print() }, 1000)
-        return
+        // Priorizar ticket 'sale' sobre 'payment' si ambos existen
+        // (porque 'sale' es más específico para ventas)
+        let selectedTicket = saleTickets.find((t: any) => t.kind === 'sale')
+        if (!selectedTicket) {
+          // Si no hay 'sale', verificar que el 'payment' sea realmente de una venta
+          // Intentar obtener la venta para confirmar que existe
+          try {
+            await api.get(`/sales/${id}`)
+            // Si la venta existe, usar el ticket 'payment'
+            selectedTicket = saleTickets[saleTickets.length - 1]
+          } catch (e: any) {
+            // Si no existe la venta (404), es un pedido, no mostrar ticket
+            console.log(`[DEBUG] ❌ sale_id ${id} no es una venta, es un pedido. No mostrar ticket.`)
+            setMsg('Este ticket corresponde a un pedido, no a una venta')
+            return
+          }
+        }
+        
+        if (selectedTicket) {
+          const w = window.open('', '_blank')
+          if (!w) return
+          w.document.write(selectedTicket.html)
+          w.document.close()
+          // Asegurar impresión
+          w.addEventListener('load', () => setTimeout(() => w.print(), 300))
+          setTimeout(() => { if (!w.closed) w.print() }, 1000)
+          return
+        }
       }
       // Fallback: reconstruir desde venta
       const r = await api.get(`/sales/${id}`)
