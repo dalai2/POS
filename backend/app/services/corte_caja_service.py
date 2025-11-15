@@ -581,7 +581,7 @@ def _process_sales_for_stats(
                 counters['num_piezas_apartadas_pagadas'] += item.quantity
                 # Solo contar piezas entregadas si el estado es "entregado"
                 if sale.credit_status == 'entregado':
-                counters['num_piezas_entregadas'] += item.quantity
+                    counters['num_piezas_entregadas'] += item.quantity
                 if item.product_id and item.product_id in products:
                     product = products[item.product_id]
                     if product.cost_price:
@@ -672,7 +672,7 @@ def _process_pedidos_liquidados(
         counters['num_piezas_pedidos_apartados_liquidados'] += pedido.cantidad
         # Solo contar piezas entregadas si el estado es "entregado"
         if pedido.estado == 'entregado':
-        counters['num_piezas_entregadas'] += pedido.cantidad
+            counters['num_piezas_entregadas'] += pedido.cantidad
 
 
 def _process_apartados_pendientes(
@@ -2858,23 +2858,23 @@ def _build_resumen_piezas(
                 resumen_piezas_dict[key]["piezas_pedidas"] += item.cantidad
         else:
             # Fallback: usar producto_pedido_id si no hay items (compatibilidad hacia atrás)
-        producto = db.query(ProductoPedido).filter(ProductoPedido.id == pedido.producto_pedido_id).first()
-        if not producto:
-            continue
-        key = (producto.nombre or producto.modelo or "Sin nombre", producto.modelo or "N/A", producto.quilataje or "N/A")
-        if key not in resumen_piezas_dict:
-            resumen_piezas_dict[key] = {
-                "nombre": producto.nombre or producto.modelo or "Sin nombre",
-                "modelo": producto.modelo or "N/A",
-                "quilataje": producto.quilataje or "N/A",
+            producto = db.query(ProductoPedido).filter(ProductoPedido.id == pedido.producto_pedido_id).first()
+            if not producto:
+                continue
+            key = (producto.nombre or producto.modelo or "Sin nombre", producto.modelo or "N/A", producto.quilataje or "N/A")
+            if key not in resumen_piezas_dict:
+                resumen_piezas_dict[key] = {
+                    "nombre": producto.nombre or producto.modelo or "Sin nombre",
+                    "modelo": producto.modelo or "N/A",
+                    "quilataje": producto.quilataje or "N/A",
                     "talla": producto.talla or None,
-                "piezas_vendidas": 0,
-                "piezas_pedidas": 0,
-                "piezas_apartadas": 0,
-                "piezas_liquidadas": 0,
-                "total_piezas": 0,
-            }
-        resumen_piezas_dict[key]["piezas_pedidas"] += pedido.cantidad
+                    "piezas_vendidas": 0,
+                    "piezas_pedidas": 0,
+                    "piezas_apartadas": 0,
+                    "piezas_liquidadas": 0,
+                    "total_piezas": 0,
+                }
+            resumen_piezas_dict[key]["piezas_pedidas"] += pedido.cantidad
 
     # Process liquidated pedidos (pedidos apartados que fueron completamente pagados)
     # Estos pedidos se suman solo a piezas_liquidadas
@@ -2908,24 +2908,24 @@ def _build_resumen_piezas(
                 resumen_piezas_dict[key]["piezas_liquidadas"] += item.cantidad
         else:
             # Fallback: usar producto_pedido_id si no hay items (compatibilidad hacia atrás)
-        producto = db.query(ProductoPedido).filter(ProductoPedido.id == pedido.producto_pedido_id).first()
-        if not producto:
-            continue
-        key = (producto.nombre or producto.modelo or "Sin nombre", producto.modelo or "N/A", producto.quilataje or "N/A")
-        if key not in resumen_piezas_dict:
-            resumen_piezas_dict[key] = {
-                "nombre": producto.nombre or producto.modelo or "Sin nombre",
-                "modelo": producto.modelo or "N/A",
-                "quilataje": producto.quilataje or "N/A",
+            producto = db.query(ProductoPedido).filter(ProductoPedido.id == pedido.producto_pedido_id).first()
+            if not producto:
+                continue
+            key = (producto.nombre or producto.modelo or "Sin nombre", producto.modelo or "N/A", producto.quilataje or "N/A")
+            if key not in resumen_piezas_dict:
+                resumen_piezas_dict[key] = {
+                    "nombre": producto.nombre or producto.modelo or "Sin nombre",
+                    "modelo": producto.modelo or "N/A",
+                    "quilataje": producto.quilataje or "N/A",
                     "talla": producto.talla or None,
-                "piezas_vendidas": 0,
-                "piezas_pedidas": 0,
-                "piezas_apartadas": 0,
-                "piezas_liquidadas": 0,
-                "total_piezas": 0,
-            }
+                    "piezas_vendidas": 0,
+                    "piezas_pedidas": 0,
+                    "piezas_apartadas": 0,
+                    "piezas_liquidadas": 0,
+                    "total_piezas": 0,
+                }
             # Los pedidos liquidados solo se suman a piezas_liquidadas
-        resumen_piezas_dict[key]["piezas_liquidadas"] += pedido.cantidad
+            resumen_piezas_dict[key]["piezas_liquidadas"] += pedido.cantidad
 
     # Calculate totals
     for data in resumen_piezas_dict.values():
