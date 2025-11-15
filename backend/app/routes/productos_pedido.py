@@ -490,6 +490,13 @@ def create_pedido(
         
     else:  # tipo_pedido == "apartado"
         # Pedido apartado: con anticipo
+        # Validar que el anticipo sea mayor a 0
+        if pedido.anticipo_pagado <= 0:
+            raise HTTPException(
+                status_code=400, 
+                detail="El anticipo inicial debe ser mayor a 0 para pedidos apartados"
+            )
+        
         saldo_pendiente = total - pedido.anticipo_pagado
 
         db_pedido = Pedido(

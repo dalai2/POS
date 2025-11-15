@@ -995,7 +995,22 @@ def _build_vendor_stats(
             vendor_stats[apartado.vendedor_id]["anticipos_apartados"] += anticipo_neto
             vendor_stats[apartado.vendedor_id]["venta_total_pasiva"] += anticipo_neto
             
-            pagos_posteriores = db.query(CreditPayment).filter(CreditPayment.sale_id == apartado.id).all()
+            # Abonos de apartados: filtrar por fecha del periodo y excluir último abono si está pagado
+            pagos_posteriores = db.query(CreditPayment).filter(
+                CreditPayment.sale_id == apartado.id,
+                CreditPayment.created_at >= start_datetime,
+                CreditPayment.created_at <= end_datetime
+            ).all()
+            
+            # Si el apartado ya está pagado/entregado, excluir el último abono
+            if apartado.credit_status in ['pagado', 'entregado']:
+                # Obtener todos los abonos para encontrar el último
+                todos_abonos = db.query(CreditPayment).filter(CreditPayment.sale_id == apartado.id).all()
+                if todos_abonos:
+                    ultimo_abono = max(todos_abonos, key=lambda a: a.created_at if a.created_at.tzinfo else a.created_at.replace(tzinfo=tz.utc))
+                    # Excluir el último abono de los abonos del periodo
+                    pagos_posteriores = [p for p in pagos_posteriores if p.id != ultimo_abono.id]
+            
             abonos_efectivo = sum(float(p.amount) for p in pagos_posteriores if p.payment_method in ['efectivo', 'cash', 'transferencia'])
             abonos_tarjeta = sum(float(p.amount) for p in pagos_posteriores if p.payment_method in ['tarjeta', 'card'])
             abonos_neto = abonos_efectivo + (abonos_tarjeta * TARJETA_DISCOUNT_RATE)
@@ -1023,7 +1038,26 @@ def _build_vendor_stats(
             vendor_stats[pedido.user_id]["anticipos_pedidos"] += anticipo_neto
             vendor_stats[pedido.user_id]["venta_total_pasiva"] += anticipo_neto
             
-            abonos_pagos = [p for p in pagos_todos if p.tipo_pago == 'saldo']
+            # Abonos de pedidos: filtrar por fecha del periodo y excluir último abono si está pagado
+            abonos_pagos = db.query(PagoPedido).filter(
+                PagoPedido.pedido_id == pedido.id,
+                PagoPedido.tipo_pago == 'saldo',
+                PagoPedido.created_at >= start_datetime,
+                PagoPedido.created_at <= end_datetime
+            ).all()
+            
+            # Si el pedido ya está pagado/entregado, excluir el último abono
+            if pedido.estado in ['pagado', 'entregado']:
+                # Obtener todos los abonos para encontrar el último
+                todos_abonos = db.query(PagoPedido).filter(
+                    PagoPedido.pedido_id == pedido.id,
+                    PagoPedido.tipo_pago == 'saldo'
+                ).all()
+                if todos_abonos:
+                    ultimo_abono = max(todos_abonos, key=lambda a: a.created_at if a.created_at.tzinfo else a.created_at.replace(tzinfo=tz.utc))
+                    # Excluir el último abono de los abonos del periodo
+                    abonos_pagos = [p for p in abonos_pagos if p.id != ultimo_abono.id]
+            
             abonos_totals = _calculate_payment_totals(abonos_pagos)
             abonos_efectivo = abonos_totals['efectivo']
             abonos_tarjeta = abonos_totals['tarjeta']

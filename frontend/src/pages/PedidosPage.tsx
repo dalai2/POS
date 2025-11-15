@@ -493,6 +493,15 @@ export default function PedidosPage() {
       return
     }
 
+    // Validar anticipo para pedidos apartados
+    if (tipoPedido === 'apartado') {
+      const anticipo = (parseFloat(metodoPagoEfectivo) || 0) + (parseFloat(metodoPagoTarjeta) || 0)
+      if (anticipo <= 0) {
+        setMsg('El anticipo inicial debe ser mayor a 0 para pedidos apartados')
+        return
+      }
+    }
+
     try {
       console.log('Starting checkout process...')
       console.log('Access token:', localStorage.getItem('access'))

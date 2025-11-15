@@ -80,12 +80,21 @@ def get_customers(
         Pedido.cliente_nombre != ''
     ).group_by(Pedido.cliente_nombre, Pedido.cliente_telefono).all()
     
-    # Combinar clientes usando SOLO el nombre como clave única
+    # Combinar clientes usando el TELÉFONO como clave única (o nombre si no hay teléfono)
     customers_dict = {}
+    
+    # Función helper para obtener la clave única del cliente
+    def get_customer_key(nombre: str, telefono: Optional[str]) -> str:
+        """Obtiene la clave única del cliente: teléfono si existe, sino nombre"""
+        if telefono and telefono.strip():
+            return telefono.strip()
+        return nombre.lower().strip() if nombre else ""
     
     # Procesar ventas de contado
     for customer in ventas_contado:
-        key = customer.nombre.lower().strip()
+        key = get_customer_key(customer.nombre, customer.telefono)
+        if not key:  # Saltar si no hay ni teléfono ni nombre
+            continue
         if key not in customers_dict:
             customers_dict[key] = {
                 'nombre': customer.nombre,
@@ -111,7 +120,9 @@ def get_customers(
     
     # Procesar apartados
     for customer in apartados:
-        key = customer.nombre.lower().strip()
+        key = get_customer_key(customer.nombre, customer.telefono)
+        if not key:  # Saltar si no hay ni teléfono ni nombre
+            continue
         if key not in customers_dict:
             customers_dict[key] = {
                 'nombre': customer.nombre,
@@ -136,7 +147,9 @@ def get_customers(
     
     # Procesar pedidos
     for customer in pedidos_customers:
-        key = customer.nombre.lower().strip()
+        key = get_customer_key(customer.nombre, customer.telefono)
+        if not key:  # Saltar si no hay ni teléfono ni nombre
+            continue
         if key not in customers_dict:
             customers_dict[key] = {
                 'nombre': customer.nombre,

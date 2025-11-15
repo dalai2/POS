@@ -210,6 +210,13 @@ async def create_sale(
     # For contado sales, verify payment is sufficient only if payments were provided
     if sale.tipo_venta == "contado" and payments and paid < sale.total:
         raise HTTPException(status_code=400, detail=f"Pago insuficiente: {paid} < {sale.total}")
+    
+    # For credito sales (apartados), verify initial payment is greater than 0
+    if sale.tipo_venta == "credito" and paid <= Decimal("0"):
+        raise HTTPException(
+            status_code=400, 
+            detail="El anticipo inicial debe ser mayor a 0 para apartados"
+        )
 
     db.commit()
     db.refresh(sale)

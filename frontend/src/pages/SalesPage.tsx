@@ -642,6 +642,15 @@ export default function SalesPage() {
         return
       }
 
+      // Validar anticipo para apartados
+      if (saleType === 'credito') {
+        const apartadoTotal = (parseFloat(apartadoCash || '0') + parseFloat(apartadoCard || '0'))
+        if (apartadoTotal <= 0) {
+          setMsg('El anticipo inicial debe ser mayor a 0 para apartados')
+          return
+        }
+      }
+
       // Verificar pago con tolerancia mínima para errores de redondeo
       const tolerance = 0.001 // 0.1 centavo de tolerancia
       if (saleType === 'contado' && (paid - total) < -tolerance) {
