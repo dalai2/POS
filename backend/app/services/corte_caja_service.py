@@ -163,17 +163,11 @@ def get_detailed_corte_caja(
     )
     
     # Build vendor stats
-    print(f"[DEBUG] Llamando _build_vendor_stats con:")
-    print(f"  - apartados_pendientes: {len(sales_data['apartados_pendientes'])}")
-    print(f"  - pedidos_pendientes: {len(pedidos_data['pedidos_pendientes'])}")
-    print(f"  - start_datetime: {start_datetime} (tz: {start_datetime.tzinfo})")
-    print(f"  - end_datetime: {end_datetime} (tz: {end_datetime.tzinfo})")
     vendor_stats = _build_vendor_stats(
         db, sales_data['all_sales'], pedidos_data['pedidos_contado'],
         pedidos_data['pedidos_liquidados'], sales_data['apartados_pendientes'],
         pedidos_data['pedidos_pendientes'], start_datetime, end_datetime, tenant
     )
-    print(f"[DEBUG] vendor_stats resultado: {vendor_stats}")
     
     # Build additional data
     dashboard = _build_dashboard_data(
@@ -1160,20 +1154,17 @@ def _build_vendor_stats(
             
             # Filtrar abonos por fecha de creación dentro del periodo
             abonos_en_periodo = []
-            print(f"[DEBUG] Apartado {apartado.id}, vendedor {apartado.vendedor_id}, pagos_posteriores: {len(pagos_posteriores)}")
             for p in pagos_posteriores:
                 # Asegurar que created_at tenga timezone
                 abono_created = p.created_at
                 if abono_created.tzinfo is None:
                     abono_created = abono_created.replace(tzinfo=tz.utc)
-                print(f"  - Abono {p.id}: {abono_created} (dentro? {abono_created >= start_datetime and abono_created <= end_datetime})")
                 if abono_created >= start_datetime and abono_created <= end_datetime:
                     abonos_en_periodo.append(p)
             
             abonos_efectivo = sum(float(p.amount) for p in abonos_en_periodo if p.payment_method in ['efectivo', 'cash', 'transferencia'])
             abonos_tarjeta = sum(float(p.amount) for p in abonos_en_periodo if p.payment_method in ['tarjeta', 'card'])
             abonos_neto = abonos_efectivo + (abonos_tarjeta * TARJETA_DISCOUNT_RATE)
-            print(f"  - abonos_en_periodo: {len(abonos_en_periodo)}, abonos_neto: {abonos_neto}")
             
             vendor_stats[apartado.vendedor_id]["abonos_apartados"] += abonos_neto
             vendor_stats[apartado.vendedor_id]["venta_total_pasiva"] += abonos_neto
@@ -1264,13 +1255,11 @@ def _build_vendor_stats(
             
             # Filtrar abonos por fecha de creación dentro del periodo
             abonos_en_periodo = []
-            print(f"[DEBUG] Pedido {pedido.id}, user {pedido.user_id}, abonos_pagos: {len(abonos_pagos)}")
             for p in abonos_pagos:
                 # Asegurar que created_at tenga timezone
                 abono_created = p.created_at
                 if abono_created.tzinfo is None:
                     abono_created = abono_created.replace(tzinfo=tz.utc)
-                print(f"  - Abono {p.id}: {abono_created} (dentro? {abono_created >= start_datetime and abono_created <= end_datetime})")
                 if abono_created >= start_datetime and abono_created <= end_datetime:
                     abonos_en_periodo.append(p)
             
@@ -1278,7 +1267,6 @@ def _build_vendor_stats(
             abonos_efectivo = abonos_totals['efectivo']
             abonos_tarjeta = abonos_totals['tarjeta']
             abonos_neto = abonos_efectivo + (abonos_tarjeta * TARJETA_DISCOUNT_RATE)
-            print(f"  - abonos_en_periodo: {len(abonos_en_periodo)}, abonos_neto: {abonos_neto}")
             
             vendor_stats[pedido.user_id]["abonos_pedidos"] += abonos_neto
             vendor_stats[pedido.user_id]["venta_total_pasiva"] += abonos_neto
