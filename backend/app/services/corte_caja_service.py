@@ -5,7 +5,7 @@ This service contains the business logic extracted from routes/reports.py
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_
 from typing import Dict, List, Any, Tuple, Optional, TypedDict
-from datetime import datetime, date, timezone as tz
+from datetime import datetime, date, timezone as tz, timedelta
 
 from app.models.tenant import Tenant
 from app.models.user import User
@@ -99,8 +99,9 @@ def get_detailed_corte_caja(
         raise ValueError("start_date must be <= end_date")
     
     # Convert to datetime for queries (timezone-aware)
-    start_datetime = datetime.combine(start_date, datetime.min.time()).replace(tzinfo=tz.utc)
-    end_datetime = datetime.combine(end_date, datetime.max.time()).replace(tzinfo=tz.utc)
+    # Adjust for Mexico timezone (UTC-6) to ensure all local day transactions are included
+    start_datetime = datetime.combine(start_date, datetime.min.time()).replace(tzinfo=tz.utc) + timedelta(hours=6)
+    end_datetime = datetime.combine(end_date + timedelta(days=1), datetime.min.time()).replace(tzinfo=tz.utc) + timedelta(hours=6) - timedelta(seconds=1)
     
     # Get base data
     sales_data = _get_sales_by_payment_date(db, tenant, start_datetime, end_datetime)
