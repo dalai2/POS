@@ -20,6 +20,108 @@ from app.routes.status_history import create_status_history
 router = APIRouter()
 
 
+def _serialize_decimal(value):
+    if value is None:
+        return None
+    return float(value)
+
+
+def _serialize_datetime(value):
+    if value is None:
+        return None
+    return value.isoformat()
+
+
+def build_product_snapshot(product: Product) -> dict:
+    return {
+        "id": product.id,
+        "tenant_id": product.tenant_id,
+        "name": product.name,
+        "modelo": getattr(product, "modelo", None),
+        "marca": getattr(product, "marca", None),
+        "color": getattr(product, "color", None),
+        "quilataje": getattr(product, "quilataje", None),
+        "base": getattr(product, "base", None),
+        "tipo_joya": getattr(product, "tipo_joya", None),
+        "talla": getattr(product, "talla", None),
+        "codigo": product.codigo,
+        "price": _serialize_decimal(product.price),
+        "cost_price": _serialize_decimal(product.cost_price),
+        "stock": product.stock,
+        "category": product.category,
+        "default_discount_pct": _serialize_decimal(product.default_discount_pct),
+        "active": product.active,
+        "peso_gramos": _serialize_decimal(product.peso_gramos),
+        "descuento_porcentaje": _serialize_decimal(getattr(product, "descuento_porcentaje", None)),
+        "precio_manual": _serialize_decimal(getattr(product, "precio_manual", None)),
+        "costo": _serialize_decimal(getattr(product, "costo", None)),
+        "precio_venta": _serialize_decimal(getattr(product, "precio_venta", None)),
+        "created_at": _serialize_datetime(product.created_at),
+    }
+
+
+def build_description_from_product_data(product_data: dict) -> str:
+    desc_parts = []
+    name = product_data.get("name")
+    modelo = product_data.get("modelo")
+    color = product_data.get("color")
+    quilataje = product_data.get("quilataje")
+    peso_gramos = product_data.get("peso_gramos")
+    talla = product_data.get("talla")
+    if name:
+        desc_parts.append(name)
+    if modelo and modelo != name:
+        desc_parts.append(modelo)
+    if color:
+        desc_parts.append(color)
+    if quilataje:
+        desc_parts.append(quilataje)
+    if peso_gramos:
+        peso = float(peso_gramos)
+        if peso == int(peso):
+            peso_formatted = f"{peso:.0f}"
+        else:
+            peso_formatted = f"{peso:.3f}".rstrip('0').rstrip('.')
+        desc_parts.append(f"{peso_formatted}g")
+    if talla:
+        desc_parts.append(talla)
+    return '-'.join(desc_parts) if desc_parts else (name or "")
+
+
+def serialize_sale_items_with_snapshot(db: Session, tenant_id: int, sale_items: List[SaleItem]) -> List[dict]:
+    product_cache: dict[int, dict | None] = {}
+    serialized_items: List[dict] = []
+    for item in sale_items:
+        product_data = None
+        if item.product_id:
+            if item.product_id not in product_cache:
+                product = db.query(Product).filter(
+                    Product.id == item.product_id,
+                    Product.tenant_id == tenant_id
+                ).first()
+                product_cache[item.product_id] = build_product_snapshot(product) if product else None
+            product_data = product_cache.get(item.product_id)
+        if product_data is None and item.product_snapshot:
+            product_data = item.product_snapshot
+
+        description = build_description_from_product_data(product_data) if product_data else item.name
+        if product_data and product_data.get("codigo"):
+            codigo = product_data.get("codigo")
+        else:
+            codigo = item.codigo
+
+        serialized_items.append({
+            "name": description or item.name,
+            "codigo": codigo,
+            "quantity": item.quantity,
+            "unit_price": item.unit_price,
+            "discount_pct": item.discount_pct,
+            "discount_amount": item.discount_amount,
+            "total_price": item.total_price,
+            "product_snapshot": product_data or item.product_snapshot
+        })
+    return serialized_items
+
 class SaleItemIn(BaseModel):
     product_id: int
     quantity: int
@@ -38,6 +140,7 @@ class SaleOutItem(BaseModel):
     discount_pct: condecimal(max_digits=5, decimal_places=2) | None = Decimal("0")
     discount_amount: condecimal(max_digits=10, decimal_places=2) | None = Decimal("0")
     total_price: condecimal(max_digits=10, decimal_places=2)
+    product_snapshot: dict | None = None
 
     class Config:
         from_attributes = True
@@ -158,6 +261,7 @@ async def create_sale(
             discount_pct=line_disc_pct,
             discount_amount=line_disc_amount,
             total_price=line_total,
+            product_snapshot=build_product_snapshot(p)
         ))
         # decrement stock
         if p.stock is not None:
@@ -241,6 +345,7 @@ async def create_sale(
         payments_list = [{"method": p.method, "amount": float(p.amount)} for p in payments]
     
     # Convert sale to SaleOut with payments
+    sale_items = db.query(SaleItem).filter(SaleItem.sale_id == sale.id).all()
     sale_out = SaleOut(
         id=sale.id,
         user_id=sale.user_id,
@@ -249,7 +354,7 @@ async def create_sale(
         tax_rate=sale.tax_rate,
         tax_amount=sale.tax_amount,
         total=sale.total,
-        items=db.query(SaleItem).filter(SaleItem.sale_id == sale.id).all(),
+        items=serialize_sale_items_with_snapshot(db, tenant.id, sale_items),
         created_at=sale.created_at,
         tipo_venta=sale.tipo_venta,
         vendedor_id=sale.vendedor_id,
@@ -299,6 +404,7 @@ def return_sale(
             quantity=-it.quantity,
             unit_price=it.unit_price,
             total_price=-it.total_price,
+            product_snapshot=it.product_snapshot
         ))
         if it.product_id:
             p = db.query(Product).filter(Product.id == it.product_id, Product.tenant_id == tenant.id).first()
@@ -382,43 +488,7 @@ def get_sale(
     
     # Build items with full description
     sale_items = db.query(SaleItem).filter(SaleItem.sale_id == sale.id).all()
-    items_with_description = []
-    for item in sale_items:
-        # If item has product relationship, build full description
-        if item.product_id:
-            product = db.query(Product).filter(Product.id == item.product_id).first()
-            if product:
-                descParts = []
-                if product.name: descParts.append(product.name)
-                if product.modelo: descParts.append(product.modelo)
-                if product.color: descParts.append(product.color)
-                if product.quilataje: descParts.append(product.quilataje)
-                if product.peso_gramos: 
-                    # Format weight to avoid unnecessary decimals
-                    peso = float(product.peso_gramos)
-                    if peso == int(peso):
-                        peso_formatted = f"{peso:.0f}"
-                    else:
-                        # Remove trailing zeros
-                        peso_formatted = f"{peso:.3f}".rstrip('0').rstrip('.')
-                    descParts.append(f"{peso_formatted}g")
-                if product.talla: descParts.append(product.talla)
-                full_description = '-'.join(descParts) if descParts else product.name
-                # Create a copy of the item with updated name
-                item_dict = {
-                    "name": full_description,
-                    "codigo": item.codigo,
-                    "quantity": item.quantity,
-                    "unit_price": item.unit_price,
-                    "discount_pct": item.discount_pct,
-                    "discount_amount": item.discount_amount,
-                    "total_price": item.total_price
-                }
-                items_with_description.append(item_dict)
-            else:
-                items_with_description.append(item)
-        else:
-            items_with_description.append(item)
+    items_with_description = serialize_sale_items_with_snapshot(db, tenant.id, sale_items)
     
     # Return sale with payments
     sale_out = SaleOut(

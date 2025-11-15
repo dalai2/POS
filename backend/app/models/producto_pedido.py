@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, String, Text, Numeric, DateTime, Boolean, ForeignKey
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from .tenant import Base
@@ -97,6 +98,9 @@ class PedidoItem(Base):
     cantidad = Column(Integer, default=1)
     precio_unitario = Column(Numeric(10, 2), nullable=False, default=0)
     total = Column(Numeric(10, 2), nullable=False, default=0)
+
+    # Snapshot JSON completo del producto al momento de crear el pedido
+    producto_snapshot = Column(JSONB, nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from sqlalchemy import Column, Integer, Numeric, ForeignKey, DateTime, String
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 
 from app.models.tenant import Base
@@ -50,6 +51,9 @@ class SaleItem(Base):
     discount_pct = Column(Numeric(5, 2), nullable=False, default=0)
     discount_amount = Column(Numeric(10, 2), nullable=False, default=0)
     total_price = Column(Numeric(10, 2), nullable=False, default=0)
+
+    # Snapshot JSON completo del producto al momento de la venta
+    product_snapshot = Column(JSONB, nullable=True)
 
     sale = relationship("Sale", back_populates="items")
     product = relationship("Product")

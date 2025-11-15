@@ -19,6 +19,7 @@ type PedidoItem = {
   cantidad: number
   precio_unitario: number
   total: number
+  producto_snapshot?: Record<string, any>
 }
 
 type Pedido = {
@@ -57,6 +58,35 @@ type Pedido = {
     codigo?: string
   }
   items?: PedidoItem[]
+}
+
+const getPedidoProductoData = (pedido: Pedido) => {
+  if (pedido.producto) return pedido.producto
+  if (pedido.items && pedido.items.length > 0) {
+    return pedido.items[0].producto_snapshot
+  }
+  return null
+}
+
+const getPedidoProductoLabel = (pedido: Pedido) => {
+  const producto = getPedidoProductoData(pedido)
+  if (!producto) return 'Producto no encontrado'
+  return producto.modelo || producto.nombre || 'Producto no encontrado'
+}
+
+const getPedidoProductoSummary = (pedido: Pedido) => {
+  const producto = getPedidoProductoData(pedido)
+  if (!producto) return ''
+  return [
+    producto.nombre,
+    producto.color,
+    producto.quilataje
+  ].filter(Boolean).join(' - ')
+}
+
+const getPedidoProductoCodigo = (pedido: Pedido) => {
+  const producto = getPedidoProductoData(pedido)
+  return producto?.codigo || ''
 }
 
 type PagoPedido = {
@@ -851,12 +881,8 @@ export default function GestionPedidosPage() {
                           ) : (
                             // Un solo producto (compatibilidad hacia atrás)
                             <>
-                              <div className="font-medium">{p.producto?.modelo || 'Producto no encontrado'}</div>
-                              <div className="text-gray-500">
-                                {p.producto?.nombre && `${p.producto.nombre} - `}
-                                {p.producto?.color && `${p.producto.color} - `}
-                                {p.producto?.quilataje && `${p.producto.quilataje}`}
-                              </div>
+                              <div className="font-medium">{getPedidoProductoLabel(p)}</div>
+                              <div className="text-gray-500">{getPedidoProductoSummary(p)}</div>
                             </>
                           )}
                         </div>
@@ -949,7 +975,7 @@ export default function GestionPedidosPage() {
                 <strong>Producto:</strong> {
                   pedidoSeleccionado.items && pedidoSeleccionado.items.length > 0
                     ? pedidoSeleccionado.items.map(item => item.modelo).join(', ')
-                    : pedidoSeleccionado.producto?.modelo || 'Producto no encontrado'
+                    : getPedidoProductoLabel(pedidoSeleccionado)
                 }
               </p>
               <p className="text-gray-700">
@@ -1027,7 +1053,7 @@ export default function GestionPedidosPage() {
                 <strong>Cliente:</strong> {pedidoHistorial.cliente_nombre}
               </p>
               <p className="text-gray-700">
-                <strong>Producto:</strong> {pedidoHistorial.producto?.modelo || '-'}
+                <strong>Producto:</strong> {getPedidoProductoLabel(pedidoHistorial)}
               </p>
               <p className="text-gray-700">
                 <strong>Total:</strong> ${pedidoHistorial.total.toFixed(2)}

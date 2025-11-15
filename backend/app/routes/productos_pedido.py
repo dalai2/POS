@@ -15,6 +15,93 @@ from ..routes.status_history import create_status_history
 
 router = APIRouter()
 
+def _serialize_decimal(value):
+    if value is None:
+        return None
+    return float(value)
+
+
+def _serialize_datetime(value):
+    if value is None:
+        return None
+    return value.isoformat()
+
+
+def build_producto_snapshot(producto: ProductoPedido) -> dict:
+    return {
+        "id": producto.id,
+        "tenant_id": producto.tenant_id,
+        "modelo": producto.modelo,
+        "nombre": producto.nombre,
+        "precio": _serialize_decimal(producto.precio),
+        "cost_price": _serialize_decimal(producto.cost_price),
+        "category": producto.category,
+        "default_discount_pct": _serialize_decimal(producto.default_discount_pct),
+        "codigo": producto.codigo,
+        "marca": producto.marca,
+        "color": producto.color,
+        "quilataje": producto.quilataje,
+        "base": producto.base,
+        "talla": producto.talla,
+        "peso": producto.peso,
+        "peso_gramos": _serialize_decimal(producto.peso_gramos),
+        "precio_manual": _serialize_decimal(producto.precio_manual),
+        "anticipo_sugerido": _serialize_decimal(producto.anticipo_sugerido),
+        "disponible": producto.disponible,
+        "active": producto.active,
+        "created_at": _serialize_datetime(producto.created_at),
+        "updated_at": _serialize_datetime(producto.updated_at),
+    }
+
+
+class SnapshotProducto:
+    def __init__(self, data: dict):
+        for key, value in data.items():
+            setattr(self, key, value)
+
+
+def hydrate_pedido_item_product(db: Session, tenant_id: int, item: PedidoItem):
+    if getattr(item, "producto", None):
+        return
+    if item.producto_snapshot:
+        item.producto = SnapshotProducto(item.producto_snapshot)
+        return
+    if item.producto_pedido_id:
+        producto = db.query(ProductoPedido).filter(
+            ProductoPedido.id == item.producto_pedido_id,
+            ProductoPedido.tenant_id == tenant_id
+        ).first()
+        if producto:
+            item.producto = producto
+            item.producto_snapshot = build_producto_snapshot(producto)
+
+
+def hydrate_pedido_products(db: Session, pedido: Pedido, tenant_id: int):
+    if pedido.items:
+        # Force load and hydrate each item
+        for item in pedido.items:
+            hydrate_pedido_item_product(db, tenant_id, item)
+    elif pedido.producto_pedido_id:
+        # No items (modo legacy), try to load product directly
+        producto = db.query(ProductoPedido).filter(
+            ProductoPedido.id == pedido.producto_pedido_id,
+            ProductoPedido.tenant_id == tenant_id
+        ).first()
+        if producto:
+            pedido.producto = producto
+        else:
+            # Fallback: usar snapshot del primer item si existe
+            for item in pedido.items or []:
+                if item.producto_snapshot:
+                    pedido.producto = SnapshotProducto(item.producto_snapshot)
+                    break
+    else:
+        # No producto_pedido_id, intentar usar snapshot de algún item
+        for item in pedido.items or []:
+            if item.producto_snapshot:
+                pedido.producto = SnapshotProducto(item.producto_snapshot)
+                break
+
 # Pydantic Models
 class ProductoPedidoBase(BaseModel):
     modelo: str  # Renombrado de "name"
@@ -91,6 +178,7 @@ class PedidoItemOut(BaseModel):
     cantidad: int
     precio_unitario: float
     total: float
+    producto_snapshot: Optional[dict] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
     
@@ -118,6 +206,7 @@ class PedidoUpdate(BaseModel):
     fecha_entrega_estimada: Optional[datetime] = None
     fecha_entrega_real: Optional[datetime] = None
     notas_internas: Optional[str] = None
+    items: Optional[List[PedidoItemCreate]] = None
 
 class PedidoOut(BaseModel):
     id: int
@@ -311,16 +400,7 @@ def list_pedidos(
     # Agregar información del producto, items y vendedor a cada pedido
     from app.models.user import User
     for pedido in pedidos:
-        # Cargar items si existen
-        if pedido.items:
-            pedido.items = pedido.items  # Ya está cargado por la relación
-        elif pedido.producto_pedido_id:
-            # Compatibilidad hacia atrás: cargar producto
-            producto = db.query(ProductoPedido).filter(
-                ProductoPedido.id == pedido.producto_pedido_id,
-                ProductoPedido.tenant_id == tenant.id
-            ).first()
-            pedido.producto = producto
+        hydrate_pedido_products(db, pedido, tenant.id)
         
         # Agregar información del vendedor
         vendedor = db.query(User).filter(User.id == pedido.user_id).first()
@@ -432,6 +512,7 @@ def create_pedido(
             producto = productos_map[item_create.producto_pedido_id]
             precio_unitario_item = Decimal(str(producto.precio))
             item_total = float(precio_unitario_item * item_create.cantidad)
+            producto_snapshot = build_producto_snapshot(producto)
             
             pedido_item = PedidoItem(
                 pedido_id=db_pedido.id,
@@ -447,7 +528,8 @@ def create_pedido(
                 peso_gramos=producto.peso_gramos,
                 cantidad=item_create.cantidad,
                 precio_unitario=float(precio_unitario_item),
-                total=item_total
+                total=item_total,
+                producto_snapshot=producto_snapshot
             )
             db.add(pedido_item)
         
@@ -542,7 +624,8 @@ def create_pedido(
                 peso_gramos=producto.peso_gramos,
                 cantidad=item_create.cantidad,
                 precio_unitario=float(precio_unitario_item),
-                total=item_total
+                total=item_total,
+                producto_snapshot=build_producto_snapshot(producto)
             )
             db.add(pedido_item)
         
@@ -589,12 +672,7 @@ def create_pedido(
     db.refresh(db_pedido)
     if db_pedido.items:
         db_pedido.items = db_pedido.items  # Ya está cargado por la relación
-    elif db_pedido.producto_pedido_id:
-        # Compatibilidad hacia atrás: cargar producto
-        producto = db.query(ProductoPedido).filter(
-            ProductoPedido.id == db_pedido.producto_pedido_id
-        ).first()
-        db_pedido.producto = producto
+    hydrate_pedido_products(db, db_pedido, tenant.id)
     
     return db_pedido
 
@@ -618,6 +696,7 @@ def update_pedido(
     old_estado = pedido.estado if 'estado' in pedido_update.dict(exclude_unset=True) else None
     
     update_data = pedido_update.dict(exclude_unset=True)
+    items_update = update_data.pop('items', None)
     
     # Validar que un pedido pagado no pueda moverse a pendiente o vencido
     if 'estado' in update_data:
@@ -630,6 +709,61 @@ def update_pedido(
     
     for field, value in update_data.items():
         setattr(pedido, field, value)
+    
+    # Si se enviaron nuevos items, reemplazar los existentes
+    if items_update is not None:
+        from decimal import Decimal
+        items_payload = items_update or []
+        if not items_payload:
+            # Eliminar todos los items
+            db.query(PedidoItem).filter(PedidoItem.pedido_id == pedido.id).delete(synchronize_session=False)
+            pedido.cantidad = 0
+            pedido.producto_pedido_id = None
+        else:
+            productos_map = {}
+            cantidad_total = 0
+            new_items = []
+            for raw_item in items_payload:
+                item_data = raw_item if isinstance(raw_item, dict) else raw_item.dict()
+                item_obj = PedidoItemCreate(**item_data)
+                producto = db.query(ProductoPedido).filter(
+                    ProductoPedido.id == item_obj.producto_pedido_id,
+                    ProductoPedido.tenant_id == tenant.id,
+                    ProductoPedido.active == True
+                ).first()
+                if not producto:
+                    raise HTTPException(status_code=404, detail=f"Producto no disponible: {item_obj.producto_pedido_id}")
+                productos_map[item_obj.producto_pedido_id] = producto
+                precio_unitario_item = Decimal(str(producto.precio))
+                item_total = float(precio_unitario_item * item_obj.cantidad)
+                cantidad_total += item_obj.cantidad
+                new_items.append(PedidoItem(
+                    pedido_id=pedido.id,
+                    producto_pedido_id=producto.id,
+                    modelo=producto.modelo,
+                    nombre=producto.nombre,
+                    codigo=producto.codigo,
+                    color=producto.color,
+                    quilataje=producto.quilataje,
+                    base=producto.base,
+                    talla=producto.talla,
+                    peso=producto.peso,
+                    peso_gramos=producto.peso_gramos,
+                    cantidad=item_obj.cantidad,
+                    precio_unitario=float(precio_unitario_item),
+                    total=item_total,
+                    producto_snapshot=build_producto_snapshot(producto)
+                ))
+            # Reemplazar items existentes
+            db.query(PedidoItem).filter(PedidoItem.pedido_id == pedido.id).delete(synchronize_session=False)
+            for new_item in new_items:
+                db.add(new_item)
+            pedido.cantidad = cantidad_total
+            # Compatibilidad: establecer producto_pedido_id si solo hay un item
+            if len(new_items) == 1:
+                pedido.producto_pedido_id = new_items[0].producto_pedido_id
+            else:
+                pedido.producto_pedido_id = None
     
     # Registrar cambio de estado si cambió
     if old_estado is not None and old_estado != pedido.estado:
@@ -705,6 +839,9 @@ def update_pedido(
     
     db.commit()
     db.refresh(pedido)
+    if pedido.items:
+        pedido.items = pedido.items
+    hydrate_pedido_products(db, pedido, tenant.id)
     return pedido
 
 @router.get("/pedidos/{pedido_id}/pagos")
