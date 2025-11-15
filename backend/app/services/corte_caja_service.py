@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_
 from typing import Dict, List, Any, Tuple, Optional, TypedDict
 from datetime import datetime, date, timedelta, timezone
+from datetime import timezone as tz
 
 from app.models.tenant import Tenant
 from app.models.user import User
@@ -13,7 +14,7 @@ from app.models.sale import Sale, SaleItem
 from app.models.product import Product
 from app.models.payment import Payment
 from app.models.credit_payment import CreditPayment
-from app.models.producto_pedido import Pedido, PagoPedido, ProductoPedido
+from app.models.producto_pedido import Pedido, PagoPedido, ProductoPedido, PedidoItem
 
 # Constants
 TARJETA_DISCOUNT_RATE = 0.97  # 3% discount for card payments
@@ -299,13 +300,13 @@ def _get_sales_by_payment_date(
         Sale.created_at <= end_datetime
     ).distinct()
     
-    # For CreditPayment (subsequent payments), use CreditPayment.created_at
-    apartados_credit_ids = db.query(Sale.id).join(CreditPayment).filter(
+    # Apartados liquidados: filtrar por fecha de CREACIÓN del apartado
+    apartados_credit_ids = db.query(Sale.id).filter(
         Sale.tenant_id == tenant.id,
         Sale.tipo_venta == "credito",
         Sale.credit_status.in_(['pagado', 'entregado']),
-        CreditPayment.created_at >= start_datetime,
-        CreditPayment.created_at <= end_datetime
+        Sale.created_at >= start_datetime,
+        Sale.created_at <= end_datetime
     ).distinct()
     
     # Combine all sales IDs
@@ -318,46 +319,24 @@ def _get_sales_by_payment_date(
     # Get all sales
     all_sales = db.query(Sale).filter(Sale.id.in_(all_sale_ids)).all() if all_sale_ids else []
     
-    # Get apartados pendientes (filtered by payment date for anticipos)
-    # For Payment (initial payment), use Sale.created_at
-    apartados_pendientes_ids_payment = db.query(Sale.id).join(Payment).filter(
+    # Get apartados pendientes filtrados por fecha de CREACIÓN en el periodo
+    # Solo incluir apartados creados en el periodo seleccionado
+    apartados_pendientes = db.query(Sale).filter(
         Sale.tenant_id == tenant.id,
         Sale.tipo_venta == "credito",
         Sale.credit_status.in_(['pendiente', 'vencido']),
         Sale.created_at >= start_datetime,
         Sale.created_at <= end_datetime
-    ).distinct()
+    ).all()
     
-    # For CreditPayment (subsequent payments), use CreditPayment.created_at
-    apartados_pendientes_ids_credit = db.query(Sale.id).join(CreditPayment).filter(
-        Sale.tenant_id == tenant.id,
-        Sale.tipo_venta == "credito",
-        Sale.credit_status.in_(['pendiente', 'vencido']),
-        CreditPayment.created_at >= start_datetime,
-        CreditPayment.created_at <= end_datetime
-    ).distinct()
-    
-    # Also include apartados created in the period (even if they don't have payments yet)
-    apartados_created_in_period = db.query(Sale.id).filter(
-        Sale.tenant_id == tenant.id,
-        Sale.tipo_venta == "credito",
-        Sale.credit_status.in_(['pendiente', 'vencido']),
-        Sale.created_at >= start_datetime,
-        Sale.created_at <= end_datetime
-    ).distinct()
-    
-    apartados_pendientes_ids_payment_list = [id for id, in apartados_pendientes_ids_payment.all()]
-    apartados_pendientes_ids_credit_list = [id for id, in apartados_pendientes_ids_credit.all()]
-    apartados_created_in_period_list = [id for id, in apartados_created_in_period.all()]
-    apartados_pendientes_ids = set(apartados_pendientes_ids_payment_list) | set(apartados_pendientes_ids_credit_list) | set(apartados_created_in_period_list)
-    apartados_pendientes = db.query(Sale).filter(Sale.id.in_(apartados_pendientes_ids)).all() if apartados_pendientes_ids else []
+    apartados_pendientes_ids_list = [sale.id for sale in apartados_pendientes]
     
     return {
         'all_sales': all_sales,
         'ventas_contado_ids': ventas_contado_ids_list,
         'apartados_pendientes': apartados_pendientes,
-        'apartados_pendientes_ids_payment': apartados_pendientes_ids_payment_list,
-        'apartados_pendientes_ids_credit': apartados_pendientes_ids_credit_list,
+        'apartados_pendientes_ids_payment': apartados_pendientes_ids_list,
+        'apartados_pendientes_ids_credit': apartados_pendientes_ids_list,
     }
 
 
@@ -368,13 +347,13 @@ def _get_pedidos_by_payment_date(
     end_datetime: datetime
 ) -> PedidosData:
     """Get pedidos filtered by payment date within the period."""
-    # Get pedidos liquidados (apartados) with payments in the period
-    pedidos_liquidados_ids = db.query(Pedido.id).join(PagoPedido).filter(
+    # Get pedidos liquidados: filtrar por fecha de CREACIÓN del pedido
+    pedidos_liquidados_ids = db.query(Pedido.id).filter(
         Pedido.tenant_id == tenant.id,
         Pedido.tipo_pedido == 'apartado',
         Pedido.estado.in_(['pagado', 'entregado']),
-        PagoPedido.created_at >= start_datetime,
-        PagoPedido.created_at <= end_datetime
+        Pedido.created_at >= start_datetime,
+        Pedido.created_at <= end_datetime
     ).distinct()
     
     pedidos_liquidados_ids_list = [id for id, in pedidos_liquidados_ids.all()]
@@ -382,13 +361,13 @@ def _get_pedidos_by_payment_date(
         Pedido.id.in_(pedidos_liquidados_ids_list)
     ).all() if pedidos_liquidados_ids_list else []
     
-    # Get pedidos de contado with payments in the period
-    pedidos_contado_ids = db.query(Pedido.id).join(PagoPedido).filter(
+    # Get pedidos de contado: filtrar por fecha de CREACIÓN del pedido
+    pedidos_contado_ids = db.query(Pedido.id).filter(
         Pedido.tenant_id == tenant.id,
         Pedido.tipo_pedido == 'contado',
         Pedido.estado == 'pagado',
-        PagoPedido.created_at >= start_datetime,
-        PagoPedido.created_at <= end_datetime
+        Pedido.created_at >= start_datetime,
+        Pedido.created_at <= end_datetime
     ).distinct()
     
     pedidos_contado_ids_list = [id for id, in pedidos_contado_ids.all()]
@@ -396,31 +375,17 @@ def _get_pedidos_by_payment_date(
         Pedido.id.in_(pedidos_contado_ids_list)
     ).all() if pedidos_contado_ids_list else []
     
-    # Get pedidos pendientes (filtered by payment date)
-    pedidos_pendientes_ids_payment = db.query(Pedido.id).join(PagoPedido).filter(
-        Pedido.tenant_id == tenant.id,
-        Pedido.tipo_pedido == 'apartado',
-        ~Pedido.estado.in_(['pagado', 'entregado', 'cancelado']),
-        PagoPedido.tipo_pago == 'anticipo',
-        PagoPedido.created_at >= start_datetime,
-        PagoPedido.created_at <= end_datetime
-    ).distinct()
-    
-    pedidos_pendientes_ids_credit = db.query(Pedido.id).join(PagoPedido).filter(
-        Pedido.tenant_id == tenant.id,
-        Pedido.tipo_pedido == 'apartado',
-        ~Pedido.estado.in_(['pagado', 'entregado', 'cancelado']),
-        PagoPedido.tipo_pago == 'saldo',
-        PagoPedido.created_at >= start_datetime,
-        PagoPedido.created_at <= end_datetime
-    ).distinct()
-    
-    pedidos_pendientes_ids_payment_list = [id for id, in pedidos_pendientes_ids_payment.all()]
-    pedidos_pendientes_ids_credit_list = [id for id, in pedidos_pendientes_ids_credit.all()]
-    pedidos_pendientes_ids = set(pedidos_pendientes_ids_payment_list) | set(pedidos_pendientes_ids_credit_list)
+    # Get pedidos pendientes filtrados por fecha de CREACIÓN en el periodo
+    # Solo incluir pedidos creados en el periodo seleccionado
     pedidos_pendientes = db.query(Pedido).filter(
-        Pedido.id.in_(pedidos_pendientes_ids)
-    ).all() if pedidos_pendientes_ids else []
+        Pedido.tenant_id == tenant.id,
+        Pedido.tipo_pedido == 'apartado',
+        ~Pedido.estado.in_(['pagado', 'entregado', 'cancelado']),
+        Pedido.created_at >= start_datetime,
+        Pedido.created_at <= end_datetime
+    ).all()
+    
+    pedidos_pendientes_ids_list = [pedido.id for pedido in pedidos_pendientes]
     
     return {
         'pedidos_liquidados': pedidos_liquidados,
@@ -428,8 +393,8 @@ def _get_pedidos_by_payment_date(
         'pedidos_contado': pedidos_contado,
         'pedidos_contado_ids': pedidos_contado_ids_list,
         'pedidos_pendientes': pedidos_pendientes,
-        'pedidos_pendientes_ids_payment': pedidos_pendientes_ids_payment_list,
-        'pedidos_pendientes_ids_credit': pedidos_pendientes_ids_credit_list,
+        'pedidos_pendientes_ids_payment': pedidos_pendientes_ids_list,
+        'pedidos_pendientes_ids_credit': pedidos_pendientes_ids_list,
     }
 
 
@@ -705,14 +670,9 @@ def _process_apartados_pendientes(
         anticipo_tarjeta = sum(float(p.amount) for p in pagos_iniciales if p.method in ['tarjeta', 'card'])
         anticipo_inicial = anticipo_efectivo + (anticipo_tarjeta * TARJETA_DISCOUNT_RATE)
         
+        # Solo actualizar contadores específicos de apartados pendientes
+        # Los contadores generales de anticipos/abonos se calculan en _calculate_ventas_pasivas
         counters['apartados_pendientes_anticipos'] += anticipo_inicial
-        counters['anticipos_apartados_total_monto'] += anticipo_inicial
-        counters['anticipos_apartados_count'] += len(pagos_iniciales)
-        counters['anticipos_apartados_efectivo_monto'] += anticipo_efectivo
-        counters['anticipos_apartados_efectivo_count'] += sum(1 for p in pagos_iniciales if p.method in ['efectivo', 'cash', 'transferencia'])
-        counters['anticipos_apartados_tarjeta_bruto'] += anticipo_tarjeta
-        counters['anticipos_apartados_tarjeta_neto'] += anticipo_tarjeta * TARJETA_DISCOUNT_RATE
-        counters['anticipos_apartados_tarjeta_count'] += sum(1 for p in pagos_iniciales if p.method in ['tarjeta', 'card'])
         
         # Get additional payments (CreditPayment)
         pagos_posteriores = db.query(CreditPayment).filter(CreditPayment.sale_id == apartado.id).all()
@@ -721,13 +681,6 @@ def _process_apartados_pendientes(
         abonos_posteriores = abonos_efectivo + (abonos_tarjeta * TARJETA_DISCOUNT_RATE)
         
         counters['apartados_pendientes_abonos_adicionales'] += abonos_posteriores
-        counters['abonos_apartados_total_neto'] += abonos_posteriores
-        counters['abonos_apartados_count'] += len(pagos_posteriores)
-        counters['abonos_apartados_efectivo_monto'] += abonos_efectivo
-        counters['abonos_apartados_efectivo_count'] += sum(1 for p in pagos_posteriores if p.payment_method in ['efectivo', 'cash', 'transferencia'])
-        counters['abonos_apartados_tarjeta_bruto'] += abonos_tarjeta
-        counters['abonos_apartados_tarjeta_neto'] += abonos_tarjeta * TARJETA_DISCOUNT_RATE
-        counters['abonos_apartados_tarjeta_count'] += sum(1 for p in pagos_posteriores if p.payment_method in ['tarjeta', 'card'])
 
 
 def _process_pedidos_pendientes(
@@ -750,6 +703,8 @@ def _process_pedidos_pendientes(
         anticipo_tarjeta = anticipo_totals['tarjeta']
         anticipo_neto = anticipo_efectivo + (anticipo_tarjeta * TARJETA_DISCOUNT_RATE)
         
+        # Solo actualizar contadores específicos de pedidos pendientes
+        # Los contadores generales de anticipos/abonos se calculan en _calculate_ventas_pasivas
         counters['pedidos_pendientes_anticipos'] += anticipo_neto
         counters['pedidos_total'] += float(pedido.total)
         counters['pedidos_anticipos'] += anticipo_neto
@@ -767,13 +722,6 @@ def _process_pedidos_pendientes(
         abonos_posteriores = abonos_efectivo + (abonos_tarjeta * TARJETA_DISCOUNT_RATE)
         
         counters['pedidos_pendientes_abonos'] += abonos_posteriores
-        counters['abonos_pedidos_total_neto'] += abonos_posteriores
-        counters['abonos_pedidos_count'] += len(pagos_pedido_abonos)
-        counters['abonos_pedidos_efectivo_monto'] += abonos_efectivo
-        counters['abonos_pedidos_efectivo_count'] += sum(1 for p in pagos_pedido_abonos if getattr(p, 'metodo_pago', None) in EFECTIVO_METHODS)
-        counters['abonos_pedidos_tarjeta_bruto'] += abonos_tarjeta
-        counters['abonos_pedidos_tarjeta_neto'] += abonos_tarjeta * TARJETA_DISCOUNT_RATE
-        counters['abonos_pedidos_tarjeta_count'] += sum(1 for p in pagos_pedido_abonos if getattr(p, 'metodo_pago', None) == TARJETA_METHOD)
 
 
 def _calculate_ventas_activas(counters: Dict[str, Any]) -> VentasActivas:
@@ -822,8 +770,11 @@ def _calculate_ventas_pasivas(
     end_datetime: datetime,
     counters: Dict[str, Any]
 ) -> VentasPasivas:
-    """Calculate passive sales metrics (anticipos and abonos)."""
-    # Anticipos de apartados del día (filtered by Sale.created_at since Payment doesn't have created_at)
+    """Calculate passive sales metrics (anticipos and abonos).
+    
+    IMPORTANTE: Todo se filtra por fecha de CREACIÓN del apartado/pedido en el periodo seleccionado.
+    """
+    # Anticipos de apartados: solo apartados CREADOS en el periodo
     anticipos_apartados_dia = db.query(Payment).join(Sale).filter(
         Sale.tenant_id == tenant.id,
         Sale.tipo_venta == "credito",
@@ -861,11 +812,12 @@ def _calculate_ventas_pasivas(
     counters['anticipos_apartados_tarjeta_neto'] = anticipos_apartados_tarjeta_neto
     counters['anticipos_apartados_tarjeta_count'] = anticipos_apartados_tarjeta_count
     
-    # Abonos de apartados del día (EXCLUIR el último abono que liquida)
+    # Abonos de apartados: solo apartados CREADOS en el periodo (filtrar por fecha de creación del apartado)
     abonos_apartados_dia = db.query(CreditPayment).join(Sale).filter(
         Sale.tenant_id == tenant.id,
-        CreditPayment.created_at >= start_datetime,
-        CreditPayment.created_at <= end_datetime
+        Sale.tipo_venta == "credito",
+        Sale.created_at >= start_datetime,
+        Sale.created_at <= end_datetime
     ).all()
     
     abonos_apartados_dia_total = 0.0
@@ -904,13 +856,13 @@ def _calculate_ventas_pasivas(
     counters['abonos_apartados_tarjeta_neto'] = abonos_apartados_tarjeta_neto
     counters['abonos_apartados_tarjeta_count'] = abonos_apartados_tarjeta_count
     
-    # Anticipos de pedidos apartados del día
+    # Anticipos de pedidos apartados: solo pedidos CREADOS en el periodo
     anticipos_pedidos_dia = db.query(PagoPedido).join(Pedido).filter(
         Pedido.tenant_id == tenant.id,
         Pedido.tipo_pedido == 'apartado',
         PagoPedido.tipo_pago == 'anticipo',
-        PagoPedido.created_at >= start_datetime,
-        PagoPedido.created_at <= end_datetime
+        Pedido.created_at >= start_datetime,
+        Pedido.created_at <= end_datetime
     ).all()
     
     anticipos_pedidos_dia_total = 0.0
@@ -943,13 +895,13 @@ def _calculate_ventas_pasivas(
     counters['anticipos_pedidos_tarjeta_neto'] = anticipos_pedidos_tarjeta_neto
     counters['anticipos_pedidos_tarjeta_count'] = anticipos_pedidos_tarjeta_count
     
-    # Abonos de pedidos apartados del día (EXCLUIR el último abono que liquida)
+    # Abonos de pedidos apartados: solo pedidos CREADOS en el periodo (filtrar por fecha de creación del pedido)
     abonos_pedidos_dia = db.query(PagoPedido).join(Pedido).filter(
         Pedido.tenant_id == tenant.id,
         Pedido.tipo_pedido == 'apartado',
         PagoPedido.tipo_pago == 'saldo',
-        PagoPedido.created_at >= start_datetime,
-        PagoPedido.created_at <= end_datetime
+        Pedido.created_at >= start_datetime,
+        Pedido.created_at <= end_datetime
     ).all()
     
     abonos_pedidos_dia_total = 0.0
@@ -1093,11 +1045,9 @@ def _build_vendor_stats(
             vendor_stats[apartado.vendedor_id]["anticipos_apartados"] += anticipo_neto
             vendor_stats[apartado.vendedor_id]["venta_total_pasiva"] += anticipo_neto
             
-            # Abonos de apartados: filtrar por fecha del periodo y excluir último abono si está pagado
+            # Abonos de apartados: obtener todos los abonos del apartado (ya filtrado por fecha de creación)
             pagos_posteriores = db.query(CreditPayment).filter(
-                CreditPayment.sale_id == apartado.id,
-                CreditPayment.created_at >= start_datetime,
-                CreditPayment.created_at <= end_datetime
+                CreditPayment.sale_id == apartado.id
             ).all()
             
             # Si el apartado ya está pagado/entregado, excluir el último abono
@@ -1136,12 +1086,10 @@ def _build_vendor_stats(
             vendor_stats[pedido.user_id]["anticipos_pedidos"] += anticipo_neto
             vendor_stats[pedido.user_id]["venta_total_pasiva"] += anticipo_neto
             
-            # Abonos de pedidos: filtrar por fecha del periodo y excluir último abono si está pagado
+            # Abonos de pedidos: obtener todos los abonos del pedido (ya filtrado por fecha de creación)
             abonos_pagos = db.query(PagoPedido).filter(
                 PagoPedido.pedido_id == pedido.id,
-                PagoPedido.tipo_pago == 'saldo',
-                PagoPedido.created_at >= start_datetime,
-                PagoPedido.created_at <= end_datetime
+                PagoPedido.tipo_pago == 'saldo'
             ).all()
             
             # Si el pedido ya está pagado/entregado, excluir el último abono
@@ -1737,11 +1685,11 @@ def _build_historiales(
             "motivo": motivo
         })
     
-    # Historial de abonos de apartados
+    # Historial de abonos de apartados: solo apartados CREADOS en el periodo
     todos_abonos_apartados = db.query(CreditPayment).join(Sale).filter(
         Sale.tenant_id == tenant.id,
-        CreditPayment.created_at >= start_datetime,
-        CreditPayment.created_at <= end_datetime
+        Sale.created_at >= start_datetime,
+        Sale.created_at <= end_datetime
     ).order_by(CreditPayment.created_at.desc()).all()
     
     for abono in todos_abonos_apartados:
@@ -1760,11 +1708,11 @@ def _build_historiales(
             "vendedor": vendedor
         })
     
-    # Historial de abonos de pedidos
+    # Historial de abonos de pedidos: solo pedidos CREADOS en el periodo
     todos_abonos_pedidos = db.query(PagoPedido).join(Pedido).filter(
         Pedido.tenant_id == tenant.id,
-        PagoPedido.created_at >= start_datetime,
-        PagoPedido.created_at <= end_datetime,
+        Pedido.created_at >= start_datetime,
+        Pedido.created_at <= end_datetime,
         PagoPedido.tipo_pago == 'saldo'
     ).order_by(PagoPedido.created_at.desc()).all()
     
@@ -1977,14 +1925,14 @@ def _calculate_additional_metrics(
     
     num_abonos_apartados = db.query(CreditPayment).join(Sale).filter(
         Sale.tenant_id == tenant.id,
-        CreditPayment.created_at >= start_datetime,
-        CreditPayment.created_at <= end_datetime
+        Sale.created_at >= start_datetime,
+        Sale.created_at <= end_datetime
     ).count()
     
     num_abonos_pedidos = db.query(PagoPedido).join(Pedido).filter(
         Pedido.tenant_id == tenant.id,
-        PagoPedido.created_at >= start_datetime,
-        PagoPedido.created_at <= end_datetime,
+        Pedido.created_at >= start_datetime,
+        Pedido.created_at <= end_datetime,
         PagoPedido.tipo_pago == 'saldo'
     ).count()
     
@@ -2351,8 +2299,8 @@ def _build_resumen_piezas(
     Args:
         db: Database session
         all_sales: List of all sales in the period
-        apartados_pendientes: List of pending apartados
-        pedidos_pendientes: List of pending pedidos
+        apartados_pendientes: List of pending apartados created in the period
+        pedidos_pendientes: List of pending pedidos created in the period
         pedidos_liquidados: List of liquidated pedidos
         
     Returns:
@@ -2382,7 +2330,7 @@ def _build_resumen_piezas(
                     }
                 resumen_piezas_dict[key]["piezas_vendidas"] += item.quantity
 
-    # Process pending apartados
+    # Process pending apartados (solo los creados en el periodo)
     for apartado in apartados_pendientes:
         items = db.query(SaleItem).filter(SaleItem.sale_id == apartado.id).all()
         for item in items:
@@ -2425,24 +2373,52 @@ def _build_resumen_piezas(
                     }
                 resumen_piezas_dict[key]["piezas_liquidadas"] += item.quantity
 
-    # Process pending pedidos
+    # Process pending pedidos (solo los creados en el periodo)
+    # Nota: pedidos_pendientes contiene pedidos con tipo_pedido='apartado' que están pendientes
+    # Estos deben sumarse a piezas_apartadas, no a piezas_pedidas
     for pedido in pedidos_pendientes:
-        producto = db.query(ProductoPedido).filter(ProductoPedido.id == pedido.producto_pedido_id).first()
-        if not producto:
-            continue
-        key = (producto.nombre or producto.modelo or "Sin nombre", producto.modelo or "N/A", producto.quilataje or "N/A")
-        if key not in resumen_piezas_dict:
-            resumen_piezas_dict[key] = {
-                "nombre": producto.nombre or producto.modelo or "Sin nombre",
-                "modelo": producto.modelo or "N/A",
-                "quilataje": producto.quilataje or "N/A",
-                "piezas_vendidas": 0,
-                "piezas_pedidas": 0,
-                "piezas_apartadas": 0,
-                "piezas_liquidadas": 0,
-                "total_piezas": 0,
-            }
-        resumen_piezas_dict[key]["piezas_pedidas"] += pedido.cantidad
+        # Obtener items del pedido (puede tener múltiples items)
+        pedido_items = db.query(PedidoItem).filter(PedidoItem.pedido_id == pedido.id).all()
+        
+        if pedido_items:
+            # Si tiene items, usar los items
+            for item in pedido_items:
+                # Construir key basado en los datos del item
+                nombre = item.nombre or item.modelo or "Sin nombre"
+                modelo = item.modelo or "N/A"
+                quilataje = item.quilataje or "N/A"
+                key = (nombre, modelo, quilataje)
+                
+                if key not in resumen_piezas_dict:
+                    resumen_piezas_dict[key] = {
+                        "nombre": nombre,
+                        "modelo": modelo,
+                        "quilataje": quilataje,
+                        "piezas_vendidas": 0,
+                        "piezas_pedidas": 0,
+                        "piezas_apartadas": 0,
+                        "piezas_liquidadas": 0,
+                        "total_piezas": 0,
+                    }
+                resumen_piezas_dict[key]["piezas_apartadas"] += item.cantidad
+        else:
+            # Fallback: usar producto_pedido_id si no hay items (compatibilidad hacia atrás)
+            producto = db.query(ProductoPedido).filter(ProductoPedido.id == pedido.producto_pedido_id).first()
+            if not producto:
+                continue
+            key = (producto.nombre or producto.modelo or "Sin nombre", producto.modelo or "N/A", producto.quilataje or "N/A")
+            if key not in resumen_piezas_dict:
+                resumen_piezas_dict[key] = {
+                    "nombre": producto.nombre or producto.modelo or "Sin nombre",
+                    "modelo": producto.modelo or "N/A",
+                    "quilataje": producto.quilataje or "N/A",
+                    "piezas_vendidas": 0,
+                    "piezas_pedidas": 0,
+                    "piezas_apartadas": 0,
+                    "piezas_liquidadas": 0,
+                    "total_piezas": 0,
+                }
+            resumen_piezas_dict[key]["piezas_apartadas"] += pedido.cantidad
 
     # Process liquidated pedidos
     for pedido in pedidos_liquidados:
