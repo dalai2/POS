@@ -68,7 +68,7 @@ def list_products(
     user: User = Depends(get_current_user),
     q: Optional[str] = Query(None, description="Search by name"),
     skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=200),
+    limit: int = Query(50, ge=1, le=2000),
     active: Optional[bool] = Query(None, description="Filter by active status"),
 ):
     logging.getLogger(__name__).info("list_products q=%s skip=%s limit=%s", q, skip, limit)

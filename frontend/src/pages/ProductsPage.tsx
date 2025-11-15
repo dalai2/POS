@@ -68,6 +68,7 @@ export default function ProductsPage() {
     descuento_porcentaje: '',
     quilataje: '',
   })
+  const [loadLimit, setLoadLimit] = useState<number>(50)
 
   // Form state
   const [form, setForm] = useState({
@@ -137,6 +138,7 @@ export default function ProductsPage() {
       const qs = new URLSearchParams()
       if (query.trim()) qs.set('q', query.trim())
       if (activeFilter !== 'all') qs.set('active', String(activeFilter === 'active'))
+      qs.set('limit', String(loadLimit))
       const res = await api.get(`/products/?${qs.toString()}`)
       setAllProducts(res.data)
       applyLocalFilters(res.data)
@@ -148,6 +150,12 @@ export default function ProductsPage() {
   useEffect(() => {
     applyLocalFilters(allProducts)
   }, [tallaFilter, modeloFilter, quilatajeFilter])
+
+  useEffect(() => {
+    if (hasSession()) {
+      load()
+    }
+  }, [loadLimit])
 
   const calculatePrice = (quilataje: string, pesoGramos: string, descuento: string): number => {
     if (!quilataje || !pesoGramos) return 0
@@ -343,6 +351,28 @@ export default function ProductsPage() {
     }
   }
 
+  const selectAllFiltered = () => {
+    const visibleIds = products.map(p => p.id)
+    setSelectedProductIds(visibleIds)
+  }
+
+  const clearSelection = () => {
+    setSelectedProductIds([])
+  }
+
+  const archive = async (id: number) => {
+    if (!confirm('¿Archivar este producto con stock 0?')) return
+    try {
+      const product = products.find(p => p.id === id)
+      if (!product) return
+      await api.put(`/products/${id}`, { ...product, active: false })
+      setMessage('Producto archivado exitosamente')
+      load()
+    } catch (e: any) {
+      setMessage(e?.response?.data?.detail || 'Error al archivar producto')
+    }
+  }
+
   const handleBulkUpdate = async () => {
     if (selectedProductIds.length === 0) {
       alert('Por favor selecciona al menos un producto')
@@ -495,6 +525,53 @@ export default function ProductsPage() {
                 🔄 Limpiar Filtros
               </button>
             </div>
+          </div>
+        </div>
+
+        {/* Selector de Límite y Botones de Selección */}
+        <div className="bg-white rounded-lg shadow p-4 mb-4">
+          <div className="flex justify-between items-center">
+            <div className="flex gap-4 items-center">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Mostrar productos</label>
+                <select
+                  className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
+                  value={loadLimit}
+                  onChange={(e) => setLoadLimit(Number(e.target.value))}
+                >
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                  <option value={2000}>Todos</option>
+                </select>
+              </div>
+              <div className="text-sm text-gray-600">
+                Mostrando {products.length} de {allProducts.length} productos
+              </div>
+            </div>
+
+            {(userRole === 'owner' || userRole === 'admin') && (
+              <div className="flex gap-2 items-center">
+                <button
+                  onClick={selectAllFiltered}
+                  disabled={products.length === 0}
+                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                >
+                  ✓ Seleccionar todos visibles ({products.length})
+                </button>
+                <button
+                  onClick={clearSelection}
+                  disabled={selectedProductIds.length === 0}
+                  className="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                >
+                  ✗ Limpiar selección
+                </button>
+                {selectedProductIds.length > 0 && (
+                  <span className="text-sm font-medium text-gray-700 bg-yellow-100 px-3 py-2 rounded-lg">
+                    {selectedProductIds.length} seleccionado(s)
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -854,13 +931,16 @@ export default function ProductsPage() {
             <thead className="bg-gray-50">
               <tr>
                 {(userRole === 'owner' || userRole === 'admin') && (
-                  <th className="px-4 py-3 text-center">
-                    <input
-                      type="checkbox"
-                      checked={products.length > 0 && selectedProductIds.length === products.length}
-                      onChange={toggleSelectAll}
-                      className="w-4 h-4 text-blue-600 rounded"
-                    />
+                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                    <div className="flex flex-col items-center">
+                      <span>Descuento</span>
+                      <input
+                        type="checkbox"
+                        checked={products.length > 0 && selectedProductIds.length === products.length}
+                        onChange={toggleSelectAll}
+                        className="w-4 h-4 text-blue-600 rounded mt-1"
+                      />
+                    </div>
                   </th>
                 )}
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Código</th>
@@ -925,6 +1005,14 @@ export default function ProductsPage() {
                         >
                           Editar
                         </button>
+                        {p.stock === 0 && (
+                          <button
+                            onClick={() => archive(p.id)}
+                            className="text-orange-600 hover:text-orange-900 mr-3"
+                          >
+                            Archivar
+                          </button>
+                        )}
                         <button
                           onClick={() => remove(p.id)}
                           className="text-red-600 hover:text-red-900"
