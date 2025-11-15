@@ -337,9 +337,19 @@ def _get_sales_by_payment_date(
         CreditPayment.created_at <= end_datetime
     ).distinct()
     
+    # Also include apartados created in the period (even if they don't have payments yet)
+    apartados_created_in_period = db.query(Sale.id).filter(
+        Sale.tenant_id == tenant.id,
+        Sale.tipo_venta == "credito",
+        Sale.credit_status.in_(['pendiente', 'vencido']),
+        Sale.created_at >= start_datetime,
+        Sale.created_at <= end_datetime
+    ).distinct()
+    
     apartados_pendientes_ids_payment_list = [id for id, in apartados_pendientes_ids_payment.all()]
     apartados_pendientes_ids_credit_list = [id for id, in apartados_pendientes_ids_credit.all()]
-    apartados_pendientes_ids = set(apartados_pendientes_ids_payment_list) | set(apartados_pendientes_ids_credit_list)
+    apartados_created_in_period_list = [id for id, in apartados_created_in_period.all()]
+    apartados_pendientes_ids = set(apartados_pendientes_ids_payment_list) | set(apartados_pendientes_ids_credit_list) | set(apartados_created_in_period_list)
     apartados_pendientes = db.query(Sale).filter(Sale.id.in_(apartados_pendientes_ids)).all() if apartados_pendientes_ids else []
     
     return {
