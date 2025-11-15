@@ -46,6 +46,7 @@ class ResumenPiezas(BaseModel):
     nombre: str  # Nombre del producto
     modelo: Optional[str]  # Modelo del producto
     quilataje: Optional[str]  # Kilataje
+    talla: Optional[str]  # Talla del producto
     piezas_vendidas: int  # Piezas vendidas (contado + apartados pagados)
     piezas_pedidas: int  # Piezas en pedidos (apartado tipo pedido)
     piezas_apartadas: int  # Piezas en apartados (credito pendiente)

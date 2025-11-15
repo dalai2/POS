@@ -5,7 +5,7 @@ This service contains the business logic for inventory tracking and reporting.
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, func
 from typing import Dict, List, Any, Optional, TypedDict
-from datetime import datetime, date, timezone as tz
+from datetime import datetime, date, timezone as tz, timedelta, timezone
 
 from app.models.tenant import Tenant
 from app.models.inventory_movement import InventoryMovement
@@ -102,9 +102,11 @@ def get_inventory_report(
         raise ValueError("start_date must be <= end_date")
     
     # Convert to datetime for queries (timezone-aware)
-    # Note: After running fix_all_timestamps_timezone.sql, dates are already in Mexico time
-    start_datetime = datetime.combine(start_date, datetime.min.time()).replace(tzinfo=tz.utc)
-    end_datetime = datetime.combine(end_date, datetime.max.time()).replace(tzinfo=tz.utc)
+    # Interpret dates as Mexico local time (UTC-6) for filtering
+    mexico_offset = timedelta(hours=-6)  # CST (Central Standard Time)
+    mexico_tz = timezone(mexico_offset)
+    start_datetime = datetime.combine(start_date, datetime.min.time()).replace(tzinfo=mexico_tz)
+    end_datetime = datetime.combine(end_date, datetime.max.time()).replace(tzinfo=mexico_tz)
     
     # Get inventory movements
     movements_data = _get_inventory_movements_by_date_range(

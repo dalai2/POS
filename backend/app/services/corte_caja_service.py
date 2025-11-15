@@ -2322,6 +2322,7 @@ def _build_resumen_piezas(
                         "nombre": product.name or "Sin nombre",
                         "modelo": product.modelo or "N/A",
                         "quilataje": product.quilataje or "N/A",
+                        "talla": product.talla or None,
                         "piezas_vendidas": 0,
                         "piezas_pedidas": 0,
                         "piezas_apartadas": 0,
@@ -2343,6 +2344,7 @@ def _build_resumen_piezas(
                     "nombre": product.name or "Sin nombre",
                     "modelo": product.modelo or "N/A",
                     "quilataje": product.quilataje or "N/A",
+                    "talla": product.talla or None,
                     "piezas_vendidas": 0,
                     "piezas_pedidas": 0,
                     "piezas_apartadas": 0,
@@ -2365,6 +2367,7 @@ def _build_resumen_piezas(
                         "nombre": product.name or "Sin nombre",
                         "modelo": product.modelo or "N/A",
                         "quilataje": product.quilataje or "N/A",
+                        "talla": product.talla or None,
                         "piezas_vendidas": 0,
                         "piezas_pedidas": 0,
                         "piezas_apartadas": 0,
@@ -2387,6 +2390,7 @@ def _build_resumen_piezas(
                 nombre = item.nombre or item.modelo or "Sin nombre"
                 modelo = item.modelo or "N/A"
                 quilataje = item.quilataje or "N/A"
+                talla = item.talla or None
                 key = (nombre, modelo, quilataje)
                 
                 if key not in resumen_piezas_dict:
@@ -2394,6 +2398,7 @@ def _build_resumen_piezas(
                         "nombre": nombre,
                         "modelo": modelo,
                         "quilataje": quilataje,
+                        "talla": talla,
                         "piezas_vendidas": 0,
                         "piezas_pedidas": 0,
                         "piezas_apartadas": 0,
@@ -2412,6 +2417,7 @@ def _build_resumen_piezas(
                     "nombre": producto.nombre or producto.modelo or "Sin nombre",
                     "modelo": producto.modelo or "N/A",
                     "quilataje": producto.quilataje or "N/A",
+                    "talla": producto.talla or None,
                     "piezas_vendidas": 0,
                     "piezas_pedidas": 0,
                     "piezas_apartadas": 0,
@@ -2431,6 +2437,7 @@ def _build_resumen_piezas(
                 "nombre": producto.nombre or producto.modelo or "Sin nombre",
                 "modelo": producto.modelo or "N/A",
                 "quilataje": producto.quilataje or "N/A",
+                "talla": producto.talla or None,
                 "piezas_vendidas": 0,
                 "piezas_pedidas": 0,
                 "piezas_apartadas": 0,
@@ -2458,26 +2465,32 @@ def _build_total_piezas_por_nombre_sin_liquidadas(
     resumen_piezas: List[dict]
 ) -> Dict[str, int]:
     """
-    Group piece summary by name only, summing all categories except liquidated.
+    Group piece summary by name only (case-insensitive), summing only vendidas and pedidas.
+    Excludes apartadas (which includes both apartados and pedidos apartados) and liquidadas.
     
     Args:
         resumen_piezas: List of piece summary dictionaries
         
     Returns:
-        Dictionary mapping product name to total pieces (excluding liquidated)
+        Dictionary mapping product name (lowercase) to total pieces (only vendidas + pedidas)
     """
     total_por_nombre_dict: Dict[str, int] = {}
     
     for pieza in resumen_piezas:
-        nombre = pieza["nombre"]
+        # Normalizar nombre a minúsculas para agrupar sin distinguir mayúsculas/minúsculas
+        nombre = (pieza["nombre"] or "").lower().strip()
+        if not nombre:
+            nombre = "sin nombre"
+        
         if nombre not in total_por_nombre_dict:
             total_por_nombre_dict[nombre] = 0
         
-        # Sum all categories except liquidated
+        # Solo sumar piezas_vendidas y piezas_pedidas
+        # Excluir piezas_apartadas (que incluye apartados y pedidos apartados)
+        # Excluir piezas_liquidadas
         total_por_nombre_dict[nombre] += (
             pieza["piezas_vendidas"]
             + pieza["piezas_pedidas"]
-            + pieza["piezas_apartadas"]
         )
     
     return total_por_nombre_dict

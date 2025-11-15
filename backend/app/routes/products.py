@@ -124,7 +124,7 @@ def create_product(
     )
     db.add(product)
     try:
-        db.commit()
+        db.flush()  # Get product.id before committing
     except IntegrityError as e:
         db.rollback()
         # Friendly messages for unique constraints
@@ -132,6 +132,27 @@ def create_product(
         if "uq_products_tenant_codigo" in msg:
             raise HTTPException(status_code=400, detail="Código already exists for this tenant")
         raise HTTPException(status_code=400, detail="Invalid product data")
+    
+    # Create inventory movement if product has initial stock
+    initial_stock = int(data.stock) if data.stock else 0
+    if initial_stock > 0:
+        from app.models.inventory_movement import InventoryMovement
+        movement = InventoryMovement(
+            tenant_id=tenant.id,
+            product_id=product.id,
+            user_id=user.id,
+            movement_type="entrada",
+            quantity=initial_stock,
+            cost=float(data.cost_price) if data.cost_price else None,
+            notes=f"Producto creado con stock inicial"
+        )
+        db.add(movement)
+    
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=f"Error creating product: {str(e)}")
     db.refresh(product)
     return product
 
