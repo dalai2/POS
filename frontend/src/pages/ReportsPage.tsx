@@ -53,6 +53,30 @@ export default function ReportsPage() {
     });
   };
 
+  // Helper function to format date strings (ISO or date strings) as local dates
+  const formatDateString = (dateStr: string): string => {
+    if (!dateStr) return '';
+    try {
+      // If it's already YYYY-MM-DD format, use formatLocalDateForPrint
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+        return formatLocalDateForPrint(dateStr);
+      }
+      // Otherwise, parse as ISO string and convert to local date
+      const date = new Date(dateStr);
+      // Extract local date components to avoid timezone issues
+      const year = date.getFullYear();
+      const month = date.getMonth() + 1;
+      const day = date.getDate();
+      return new Date(year, month - 1, day).toLocaleDateString('es-ES', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      });
+    } catch (e) {
+      return dateStr; // Return original if parsing fails
+    }
+  };
+
   const printReport = () => {
     const w = window.open('', '_blank');
     if (!w) return;
@@ -604,7 +628,7 @@ export default function ReportsPage() {
       <tbody>
         ${detailedReport.sales_details.map(s => `
         <tr>
-          <td>${new Date(s.fecha).toLocaleDateString('es-ES')}</td>
+          <td>${formatDateString(s.fecha)}</td>
           <td>${s.cliente}</td>
           <td>${s.piezas}</td>
           <td>$${s.total.toFixed(2)}</td>
@@ -638,7 +662,7 @@ export default function ReportsPage() {
       <tbody>
         ${detailedReport.historial_apartados.map(a => `
         <tr>
-          <td>${new Date(a.fecha).toLocaleDateString('es-ES')}</td>
+          <td>${formatDateString(a.fecha)}</td>
           <td>${a.cliente}</td>
           <td>$${a.total.toFixed(2)}</td>
           <td>$${a.anticipo.toFixed(2)}</td>
@@ -672,7 +696,7 @@ export default function ReportsPage() {
       <tbody>
         ${detailedReport.historial_pedidos.map(p => `
         <tr>
-          <td>${new Date(p.fecha).toLocaleDateString('es-ES')}</td>
+          <td>${formatDateString(p.fecha)}</td>
           <td>${p.cliente}</td>
           <td>${p.producto}</td>
           <td>${p.cantidad}</td>
@@ -704,7 +728,7 @@ export default function ReportsPage() {
       <tbody>
         ${detailedReport.historial_abonos_apartados.map(a => `
         <tr>
-          <td>${new Date(a.fecha).toLocaleDateString('es-ES')}</td>
+          <td>${formatDateString(a.fecha)}</td>
           <td>${a.cliente}</td>
           <td>$${a.monto.toFixed(2)}</td>
           <td>${a.metodo_pago}</td>
@@ -733,7 +757,7 @@ export default function ReportsPage() {
       <tbody>
         ${detailedReport.historial_abonos_pedidos.map(a => `
         <tr>
-          <td>${new Date(a.fecha).toLocaleDateString('es-ES')}</td>
+          <td>${formatDateString(a.fecha)}</td>
           <td>${a.cliente}</td>
           <td>${a.producto}</td>
           <td>$${a.monto.toFixed(2)}</td>
@@ -822,7 +846,7 @@ export default function ReportsPage() {
       <tbody>
         ${detailedReport.apartados_cancelados_vencidos.map(a => `
         <tr>
-          <td>${new Date(a.fecha).toLocaleDateString('es-ES')}</td>
+          <td>${formatDateString(a.fecha)}</td>
           <td>${a.cliente}</td>
           <td>$${a.total.toFixed(2)}</td>
           <td style="color: green;">$${a.anticipo.toFixed(2)}</td>
@@ -864,7 +888,7 @@ export default function ReportsPage() {
       <tbody>
         ${detailedReport.pedidos_cancelados_vencidos.map(p => `
         <tr>
-          <td>${new Date(p.fecha).toLocaleDateString('es-ES')}</td>
+          <td>${formatDateString(p.fecha)}</td>
           <td>${p.cliente}</td>
           <td>${p.producto}</td>
           <td>${p.cantidad}</td>

@@ -419,11 +419,19 @@ export default function SalesHistoryPage() {
       
       // Filtrar solo tickets de ventas (excluir tickets de pedidos)
       const saleTickets = allTickets.filter((ticket: any) => {
-        // Incluir tickets de ventas y pagos de apartados
-        if (ticket.kind === 'sale' || ticket.kind === 'payment') return true
-        // Excluir tickets de pedidos
-        if (ticket.kind.startsWith('pedido')) return false
-        return true
+        // Incluir tickets de ventas
+        if (ticket.kind === 'sale') return true
+        
+        // Incluir tickets de apartados (abonos con patrón 'payment-{id}')
+        if (ticket.kind.match(/^payment-\d+$/)) return true
+        
+        // Incluir 'payment' solo si NO hay tickets de pedidos para este sale_id
+        // (para mantener compatibilidad con anticipos antiguos)
+        const hasPedidoTickets = allTickets.some((t: any) => t.kind.startsWith('pedido'))
+        if (ticket.kind === 'payment' && !hasPedidoTickets) return true
+        
+        // Excluir todo lo demás
+        return false
       })
       
       if (saleTickets.length > 0) {
