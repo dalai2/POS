@@ -493,7 +493,7 @@ export default function SalesHistoryPage() {
             {sales.map(s => (
               <tr key={s.id} className="border-t">
                 <td className="p-2">{s.id}</td>
-                <td className="p-2">{new Date(s.created_at).toLocaleString()}</td>
+                <td className="p-2">{new Date(s.created_at).toLocaleString('es-MX', { timeZone: 'America/Mexico_City' })}</td>
                 <td className="p-2">${Number(s.total).toFixed(2)}</td>
                 <td className="p-2">{s.tipo_venta === 'credito' ? 'abono' : (s.tipo_venta || 'contado')}</td>
                 <td className="p-2">{getVendedorName(s)}</td>

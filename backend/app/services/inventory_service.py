@@ -102,15 +102,9 @@ def get_inventory_report(
         raise ValueError("start_date must be <= end_date")
     
     # Convert to datetime for queries (timezone-aware)
-    # Adjust for Mexico timezone (UTC-6): 
-    # - A movement created at 00:00 Mexico time = 06:00 UTC same day
-    # - A movement created at 23:59 Mexico time = 05:59 UTC next day
-    # So we need to:
-    # - Start from 06:00 UTC of start_date (covers 00:00-23:59 Mexico time of start_date)
-    # - End at 05:59:59 UTC of end_date+1 (covers 00:00-23:59 Mexico time of end_date)
-    from datetime import timedelta
-    start_datetime = datetime.combine(start_date, datetime.min.time()).replace(tzinfo=tz.utc) + timedelta(hours=6)
-    end_datetime = datetime.combine(end_date + timedelta(days=1), datetime.min.time()).replace(tzinfo=tz.utc) + timedelta(hours=6) - timedelta(seconds=1)
+    # Note: After running fix_all_timestamps_timezone.sql, dates are already in Mexico time
+    start_datetime = datetime.combine(start_date, datetime.min.time()).replace(tzinfo=tz.utc)
+    end_datetime = datetime.combine(end_date, datetime.max.time()).replace(tzinfo=tz.utc)
     
     # Get inventory movements
     movements_data = _get_inventory_movements_by_date_range(
@@ -562,13 +556,12 @@ def get_stock_grouped_historical(
     if target_date >= date.today():
         return get_stock_grouped(db=db, tenant=tenant)
     
-    # Convert target_date to datetime with Mexico timezone adjustment (UTC-6)
-    # We want to include all movements UP TO the end of target_date in Mexico time
-    # End of day in Mexico = 23:59:59 Mexico = 05:59:59 UTC next day
+    # Note: After running fix_all_timestamps_timezone.sql, dates are already in Mexico time
+    # We want to include all movements UP TO the end of target_date
     target_datetime_end = datetime.combine(
-        target_date + timedelta(days=1), 
-        datetime.min.time()
-    ).replace(tzinfo=tz.utc) + timedelta(hours=6) - timedelta(seconds=1)
+        target_date, 
+        datetime.max.time()
+    ).replace(tzinfo=tz.utc)
     
     # Get all products that existed on or before target_date
     products = db.query(Product).filter(

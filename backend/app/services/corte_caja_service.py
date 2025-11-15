@@ -99,9 +99,9 @@ def get_detailed_corte_caja(
         raise ValueError("start_date must be <= end_date")
     
     # Convert to datetime for queries (timezone-aware)
-    # Adjust for Mexico timezone (UTC-6) to ensure all local day transactions are included
-    start_datetime = datetime.combine(start_date, datetime.min.time()).replace(tzinfo=tz.utc) + timedelta(hours=6)
-    end_datetime = datetime.combine(end_date + timedelta(days=1), datetime.min.time()).replace(tzinfo=tz.utc) + timedelta(hours=6) - timedelta(seconds=1)
+    # Note: After running fix_all_timestamps_timezone.sql, dates are already in Mexico time
+    start_datetime = datetime.combine(start_date, datetime.min.time()).replace(tzinfo=tz.utc)
+    end_datetime = datetime.combine(end_date, datetime.max.time()).replace(tzinfo=tz.utc)
     
     # Get base data
     sales_data = _get_sales_by_payment_date(db, tenant, start_datetime, end_datetime)
