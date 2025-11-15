@@ -60,9 +60,10 @@ export interface DashboardTarjetaValue {
   count: number;
 }
 
-export interface DashboardBreakdown extends DashboardValue {
-  efectivo?: DashboardValue;
-  tarjeta?: DashboardTarjetaValue;
+export interface DashboardBreakdown {
+  total: DashboardValue;
+  efectivo: DashboardValue;
+  tarjeta: DashboardTarjetaValue;
 }
 
 export interface DashboardMetodoDetalle {
