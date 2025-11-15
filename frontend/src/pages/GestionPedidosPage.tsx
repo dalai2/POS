@@ -236,7 +236,7 @@ export default function GestionPedidosPage() {
         const logoBase64 = await getLogoAsBase64()
         const ticketHTML = generatePedidoTicketHTML({
           pedido: pedidoSeleccionado,
-          producto: pedidoSeleccionado.producto,
+          items: pedidoSeleccionado.items || (pedidoSeleccionado.producto ? [pedidoSeleccionado.producto] : []),
           vendedorEmail: pedidoSeleccionado.vendedor_email,
           paymentData: {
             amount: montoNum,
@@ -821,16 +821,15 @@ export default function GestionPedidosPage() {
                                 <div key={item.id || idx} className={idx > 0 ? 'mt-2 pt-2 border-t border-gray-200' : ''}>
                                   <div className="font-medium">{item.modelo || 'Producto sin modelo'}</div>
                                   <div className="text-gray-500 text-xs">
-                                    {item.nombre && `${item.nombre} - `}
-                                    {item.color && `${item.color} - `}
-                                    {item.quilataje && `${item.quilataje}`}
+                                    {[
+                                      item.nombre,
+                                      item.color,
+                                      item.quilataje
+                                    ].filter(Boolean).join(' - ')}
                                     {item.cantidad > 1 && ` (x${item.cantidad})`}
                                   </div>
                                 </div>
                               ))}
-                              <div className="text-gray-400 text-xs mt-1">
-                                Quilatajes: {p.items.map(item => item.quilataje).filter(q => q).join(', ') || 'N/A'}
-                              </div>
                             </>
                           ) : (
                             // Un solo producto (compatibilidad hacia atrás)
