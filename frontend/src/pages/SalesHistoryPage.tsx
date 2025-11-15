@@ -415,9 +415,19 @@ export default function SalesHistoryPage() {
     try {
       // Intentar obtener ticket persistido
       const saved = await api.get(`/tickets/by-sale/${id}`)
-      const tickets = saved.data || []
-      if (tickets.length > 0) {
-        const last = tickets[tickets.length - 1]
+      const allTickets = saved.data || []
+      
+      // Filtrar solo tickets de ventas (excluir tickets de pedidos)
+      const saleTickets = allTickets.filter((ticket: any) => {
+        // Incluir tickets de ventas y pagos de apartados
+        if (ticket.kind === 'sale' || ticket.kind === 'payment') return true
+        // Excluir tickets de pedidos
+        if (ticket.kind.startsWith('pedido')) return false
+        return true
+      })
+      
+      if (saleTickets.length > 0) {
+        const last = saleTickets[saleTickets.length - 1]
         const w = window.open('', '_blank')
         if (!w) return
         w.document.write(last.html)
