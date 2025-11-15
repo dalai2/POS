@@ -61,8 +61,17 @@ export default function ReportsPage() {
       if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
         return formatLocalDateForPrint(dateStr);
       }
+      // If it's YYYY-MM-DD with time (ISO format), extract just the date part
+      const dateOnlyMatch = dateStr.match(/^(\d{4}-\d{2}-\d{2})/);
+      if (dateOnlyMatch) {
+        return formatLocalDateForPrint(dateOnlyMatch[1]);
+      }
       // Otherwise, parse as ISO string and convert to local date
       const date = new Date(dateStr);
+      // Check if date is valid
+      if (isNaN(date.getTime())) {
+        return dateStr; // Return original if invalid
+      }
       // Extract local date components to avoid timezone issues
       const year = date.getFullYear();
       const month = date.getMonth() + 1;
@@ -73,6 +82,7 @@ export default function ReportsPage() {
         day: '2-digit'
       });
     } catch (e) {
+      console.warn('Error formatting date:', dateStr, e);
       return dateStr; // Return original if parsing fails
     }
   };

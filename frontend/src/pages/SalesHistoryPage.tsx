@@ -417,6 +417,9 @@ export default function SalesHistoryPage() {
       const saved = await api.get(`/tickets/by-sale/${id}`)
       const allTickets = saved.data || []
       
+      // DEBUG: Ver qué tickets están llegando
+      console.log(`[DEBUG] Tickets para sale_id ${id}:`, allTickets.map((t: any) => ({ id: t.id, kind: t.kind })))
+      
       // Filtrar solo tickets de ventas (excluir tickets de pedidos)
       const saleTickets = allTickets.filter((ticket: any) => {
         // Incluir tickets de ventas
@@ -424,6 +427,9 @@ export default function SalesHistoryPage() {
         
         // Incluir tickets de apartados (abonos con patrón 'payment-{id}')
         if (ticket.kind.match(/^payment-\d+$/)) return true
+        
+        // Excluir EXPLÍCITAMENTE tickets de pedidos
+        if (ticket.kind.startsWith('pedido')) return false
         
         // Incluir 'payment' solo si NO hay tickets de pedidos para este sale_id
         // (para mantener compatibilidad con anticipos antiguos)
@@ -433,6 +439,8 @@ export default function SalesHistoryPage() {
         // Excluir todo lo demás
         return false
       })
+      
+      console.log(`[DEBUG] Tickets filtrados para ventas:`, saleTickets.map((t: any) => ({ id: t.id, kind: t.kind })))
       
       if (saleTickets.length > 0) {
         const last = saleTickets[saleTickets.length - 1]
