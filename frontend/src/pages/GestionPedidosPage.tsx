@@ -241,32 +241,18 @@ export default function GestionPedidosPage() {
         const ticketsResponse = await api.get(`/tickets/by-pedido/${pedido.id}`)
         const allTickets = ticketsResponse.data || []
         
-        console.log('🔍 DEBUG - Todos los tickets recibidos:', pedido.id, allTickets.map((t: TicketRecord) => ({ id: t.id, kind: t.kind })))
-        
         const hasPedidoTickets = allTickets.some((t: TicketRecord) => t.kind.startsWith('pedido'))
-        console.log('🔍 DEBUG - Tiene tickets pedido-*?', hasPedidoTickets)
-        
         const pedidoTickets = allTickets.filter((ticket: TicketRecord) => {
           if (pedido.tipo_pedido === 'contado') {
             // Pedidos de contado: aceptar tickets iniciales guardados como 'payment' o, por compatibilidad, 'sale'
-            console.log('🔍 DEBUG - Filtro contado, ticket:', ticket.kind, 'incluye?', ticket.kind === 'payment' || ticket.kind === 'sale')
             return ticket.kind === 'payment' || ticket.kind === 'sale'
           }
           // Apartados: incluir tickets generados por pagos parciales
-          if (ticket.kind.startsWith('pedido')) {
-            console.log('🔍 DEBUG - Filtro apartado, ticket con pedido-*:', ticket.kind, 'INCLUIDO')
-            return true
-          }
+          if (ticket.kind.startsWith('pedido')) return true
           // Fallback legacy: si no existen tickets 'pedido-*', usa el ticket 'payment'
-          if (ticket.kind === 'payment' && !hasPedidoTickets) {
-            console.log('🔍 DEBUG - Filtro apartado, ticket payment legacy:', ticket.kind, 'INCLUIDO')
-            return true
-          }
-          console.log('🔍 DEBUG - Filtro apartado, ticket:', ticket.kind, 'EXCLUIDO')
+          if (ticket.kind === 'payment' && !hasPedidoTickets) return true
           return false
         })
-        
-        console.log('🔍 DEBUG - Tickets filtrados finales:', pedidoTickets.map((t: TicketRecord) => ({ id: t.id, kind: t.kind })))
         setTicketsByPedido((prev: Record<number, TicketRecord[]>) => ({ ...prev, [pedido.id]: pedidoTickets }))
       } catch (error) {
         console.error('Error loading tickets:', error)
@@ -1129,7 +1115,6 @@ export default function GestionPedidosPage() {
                     {(() => {
                       let abonoCounter = 0;
                       const pedidoTickets = ticketsByPedido[pedidoHistorial.id] || [];
-                      console.log('🎫 DEBUG Pedido Tickets disponibles:', pedidoHistorial.id, pedidoTickets.map(t => ({ id: t.id, kind: t.kind })));
                       return pagosPedido.map((pago) => {
                         const isInitialPayment = pago.tipo_pago === 'anticipo' || pago.tipo_pago === 'total';
                         const isAbono = !isInitialPayment;
@@ -1140,18 +1125,12 @@ export default function GestionPedidosPage() {
                         // For subsequent abonos, look for 'pedido-payment-{id}' kind
                         let ticket;
                         if (isAbono) {
-                          console.log(`🎫 DEBUG Buscando ticket para ABONO ${pago.id}, buscando kind: pedido-payment-${pago.id}`);
                           ticket = pedidoTickets.find(t => t.kind === `pedido-payment-${pago.id}`);
-                          console.log(`🎫 DEBUG Resultado: ${ticket ? `ENCONTRADO (id: ${ticket.id})` : 'NO ENCONTRADO'}`);
                         } else {
-                          console.log(`🎫 DEBUG Buscando ticket para PAGO INICIAL ${pago.id} (tipo: ${pago.tipo_pago})`);
                           ticket =
                             pedidoTickets.find(t => t.kind === `pedido-payment-${pago.id}`) ||
                             pedidoTickets.find(t => t.kind === 'payment' || t.kind === 'sale');
-                          console.log(`🎫 DEBUG Resultado: ${ticket ? `ENCONTRADO (id: ${ticket.id}, kind: ${ticket.kind})` : 'NO ENCONTRADO'}`);
                         }
-                        
-                        console.log(`🎫 DEBUG Pago ${pago.id}: tipo_pago=${pago.tipo_pago}, isAbono=${isAbono}, ticket=`, ticket ? { id: ticket.id, kind: ticket.kind } : null);
                         
                         const ticketLabel = isAbono
                           ? `Ticket ${abonoCounter}`
