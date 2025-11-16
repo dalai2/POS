@@ -1,0 +1,74 @@
+FIXES APPLIED - 2025-11-16
+
+========================================
+DATABASE FIXES (Railway PostgreSQL)
+========================================
+
+1. FIX: Apartado #2 - product_snapshot NULL
+   - Updated sale_items for apartado #2 to populate product_snapshot
+   - Script: 2025_11_fix_ticket_issues.sql
+   - Status: ✅ APPLIED
+
+2. FIX: Ticket #39 - Deleted incorrect ticket
+   - Removed ticket #39 which had wrong pedido_id and HTML saying "Pedido 10"
+   - Script: 2025_11_fix_ticket_39_html.sql
+   - Status: ✅ APPLIED
+
+3. NOTE: Timezone
+   - Database is in UTC (Etc/UTC)
+   - Frontend already converts to America/Mexico_City timezone
+   - No fix needed
+
+========================================
+FRONTEND FIXES (TypeScript/React)
+========================================
+
+1. FEATURE: Added "Regenerar" button for missing tickets in CreditsPage
+   - File: frontend/src/pages/CreditsPage.tsx
+   - Added regenerarTicketApartado() function
+   - Shows "Regenerar" button when ticket doesn't exist
+   - Generates proper ticket HTML and saves to database
+   - Status: ✅ READY TO DEPLOY
+
+========================================
+NEXT STEPS
+========================================
+
+1. Deploy frontend changes:
+   - git add frontend/src/pages/CreditsPage.tsx
+   - git commit -m "feat: add regenerate ticket button for apartment payments"
+   - git push
+
+2. In Production:
+   - Open CreditsPage → Apartado #1
+   - Click "Regenerar" button to generate initial payment ticket
+   - Ticket will be created with proper HTML and layout
+
+3. Verify:
+   - Apartado #1 now shows ticket for initial payment
+   - Apartado #2 ticket shows product description correctly
+   - All other apartments can regenerate missing tickets
+
+========================================
+SUMMARY OF ISSUES FIXED
+========================================
+
+✅ Apartado #1: No ticket for initial payment
+   - Solution: Added regenerate button to create ticket on demand
+
+✅ Apartado #2: "Producto sin descripción" in ticket
+   - Solution: Populated product_snapshot in database
+
+✅ Tickets #7, #10 (Pedidos contado): Missing tickets
+   - Note: These are working correctly with 1 ticket each
+
+✅ Apartado #3: No issues found
+
+⚠️  Timezone: UTC in database
+   - Frontend already handles conversion to Mexico timezone
+   - No action needed
+
+REMAINING ITEMS (if needed):
+- Fix venta #8 date if still showing incorrect date after timezone handling
+- Archive old migration files
+

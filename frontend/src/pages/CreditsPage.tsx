@@ -200,6 +200,60 @@ export default function CreditsPage() {
     }, 1000);
   };
 
+  const regenerarTicketApartado = async (apartado: CreditSale, pago: CreditPayment) => {
+    try {
+      // Get sale items
+      const saleResponse = await api.get(`/sales/${apartado.id}`);
+      const saleItems = saleResponse.data.items || [];
+      
+      // Get logo as base64
+      const logoBase64 = await getLogoAsBase64();
+      
+      // Calculate payment amounts
+      const previousPaid = apartado.amount_paid - pago.amount;
+      const newPaid = apartado.amount_paid;
+      const newBalance = apartado.total - newPaid;
+      
+      // Generate ticket HTML
+      const ticketHTML = generateApartadoPaymentTicketHTML({
+        sale: apartado,
+        saleItems,
+        paymentData: {
+          amount: pago.amount,
+          method: pago.payment_method,
+          previousPaid: Math.max(0, previousPaid),
+          newPaid,
+          newBalance: Math.max(0, newBalance)
+        },
+        vendedorEmail: apartado.vendedor_email || undefined,
+        logoBase64
+      });
+      
+      // Save or update ticket in database
+      await saveTicket({
+        saleId: apartado.id,
+        kind: `payment-${pago.id}`,
+        html: ticketHTML
+      });
+      
+      // Print ticket
+      openAndPrintTicket(ticketHTML);
+      
+      // Reload tickets
+      try {
+        const ticketsResponse = await api.get(`/tickets/by-sale/${apartado.id}`);
+        setTicketsBySale(prev => ({ ...prev, [apartado.id]: ticketsResponse.data || [] }));
+      } catch (err) {
+        console.error('Error reloading tickets:', err);
+      }
+      
+      alert('✅ Ticket regenerado correctamente');
+    } catch (error: any) {
+      console.error('Error regenerando ticket:', error);
+      alert('Error regenerando ticket: ' + (error.response?.data?.detail || error.message));
+    }
+  };
+
   const abrirHistorial = async (credit: CreditSale) => {
     setCreditHistorial(credit);
     
@@ -706,7 +760,13 @@ export default function CreditsPage() {
                                     {ticketLabel}
                                   </button>
                                 ) : (
-                                  <span className="text-gray-400 text-xs">No disponible</span>
+                                  <button
+                                    className="text-purple-600 hover:text-purple-800 underline text-xs"
+                                    onClick={() => regenerarTicketApartado(creditHistorial, pago)}
+                                    title="Regenerar ticket de este abono"
+                                  >
+                                    Regenerar
+                                  </button>
                                 )}
                               </td>
                             </tr>
