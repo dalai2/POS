@@ -201,6 +201,7 @@ export default function CreditsPage() {
     // Cargar tickets de abonos
     try {
       const ticketsResponse = await api.get(`/tickets/by-sale/${credit.id}`);
+      console.log('🎫 DEBUG Apartado - Tickets recibidos para sale_id', credit.id, ':', ticketsResponse.data);
       setTicketsBySale(prev => ({ ...prev, [credit.id]: ticketsResponse.data || [] }));
     } catch (error) {
       console.error('Error loading tickets:', error);
@@ -649,9 +650,16 @@ export default function CreditsPage() {
                       {(() => {
                         let abonoCounter = 0;
                         const saleTickets = ticketsBySale[creditHistorial.id] || [];
-                        return creditHistorial.payments.map((pago) => {
+                        console.log('🎫 DEBUG Tickets disponibles para apartado', creditHistorial.id, ':', saleTickets.map(t => ({ id: t.id, kind: t.kind })));
+                        return creditHistorial.payments.map((pago, index) => {
                           const isAbono = pago.id > 0;
                           if (isAbono) abonoCounter += 1;
+                          
+                          console.log(`🎫 DEBUG Pago ${index + 1}:`, { 
+                            pago_id: pago.id, 
+                            isAbono, 
+                            buscando_kind: isAbono ? `payment-${pago.id}` : 'payment o sale' 
+                          });
                           
                           // Find ticket for this payment
                           // For initial payment (anticipo), look for 'payment' or 'sale' kind
@@ -663,6 +671,8 @@ export default function CreditsPage() {
                             // Initial payment - look for 'payment' or 'sale' kind
                             ticket = saleTickets.find(t => t.kind === 'payment' || t.kind === 'sale');
                           }
+                          
+                          console.log(`🎫 DEBUG Resultado:`, ticket ? { encontrado: true, ticket_id: ticket.id, ticket_kind: ticket.kind } : { encontrado: false });
                           
                           const ticketLabel = isAbono ? `Ticket ${abonoCounter}` : 'Ticket anticipo';
                           
