@@ -120,6 +120,8 @@ export default function GestionPedidosPage() {
   const [msg, setMsg] = useState('')
   const [loading, setLoading] = useState(true)
   const [userRole, setUserRole] = useState<string>('')
+  const [users, setUsers] = useState<Array<{ id: number; email: string; username?: string | null }>>([])
+  const [userMap, setUserMap] = useState<Record<number, { email: string; username?: string | null }>>({})
   
   // Filtros
   const [filtroEstado, setFiltroEstado] = useState('')
@@ -154,7 +156,20 @@ export default function GestionPedidosPage() {
       return
     }
     setUserRole(localStorage.getItem('role') || '')
-    loadPedidos()
+    ;(async () => {
+      try {
+        // Load users to map vendedor display
+        const r = await api.get('/admin/users')
+        const list = r.data || []
+        setUsers(list)
+        const map: Record<number, { email: string; username?: string | null }> = {}
+        list.forEach((u: any) => { map[u.id] = { email: u.email, username: u.username } })
+        setUserMap(map)
+      } catch (e) {
+        // ignore
+      }
+      loadPedidos()
+    })()
   }, [])
 
   const loadPedidos = async () => {
@@ -918,7 +933,12 @@ export default function GestionPedidosPage() {
                       </td>
                       <td className="px-4 py-3 text-sm">
                         <div className="text-xs text-gray-600">
-                          {p.vendedor_email || '-'}
+                          {(() => {
+                            // Prefer username from user_id if available, fallback to email fields
+                            const ui = userMap[p.user_id]
+                            const name = ui?.username || ui?.email || p.vendedor_email || '-'
+                            return name
+                          })()}
                         </div>
                       </td>
                       <td className="px-4 py-3 text-sm">{p.cantidad}</td>

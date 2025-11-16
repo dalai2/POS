@@ -9,7 +9,10 @@ class CreditPayment(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
-    sale_id = Column(Integer, ForeignKey("sales.id"), nullable=False, index=True)
+    # Legacy reference (deprecado tras migración)
+    sale_id = Column(Integer, ForeignKey("sales.id"), nullable=True, index=True)
+    # Nueva referencia a apartados
+    apartado_id = Column(Integer, ForeignKey("apartados.id"), nullable=True, index=True)
     
     # Payment amount (abono)
     amount = Column(Numeric(10, 2), nullable=False)
@@ -26,3 +29,4 @@ class CreditPayment(Base):
     # Timestamp
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
+    

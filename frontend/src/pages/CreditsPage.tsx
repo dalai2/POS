@@ -45,6 +45,8 @@ interface CreditSale {
 
 export default function CreditsPage() {
   const [credits, setCredits] = useState<CreditSale[]>([]);
+  const [users, setUsers] = useState<Array<{ id: number; email: string; username?: string | null }>>([]);
+  const [userMap, setUserMap] = useState<Record<number, { email: string; username?: string | null }>>({});
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [searchFilter, setSearchFilter] = useState<string>('');
@@ -71,7 +73,19 @@ export default function CreditsPage() {
   }>({ show: false, saleId: null, nuevoEstado: null, estadoActual: null, sale: null });
 
   useEffect(() => {
-    loadCredits();
+    (async () => {
+      await loadCredits();
+      try {
+        const r = await api.get('/admin/users');
+        const list = r.data || [];
+        setUsers(list);
+        const map: Record<number, { email: string; username?: string | null }> = {};
+        list.forEach((u: any) => { map[u.id] = { email: u.email, username: u.username }; });
+        setUserMap(map);
+      } catch (_e) {
+        // ignore
+      }
+    })();
   }, [statusFilter]);
 
   const loadCredits = async () => {
@@ -406,7 +420,7 @@ export default function CreditsPage() {
         <div className="bg-white rounded-lg shadow-md overflow-hidden">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+            <thead className="bg-gray-50">
                 <tr>
                   <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
                     Folio
@@ -523,8 +537,11 @@ export default function CreditsPage() {
                         )}
                       </td>
                       <td className="px-3 py-2 text-sm text-gray-500">
-                        <div className="max-w-[120px] truncate" title={credit.vendedor_email || '-'}>
-                          {credit.vendedor_email || '-'}
+                        <div className="max-w-[160px] truncate" title={(userMap[credit.vendedor_id || -1]?.username || userMap[credit.vendedor_id || -1]?.email || credit.vendedor_email || '-') || '-'}>
+                          {(() => {
+                            const ui = credit.vendedor_id ? userMap[credit.vendedor_id] : undefined;
+                            return ui?.username || ui?.email || credit.vendedor_email || '-';
+                          })()}
                         </div>
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-500">

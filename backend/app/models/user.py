@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, Integer, String, ForeignKey, UniqueConstraint, Index
 from sqlalchemy.orm import relationship
 
 from app.models.tenant import Base
@@ -15,7 +15,11 @@ class User(Base):
     hashed_password = Column(String(255), nullable=False)
     role = Column(String(50), nullable=False, default="cashier")
     tenant_id = Column(Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    # Optional username for display purposes (unique per tenant when not null)
+    username = Column(String(150), nullable=True, index=True)
 
     tenant = relationship("Tenant")
+
+    # Partial unique (username per tenant) is enforced via DB index in migration
 
 

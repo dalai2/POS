@@ -8,7 +8,10 @@ class Payment(Base):
     __tablename__ = "payments"
 
     id = Column(Integer, primary_key=True, index=True)
-    sale_id = Column(Integer, ForeignKey("sales.id", ondelete="CASCADE"), nullable=False, index=True)
+    # Legacy reference (deprecado tras migración): sale_id
+    sale_id = Column(Integer, ForeignKey("sales.id", ondelete="CASCADE"), nullable=True, index=True)
+    # Nueva referencia a ventas de contado
+    venta_contado_id = Column(Integer, ForeignKey("ventas_contado.id", ondelete="CASCADE"), nullable=True, index=True)
     method = Column(String(50), nullable=False)  # e.g., cash, card, voucher
     amount = Column(Numeric(10, 2), nullable=False, default=0)
 

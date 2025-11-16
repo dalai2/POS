@@ -17,18 +17,21 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str
     role: str
+    username: str | None = None
 
 
 class UserUpdate(BaseModel):
     email: EmailStr | None = None
     password: str | None = None
     role: str | None = None
+    username: str | None = None
 
 
 class UserOut(BaseModel):
     id: int
     email: EmailStr
     role: str
+    username: str | None = None
 
     class Config:
         from_attributes = True
@@ -44,7 +47,17 @@ def list_users(db: Session = Depends(get_db), tenant: Tenant = Depends(get_tenan
 def create_user(data: UserCreate, db: Session = Depends(get_db), tenant: Tenant = Depends(get_tenant), user: User = Depends(get_current_user)):
     if db.query(User).filter(User.tenant_id == tenant.id, User.email == data.email).first():
         raise HTTPException(status_code=400, detail="Email already exists for this tenant")
-    new_user = User(email=data.email, hashed_password=hash_password(data.password), role=data.role, tenant_id=tenant.id)
+    if data.username:
+        existing_username = db.query(User).filter(User.tenant_id == tenant.id, User.username == data.username).first()
+        if existing_username:
+            raise HTTPException(status_code=400, detail="Username already exists for this tenant")
+    new_user = User(
+        email=data.email,
+        hashed_password=hash_password(data.password),
+        role=data.role,
+        tenant_id=tenant.id,
+        username=data.username
+    )
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
@@ -88,6 +101,19 @@ def update_user(
     
     if data.role:
         user_to_update.role = data.role
+
+    if data.username is not None:
+        if data.username == "":
+            user_to_update.username = None
+        else:
+            existing_username = db.query(User).filter(
+                User.tenant_id == tenant.id,
+                User.username == data.username,
+                User.id != user_id
+            ).first()
+            if existing_username:
+                raise HTTPException(status_code=400, detail="Username already exists")
+            user_to_update.username = data.username
     
     db.commit()
     db.refresh(user_to_update)

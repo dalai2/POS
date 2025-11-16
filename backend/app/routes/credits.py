@@ -11,7 +11,7 @@ from app.models.tenant import Tenant
 from app.models.user import User
 from app.models.credit_payment import CreditPayment
 from app.models.payment import Payment
-from app.models.sale import Sale
+from app.models.apartado import Apartado
 from app.routes.status_history import create_status_history
 
 router = APIRouter()
@@ -65,18 +65,15 @@ def get_credit_sales(
     """Get all credit sales with optional filters"""
     from datetime import datetime, timedelta
     
-    query = db.query(Sale).filter(
-        Sale.tenant_id == tenant.id,
-        Sale.tipo_venta == "credito"
-    )
+    query = db.query(Apartado).filter(Apartado.tenant_id == tenant.id)
 
     if status:
-        query = query.filter(Sale.credit_status == status)
+        query = query.filter(Apartado.credit_status == status)
 
     if vendedor_id:
-        query = query.filter(Sale.vendedor_id == vendedor_id)
+        query = query.filter(Apartado.vendedor_id == vendedor_id)
 
-    sales = query.order_by(Sale.created_at.desc()).all()
+    sales = query.order_by(Apartado.created_at.desc()).all()
     
     # Verificar y actualizar estado vencido (75 días = 2 meses + 15 días)
     fecha_limite = datetime.utcnow() - timedelta(days=75)
@@ -95,14 +92,10 @@ def get_credit_sales(
     # Add payments and balance to each sale
     result = []
     for sale in sales:
-        # Obtener pagos iniciales de la tabla Payment (anticipo)
-        initial_payments_query = db.query(Payment).filter(
-            Payment.sale_id == sale.id
-        ).all()
-        
-        # Obtener abonos posteriores de CreditPayment
+        # No consolidamos pagos iniciales desde Payment; ahora todos los abonos viven en credit_payments.apartado_id
+        initial_payments_query = []
         credit_payments_query = db.query(CreditPayment).filter(
-            CreditPayment.sale_id == sale.id
+            CreditPayment.apartado_id == sale.id
         ).all()
         
         # Combinar ambos tipos de pagos
@@ -124,21 +117,13 @@ def get_credit_sales(
                 metodo_display = "cash"
             
             # Agregar un solo registro consolidado para el anticipo inicial
-            payments.append({
-                "id": -initial_payments_query[0].id,  # ID negativo del primer pago
-                "sale_id": sale.id,
-                "amount": total_inicial,
-                "payment_method": metodo_display,
-                "user_id": sale.vendedor_id,
-                "notes": "Anticipo inicial",
-                "created_at": sale.created_at.isoformat()
-            })
+            pass
         
         # Agregar abonos posteriores
         for p in credit_payments_query:
             payments.append({
                 "id": p.id,
-                "sale_id": p.sale_id,
+                "sale_id": sale.id,
                 "amount": float(p.amount),
                 "payment_method": p.payment_method,
                 "user_id": p.user_id,
@@ -184,10 +169,9 @@ def register_payment(
 ):
     """Register a payment (abono) for a credit sale"""
     # Verify sale exists and is a credit sale
-    sale = db.query(Sale).filter(
-        Sale.id == data.sale_id,
-        Sale.tenant_id == tenant.id,
-        Sale.tipo_venta == "credito"
+    sale = db.query(Apartado).filter(
+        Apartado.id == data.sale_id,
+        Apartado.tenant_id == tenant.id
     ).first()
     
     if not sale:
@@ -210,7 +194,7 @@ def register_payment(
     # Create payment record
     payment = CreditPayment(
         tenant_id=tenant.id,
-        sale_id=data.sale_id,
+        apartado_id=data.sale_id,
         amount=data.amount,
         payment_method=data.payment_method,
         user_id=current_user.id,
@@ -250,7 +234,7 @@ def register_payment(
     # Return payment as dict with serialized created_at
     return {
         "id": payment.id,
-        "sale_id": payment.sale_id,
+        "sale_id": sale.id,
         "amount": float(payment.amount),
         "payment_method": payment.payment_method,
         "user_id": payment.user_id,
@@ -266,16 +250,16 @@ def get_sale_payments(
 ):
     """Get all payments for a specific credit sale"""
     # Verify sale exists
-    sale = db.query(Sale).filter(
-        Sale.id == sale_id,
-        Sale.tenant_id == tenant.id
+    sale = db.query(Apartado).filter(
+        Apartado.id == sale_id,
+        Apartado.tenant_id == tenant.id
     ).first()
     
     if not sale:
         raise HTTPException(status_code=404, detail="Sale not found")
     
     payments_query = db.query(CreditPayment).filter(
-        CreditPayment.sale_id == sale_id,
+        CreditPayment.apartado_id == sale_id,
         CreditPayment.tenant_id == tenant.id
     ).order_by(CreditPayment.created_at.desc()).all()
     
@@ -283,7 +267,7 @@ def get_sale_payments(
     payments = [
         {
             "id": p.id,
-            "sale_id": p.sale_id,
+            "sale_id": sale_id,
             "amount": float(p.amount),
             "payment_method": p.payment_method,
             "user_id": p.user_id,
@@ -302,10 +286,9 @@ def mark_as_delivered(
     current_user: User = Depends(get_current_user)
 ):
     """Mark a credit sale as delivered"""
-    sale = db.query(Sale).filter(
-        Sale.id == sale_id,
-        Sale.tenant_id == tenant.id,
-        Sale.tipo_venta == "credito"
+    sale = db.query(Apartado).filter(
+        Apartado.id == sale_id,
+        Apartado.tenant_id == tenant.id
     ).first()
     
     if not sale:
@@ -339,10 +322,9 @@ def mark_as_cancelled(
     current_user: User = Depends(get_current_user)
 ):
     """Mark a credit sale as cancelled"""
-    sale = db.query(Sale).filter(
-        Sale.id == sale_id,
-        Sale.tenant_id == tenant.id,
-        Sale.tipo_venta == "credito"
+    sale = db.query(Apartado).filter(
+        Apartado.id == sale_id,
+        Apartado.tenant_id == tenant.id
     ).first()
     
     if not sale:
@@ -384,10 +366,9 @@ def change_sale_status(
     current_user: User = Depends(get_current_user)
 ):
     """Change credit sale status manually (admin/owner only)"""
-    sale = db.query(Sale).filter(
-        Sale.id == sale_id,
-        Sale.tenant_id == tenant.id,
-        Sale.tipo_venta == "credito"
+    sale = db.query(Apartado).filter(
+        Apartado.id == sale_id,
+        Apartado.tenant_id == tenant.id
     ).first()
     
     if not sale:
