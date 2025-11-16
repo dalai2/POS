@@ -15,6 +15,8 @@ from app.models.product import Product
 from app.models.payment import Payment
 from app.models.credit_payment import CreditPayment
 from app.models.producto_pedido import Pedido, PagoPedido, ProductoPedido, PedidoItem
+from app.models.cash_sale import VentasContado, ItemVentaContado
+from app.models.apartado import Apartado
 
 # Constants
 TARJETA_DISCOUNT_RATE = 0.97  # 3% discount for card payments
@@ -127,6 +129,15 @@ def get_detailed_corte_caja(
     _process_sales_for_stats(
         db, sales_data['all_sales'], counters, sales_data['ventas_contado_ids']
     )
+
+    # Also process ventas/apartados del nuevo esquema (VentasContado/Apartado)
+    _process_new_schema_stats(
+        db=db,
+        tenant=tenant,
+        start_datetime=start_datetime,
+        end_datetime=end_datetime,
+        counters=counters,
+    )
     
     # Process pedidos de contado
     _process_pedidos_contado(
@@ -159,7 +170,12 @@ def get_detailed_corte_caja(
         db, tenant, start_datetime, end_datetime, counters
     )
     cuentas_por_cobrar = _calculate_cuentas_por_cobrar(
-        sales_data['apartados_pendientes'], pedidos_data['pedidos_pendientes']
+        sales_data['apartados_pendientes'],
+        pedidos_data['pedidos_pendientes'],
+        db,
+        tenant,
+        start_datetime,
+        end_datetime,
     )
     
     # Build vendor stats
@@ -495,6 +511,8 @@ def _initialize_counters() -> Dict[str, Any]:
         'reembolso_pedidos_cancelados': 0.0,
         'saldo_vencido_apartados': 0.0,
         'saldo_vencido_pedidos': 0.0,
+        'apartados_vencidos_count': 0,
+        'pedidos_vencidos_count': 0,
     }
 
 
@@ -594,6 +612,93 @@ def _process_sales_for_stats(
             counters['utilidad_total'] += float(sale.utilidad)
         
         counters['piezas_vendidas'] += 1
+
+
+def _process_new_schema_stats(
+    db: Session,
+    tenant: Tenant,
+    start_datetime: datetime,
+    end_datetime: datetime,
+    counters: Dict[str, Any],
+) -> None:
+    """
+    Complement counters with data from new schema tables:
+    - VentasContado / ItemVentaContado
+    - Apartado (estado pagado/entregado/pendiente/vencido/cancelado)
+    This function is additive and keeps legacy Sale-based stats intact.
+    """
+    # --- Ventas de contado nuevas ---
+    ventas_contado = db.query(VentasContado).filter(
+        VentasContado.tenant_id == tenant.id,
+        VentasContado.created_at >= start_datetime,
+        VentasContado.created_at <= end_datetime,
+    ).all()
+
+    if ventas_contado:
+        venta_ids = [v.id for v in ventas_contado]
+        items = db.query(ItemVentaContado).filter(ItemVentaContado.venta_id.in_(venta_ids)).all()
+        items_by_venta: Dict[int, list[ItemVentaContado]] = {}
+        for it in items:
+            items_by_venta.setdefault(it.venta_id, []).append(it)
+
+        product_ids = list({it.product_id for it in items if it.product_id})
+        products = {
+            p.id: p for p in db.query(Product).filter(Product.id.in_(product_ids)).all()
+        } if product_ids else {}
+
+        for venta in ventas_contado:
+            total = float(venta.total or 0)
+            counters['contado_count'] += 1
+            counters['total_contado'] += total
+            counters['total_vendido'] += total
+
+            # Costos y piezas
+            venta_items = items_by_venta.get(venta.id, [])
+            costo_venta = 0.0
+            for it in venta_items:
+                qty = int(it.quantity or 0)
+                counters['num_piezas_vendidas'] += qty
+                if it.product_id and it.product_id in products:
+                    prod = products[it.product_id]
+                    if getattr(prod, 'cost_price', None) is not None:
+                        costo_venta += float(prod.cost_price) * qty
+            counters['costo_ventas_contado'] += costo_venta
+            counters['costo_total'] += costo_venta
+            # Utilidad: total - costo
+            counters['utilidad_total'] += total - costo_venta
+
+    # --- Apartados nuevos ---
+    apartados = db.query(Apartado).filter(
+        Apartado.tenant_id == tenant.id,
+        Apartado.created_at >= start_datetime,
+        Apartado.created_at <= end_datetime,
+    ).all()
+
+    for ap in apartados:
+        total = float(ap.total or 0)
+        amount_paid = float(ap.amount_paid or 0)
+        saldo_pendiente = max(0.0, total - amount_paid)
+
+        if ap.credit_status in ['pagado', 'entregado']:
+            # Tratarlos como apartados liquidados (similar a ventas_credito)
+            counters['ventas_credito_count'] += 1
+            counters['ventas_credito_total'] += total
+            counters['credito_ventas'] += total
+            counters['total_credito'] += amount_paid
+        elif ap.credit_status in ['pendiente', 'vencido']:
+            # Pendiente de cobro
+            counters['pendiente_credito'] += saldo_pendiente
+
+        # Vencidos / cancelados para vencimientos/cancelaciones
+        if ap.credit_status == 'vencido':
+            # Consideramos el saldo pendiente como saldo en riesgo
+            counters['saldo_vencido_apartados'] += saldo_pendiente
+            counters['apartados_vencidos_count'] += 1
+        elif ap.credit_status == 'cancelado':
+            # Reembolsos y cancelaciones de apartados
+            counters['reembolso_apartados_cancelados'] += amount_paid
+            counters['cancelaciones_apartados_monto'] += amount_paid
+            counters['cancelaciones_apartados_count'] += 1
 
 
 def _process_pedidos_contado(
@@ -851,23 +956,13 @@ def _calculate_ventas_pasivas(
     counters['anticipos_apartados_tarjeta_neto'] = anticipos_apartados_tarjeta_neto
     counters['anticipos_apartados_tarjeta_count'] = anticipos_apartados_tarjeta_count
     
-    # Abonos de apartados: filtrar por fecha de creación del abono (CreditPayment.created_at)
-    # Primero obtenemos los IDs de apartados para verificar que sean tipo credito
-    apartados_ids_query = db.query(Sale.id).filter(
-        Sale.tenant_id == tenant.id,
-        Sale.tipo_venta == "credito"
-    )
-    apartados_ids_list = [id for id, in apartados_ids_query.all()]
-    
-    # Luego obtenemos los abonos creados en el periodo
-    if apartados_ids_list:
-        abonos_apartados_dia = db.query(CreditPayment).filter(
-            CreditPayment.sale_id.in_(apartados_ids_list),
+    # Abonos de apartados (nuevo y viejo esquema): filtrar por fecha de creación del abono
+    # Considerar tanto CreditPayment.sale_id (legacy) como CreditPayment.apartado_id (nuevo esquema)
+    abonos_apartados_dia = db.query(CreditPayment).filter(
+        CreditPayment.tenant_id == tenant.id,
         CreditPayment.created_at >= start_datetime,
         CreditPayment.created_at <= end_datetime
     ).all()
-    else:
-        abonos_apartados_dia = []
     
     abonos_apartados_dia_total = 0.0
     abonos_apartados_efectivo = 0.0
@@ -878,25 +973,32 @@ def _calculate_ventas_pasivas(
     abonos_apartados_tarjeta_count = 0
     
     for abono in abonos_apartados_dia:
-        # Verificar si este abono liquidó el apartado (es el último abono que cambió el estado a pagado)
-        apartado = db.query(Sale).filter(Sale.id == abono.sale_id).first()
-        
-        # Obtener todos los abonos del apartado para identificar el último que liquidó
-        todos_abonos = db.query(CreditPayment).filter(
-            CreditPayment.sale_id == abono.sale_id
-        ).order_by(CreditPayment.created_at.desc()).all()
-        
-        # Identificar el último abono que cambió el estado a pagado
-        ultimo_abono_liquidante = None
-        if apartado and apartado.credit_status in ['pagado', 'entregado']:
-            # Si el apartado está pagado, el último abono es el que lo liquidó
-            if todos_abonos:
-                ultimo_abono_liquidante = todos_abonos[0]
-        
-        # Excluir el último abono que liquidó el apartado
-        if ultimo_abono_liquidante and abono.id == ultimo_abono_liquidante.id:
-            continue  # Este abono ya fue contado en ventas de liquidación
-        
+        # Legacy: abonos ligados a Sale (tipo_venta='credito')
+        if abono.apartado_id is None and abono.sale_id is not None:
+            apartado = db.query(Sale).filter(
+                Sale.id == abono.sale_id,
+                Sale.tenant_id == tenant.id,
+                Sale.tipo_venta == "credito",
+            ).first()
+
+            # Obtener todos los abonos del apartado para identificar el último que liquidó
+            todos_abonos = db.query(CreditPayment).filter(
+                CreditPayment.sale_id == abono.sale_id
+            ).order_by(CreditPayment.created_at.desc()).all()
+
+            # Identificar el último abono que cambió el estado a pagado
+            ultimo_abono_liquidante = None
+            if apartado and apartado.credit_status in ['pagado', 'entregado']:
+                # Si el apartado está pagado, el último abono es el que lo liquidó
+                if todos_abonos:
+                    ultimo_abono_liquidante = todos_abonos[0]
+
+            # Excluir el último abono que liquidó el apartado
+            if ultimo_abono_liquidante and abono.id == ultimo_abono_liquidante.id:
+                continue  # Este abono ya fue contado en ventas de liquidación
+
+        # Nuevo esquema: abonos ligados a Apartado.apartado_id
+        # Para simplificar, contamos todos los abonos (el cálculo de liquidación ya se hace en _process_new_schema_stats)
         amount = float(abono.amount or 0)
         if abono.payment_method in ['tarjeta', 'card']:
             abonos_apartados_tarjeta_bruto += amount
@@ -1047,12 +1149,28 @@ def _calculate_ventas_pasivas(
 
 def _calculate_cuentas_por_cobrar(
     apartados_pendientes: List[Sale],
-    pedidos_pendientes: List[Pedido]
+    pedidos_pendientes: List[Pedido],
+    db: Session,
+    tenant: Tenant,
+    start_datetime: datetime,
+    end_datetime: datetime,
 ) -> float:
     """Calculate accounts receivable (cuentas por cobrar)."""
     cuentas_por_cobrar = 0.0
+    # Legacy apartados (Sale)
     for apartado in apartados_pendientes:
         saldo = float(apartado.total) - float(apartado.amount_paid or 0)
+        cuentas_por_cobrar += saldo
+
+    # Apartados nuevos (Apartado) pendientes o vencidos creados en el periodo
+    apartados_nuevos_pendientes = db.query(Apartado).filter(
+        Apartado.tenant_id == tenant.id,
+        Apartado.created_at >= start_datetime,
+        Apartado.created_at <= end_datetime,
+        Apartado.credit_status.in_(["pendiente", "vencido"]),
+    ).all()
+    for ap in apartados_nuevos_pendientes:
+        saldo = float(ap.total or 0) - float(ap.amount_paid or 0)
         cuentas_por_cobrar += saldo
     for pedido in pedidos_pendientes:
         cuentas_por_cobrar += float(pedido.saldo_pendiente)
@@ -1471,10 +1589,10 @@ def _build_dashboard_data(
     vencimientos_apartados_monto = counters.get('saldo_vencido_apartados', 0.0)
     vencimientos_pedidos_monto = counters.get('saldo_vencido_pedidos', 0.0)
     vencimientos_total_monto = vencimientos_apartados_monto + vencimientos_pedidos_monto
-    # Counts would need to be calculated from actual vencidos, but using 0 for now
-    vencimientos_apartados_count = 0
-    vencimientos_pedidos_count = 0
-    vencimientos_total_count = 0
+    # Counts basados en contadores de vencidos
+    vencimientos_apartados_count = counters.get('apartados_vencidos_count', 0)
+    vencimientos_pedidos_count = counters.get('pedidos_vencidos_count', 0)
+    vencimientos_total_count = vencimientos_apartados_count + vencimientos_pedidos_count
     
     # Calculate cancelaciones totals
     cancelaciones_ventas_contado_monto = counters.get('cancelaciones_ventas_contado_monto', 0.0)
@@ -1847,6 +1965,7 @@ def _build_historiales(
         Sale.credit_status.in_(['cancelado', 'vencido'])
     ).order_by(Sale.created_at.desc()).all()
     
+    # Legacy apartados (basados en Sale)
     for apartado in apartados_cancelados_vencidos_query:
         vendedor = "Unknown"
         if apartado.vendedor_id:
@@ -1877,6 +1996,7 @@ def _build_historiales(
         elif apartado.credit_status == "vencido":
             counters['saldo_vencido_apartados'] += total_pagado_neto
             counters['piezas_vencidas_apartados'] += piezas_apartado
+            counters['apartados_vencidos_count'] += 1
         
         apartados_cancelados_vencidos.append({
             "id": apartado.id,
@@ -1890,6 +2010,61 @@ def _build_historiales(
             "motivo": motivo
         })
     
+    # Apartados cancelados y vencidos (nuevo esquema Apartado)
+    apartados_nuevos_cancelados_vencidos = db.query(Apartado).filter(
+        Apartado.tenant_id == tenant.id,
+        Apartado.created_at >= start_datetime,
+        Apartado.created_at <= end_datetime,
+        Apartado.credit_status.in_(['cancelado', 'vencido'])
+    ).order_by(Apartado.created_at.desc()).all()
+
+    for ap in apartados_nuevos_cancelados_vencidos:
+        vendedor = "Unknown"
+        if ap.vendedor_id:
+            vendor = db.query(User).filter(User.id == ap.vendedor_id).first()
+            vendedor = vendor.email if vendor else "Unknown"
+
+        saldo = float(ap.total or 0) - float(ap.amount_paid or 0)
+        motivo = "Vencido" if ap.credit_status == "vencido" else "Cancelado"
+
+        # Para el nuevo esquema, todos los pagos (anticipos+abonos) viven en credit_payments.apartado_id
+        abonos_apartado = db.query(CreditPayment).filter(CreditPayment.apartado_id == ap.id).all()
+        abonos_efectivo = sum(
+            float(p.amount) for p in abonos_apartado
+            if p.payment_method in ['efectivo', 'cash', 'transferencia']
+        )
+        abonos_tarjeta = sum(
+            float(p.amount) for p in abonos_apartado
+            if p.payment_method in ['tarjeta', 'card']
+        )
+        total_pagado_neto = abonos_efectivo + (abonos_tarjeta * TARJETA_DISCOUNT_RATE)
+
+        # No tenemos SaleItem para Apartado nuevo; las piezas se pueden aproximar a 0 aquí
+        piezas_apartado = 0
+
+        if ap.credit_status == "cancelado":
+            counters['reembolso_apartados_cancelados'] += total_pagado_neto
+            counters['cancelaciones_apartados_monto'] += total_pagado_neto
+            counters['cancelaciones_apartados_count'] += 1
+            counters['piezas_canceladas_apartados'] += piezas_apartado
+        elif ap.credit_status == "vencido":
+            # Consideramos el saldo pendiente como saldo en riesgo
+            counters['saldo_vencido_apartados'] += max(0.0, float(ap.total or 0) - float(ap.amount_paid or 0))
+            counters['piezas_vencidas_apartados'] += piezas_apartado
+            counters['apartados_vencidos_count'] += 1
+
+        apartados_cancelados_vencidos.append({
+            "id": ap.id,
+            "fecha": ap.created_at.strftime("%Y-%m-%d %H:%M"),
+            "cliente": ap.customer_name or "Sin nombre",
+            "total": float(ap.total or 0),
+            "anticipo": float(ap.amount_paid or 0),
+            "saldo": saldo,
+            "estado": ap.credit_status,
+            "vendedor": vendedor,
+            "motivo": motivo,
+        })
+
     # Historial de abonos de apartados: solo apartados CREADOS en el periodo
     todos_abonos_apartados = db.query(CreditPayment).join(Sale).filter(
         Sale.tenant_id == tenant.id,
@@ -1987,6 +2162,7 @@ def _build_historiales(
                 counters['piezas_canceladas_pedidos_apartados'] += pedido.cantidad or 0
         elif pedido.estado == "vencido":
             counters['saldo_vencido_pedidos'] += total_pagado_neto
+            counters['pedidos_vencidos_count'] += 1
             if pedido.tipo_pedido == "apartado":
                 counters['piezas_vencidas_pedidos_apartados'] += pedido.cantidad or 0
         

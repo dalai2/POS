@@ -231,37 +231,6 @@ async def create_sale(
         line_disc_amount = (line_subtotal * line_disc_pct / Decimal('100')).quantize(Decimal('0.01'))
         line_total = (line_subtotal - line_disc_amount).quantize(Decimal('0.01'))
         subtotal += line_total
-        
-        # Build full description from product fields
-        descParts = []
-        if p.name: descParts.append(p.name)
-        if p.modelo: descParts.append(p.modelo)
-        if p.color: descParts.append(p.color)
-        if p.quilataje: descParts.append(p.quilataje)
-        if p.peso_gramos: 
-            # Format weight to avoid unnecessary decimals
-            peso = float(p.peso_gramos)
-            if peso == int(peso):
-                peso_formatted = f"{peso:.0f}"
-            else:
-                # Remove trailing zeros
-                peso_formatted = f"{peso:.3f}".rstrip('0').rstrip('.')
-            descParts.append(f"{peso_formatted}g")
-        if p.talla: descParts.append(p.talla)
-        full_description = '-'.join(descParts) if descParts else p.name
-        
-        db.add(SaleItem(
-            sale_id=sale.id,
-            product_id=p.id,
-            name=full_description,
-            codigo=p.codigo,
-            quantity=q,
-            unit_price=unit,
-            discount_pct=line_disc_pct,
-            discount_amount=line_disc_amount,
-            total_price=line_total,
-            product_snapshot=build_product_snapshot(p)
-        ))
         # decrement stock
         if p.stock is not None:
             p.stock = int(p.stock) - q
@@ -282,7 +251,7 @@ async def create_sale(
 
     # Para contado: validar que el pago cubre total si se envía
     if (tipo_venta or "contado") == "contado" and payments and paid < total_val:
-        raise HTTPException(status_code=400, detail=f"Pago insuficiente: {paid} < {sale.total}")
+        raise HTTPException(status_code=400, detail=f"Pago insuficiente: {paid} < {total_val}")
     
     # Para credito: validar anticipo > 0
     if (tipo_venta or "contado") == "credito" and paid <= Decimal("0"):

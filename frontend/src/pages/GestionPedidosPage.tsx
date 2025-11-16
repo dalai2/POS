@@ -280,6 +280,51 @@ export default function GestionPedidosPage() {
     }
   }
 
+  const regenerarTicketPedido = async (pedido: Pedido, pago: PagoPedido) => {
+    try {
+      const logoBase64 = await getLogoAsBase64()
+      const ticketHTML = generatePedidoTicketHTML({
+        pedido,
+        items: pedido.items || (pedido.producto ? [pedido.producto] : []),
+        vendedorEmail: pedido.vendedor_email,
+        paymentData: {
+          amount: pago.monto,
+          method: pago.metodo_pago,
+          previousPaid: Math.max(0, pedido.anticipo_pagado - pago.monto),
+          newPaid: pedido.anticipo_pagado,
+          previousBalance: pedido.saldo_pendiente + pago.monto,
+          newBalance: pedido.saldo_pendiente
+        },
+        logoBase64
+      })
+      await saveTicket({
+        pedidoId: pedido.id,
+        kind: `pedido-payment-${pago.id}`,
+        html: ticketHTML
+      })
+      setMsg('✅ Ticket regenerado correctamente')
+      // Refrescar tickets de este pedido en memoria
+      try {
+        const ticketsResponse = await api.get(`/tickets/by-pedido/${pedido.id}`)
+        const allTickets = ticketsResponse.data || []
+        const hasPedidoTickets = allTickets.some((t: TicketRecord) => t.kind.startsWith('pedido'))
+        const pedidoTickets = allTickets.filter((ticket: TicketRecord) => {
+          if (pedido.tipo_pedido === 'contado') {
+            return ticket.kind === 'payment' || ticket.kind === 'sale'
+          }
+          if (ticket.kind.startsWith('pedido')) return true
+          if (ticket.kind === 'payment' && !hasPedidoTickets) return true
+          return false
+        })
+        setTicketsByPedido((prev: Record<number, TicketRecord[]>) => ({ ...prev, [pedido.id]: pedidoTickets }))
+      } catch {}
+      setTimeout(() => setMsg(''), 2500)
+    } catch (e) {
+      setMsg('Error regenerando ticket')
+      setTimeout(() => setMsg(''), 3000)
+    }
+  }
+
   const registrarPago = async () => {
     if (!pedidoSeleccionado || !montoPago) {
       setMsg('⚠️ Por favor ingrese un monto válido')
@@ -1179,7 +1224,13 @@ export default function GestionPedidosPage() {
                                   {ticketLabel}
                                 </button>
                               ) : (
-                                <span className="text-gray-400 text-xs">No disponible</span>
+                                <button
+                                  className="text-purple-600 hover:text-purple-800 underline text-xs"
+                                  onClick={() => regenerarTicketPedido(pedidoHistorial!, pago)}
+                                  title="Regenerar ticket de este abono"
+                                >
+                                  Regenerar
+                                </button>
                               )}
                             </td>
                           </tr>
