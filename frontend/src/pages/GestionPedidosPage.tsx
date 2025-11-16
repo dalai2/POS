@@ -390,74 +390,6 @@ export default function GestionPedidosPage() {
     }
   }
 
-  const regenerarTicket = async (pago: PagoPedido, pedido: Pedido) => {
-    try {
-      setMsg('Generando ticket...')
-      
-      // Calculate previous paid amount (all payments before this one)
-      const pagoIndex = pagosPedido.findIndex(p => p.id === pago.id)
-      const previousPaid = pagosPedido
-        .slice(0, pagoIndex)
-        .reduce((sum, p) => sum + p.monto, 0)
-      
-      const newPaid = previousPaid + pago.monto
-      const newBalance = pedido.total - newPaid
-      
-      // Generate ticket
-      const logoBase64 = await getLogoAsBase64()
-      const ticketHTML = generatePedidoTicketHTML({
-        pedido: pedido,
-        items: pedido.items || (pedido.producto ? [pedido.producto] : []),
-        vendedorEmail: pedido.vendedor_email,
-        paymentData: {
-          amount: pago.monto,
-          method: pago.metodo_pago,
-          previousPaid: previousPaid,
-          newPaid: newPaid,
-          previousBalance: pedido.total - previousPaid,
-          newBalance: newBalance
-        },
-        logoBase64
-      })
-      
-      // Save ticket
-      await saveTicket({
-        pedidoId: pedido.id,
-        kind: `pedido-payment-${pago.id}`,
-        html: ticketHTML
-      })
-      
-      setMsg('✅ Ticket generado y guardado correctamente')
-      
-      // Reload tickets
-      try {
-        const ticketsResponse = await api.get(`/tickets/by-pedido/${pedido.id}`)
-        const allTickets = ticketsResponse.data || []
-        
-        const hasPedidoTickets = allTickets.some((t: TicketRecord) => t.kind.startsWith('pedido'))
-        const pedidoTickets = allTickets.filter((ticket: TicketRecord) => {
-          if (pedido.tipo_pedido === 'contado') {
-            return ticket.kind === 'payment' || ticket.kind === 'sale'
-          }
-          if (ticket.kind.startsWith('pedido')) return true
-          if (ticket.kind === 'payment' && !hasPedidoTickets) return true
-          return false
-        })
-        setTicketsByPedido((prev: Record<number, TicketRecord[]>) => ({ ...prev, [pedido.id]: pedidoTickets }))
-      } catch (error) {
-        console.error('Error reloading tickets:', error)
-      }
-      
-      // Print ticket
-      openAndPrintTicket(ticketHTML)
-      
-      setTimeout(() => setMsg(''), 3000)
-    } catch (error: any) {
-      setMsg(error?.response?.data?.detail || 'Error al generar ticket')
-      setTimeout(() => setMsg(''), 3000)
-    }
-  }
-
   /* FUNCIÓN ELIMINADA - Los tickets ahora se manejan dentro del historial
   const verTicket = async (pedido: Pedido) => {
     try {
@@ -1230,13 +1162,7 @@ export default function GestionPedidosPage() {
                                   {ticketLabel}
                                 </button>
                               ) : (
-                                <button
-                                  className="text-orange-600 hover:text-orange-800 text-xs font-medium"
-                                  onClick={() => regenerarTicket(pago, pedidoHistorial)}
-                                  title="Generar ticket para este pago"
-                                >
-                                  🔄 Generar ticket
-                                </button>
+                                <span className="text-gray-400 text-xs">No disponible</span>
                               )}
                             </td>
                           </tr>
