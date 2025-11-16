@@ -14,6 +14,7 @@ router = APIRouter()
 
 class TicketCreate(BaseModel):
     sale_id: Optional[int] = None
+    pedido_id: Optional[int] = None
     kind: str = "sale"
     html: str
 
@@ -21,6 +22,7 @@ class TicketCreate(BaseModel):
 class TicketOut(BaseModel):
     id: int
     sale_id: Optional[int]
+    pedido_id: Optional[int]
     kind: str
     html: str
     created_at: datetime
@@ -49,21 +51,45 @@ def create_ticket(
 ):
     _ensure_ticket_table(db)
 
-    # Upsert by (tenant_id, sale_id, kind): replace if already exists
+    # Upsert logic: replace if already exists
     existing = None
+    
+    # Check for existing ticket by sale_id
     if payload.sale_id is not None:
         existing = (
             db.query(Ticket)
-            .filter(Ticket.tenant_id == tenant.id, Ticket.sale_id == payload.sale_id, Ticket.kind == payload.kind)
+            .filter(
+                Ticket.tenant_id == tenant.id, 
+                Ticket.sale_id == payload.sale_id, 
+                Ticket.kind == payload.kind
+            )
             .first()
         )
+    # Check for existing ticket by pedido_id
+    elif payload.pedido_id is not None:
+        existing = (
+            db.query(Ticket)
+            .filter(
+                Ticket.tenant_id == tenant.id, 
+                Ticket.pedido_id == payload.pedido_id, 
+                Ticket.kind == payload.kind
+            )
+            .first()
+        )
+    
     if existing:
         existing.html = payload.html
         db.commit()
         db.refresh(existing)
         return existing
 
-    ticket = Ticket(tenant_id=tenant.id, sale_id=payload.sale_id, kind=payload.kind, html=payload.html)
+    ticket = Ticket(
+        tenant_id=tenant.id, 
+        sale_id=payload.sale_id, 
+        pedido_id=payload.pedido_id,
+        kind=payload.kind, 
+        html=payload.html
+    )
     db.add(ticket)
     db.commit()
     db.refresh(ticket)
@@ -95,6 +121,23 @@ def get_tickets_by_sale(
     tickets = (
         db.query(Ticket)
         .filter(Ticket.tenant_id == tenant.id, Ticket.sale_id == sale_id)
+        .order_by(Ticket.created_at.asc())
+        .all()
+    )
+    return tickets
+
+
+@router.get("/tickets/by-pedido/{pedido_id}", response_model=List[TicketOut])
+def get_tickets_by_pedido(
+    pedido_id: int,
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_tenant),
+    user=Depends(get_current_user),
+):
+    _ensure_ticket_table(db)
+    tickets = (
+        db.query(Ticket)
+        .filter(Ticket.tenant_id == tenant.id, Ticket.pedido_id == pedido_id)
         .order_by(Ticket.created_at.asc())
         .all()
     )

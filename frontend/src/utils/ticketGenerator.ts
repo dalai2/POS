@@ -363,13 +363,15 @@ export const generatePedidoTicketHTML = (params: {
  * Save ticket to database
  */
 export const saveTicket = async (params: {
-  saleId: number
+  saleId?: number
+  pedidoId?: number
   kind: string
   html: string
 }): Promise<void> => {
   try {
     await api.post('/tickets', {
       sale_id: params.saleId,
+      pedido_id: params.pedidoId,
       kind: params.kind,
       html: params.html
     })

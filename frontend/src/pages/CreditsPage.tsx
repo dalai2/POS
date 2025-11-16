@@ -60,6 +60,15 @@ export default function CreditsPage() {
     notes: '',
   });
   const userRole = localStorage.getItem('role') || '';
+  
+  // Modal para confirmar cambio de estado
+  const [estadoChangeModal, setEstadoChangeModal] = useState<{
+    show: boolean
+    saleId: number | null
+    nuevoEstado: string | null
+    estadoActual: string | null
+    sale: CreditSale | null
+  }>({ show: false, saleId: null, nuevoEstado: null, estadoActual: null, sale: null });
 
   useEffect(() => {
     loadCredits();
@@ -225,21 +234,43 @@ export default function CreditsPage() {
     }
   };
 
-  const cambiarEstado = async (saleId: number, nuevoEstado: string) => {
+  const cambiarEstado = async (saleId: number, nuevoEstado: string, estadoActual: string) => {
+    // Encontrar la venta para obtener más información
+    const sale = credits.find(c => c.id === saleId)
+    if (!sale) return
+    
+    // Mostrar modal de confirmación
+    setEstadoChangeModal({
+      show: true,
+      saleId,
+      nuevoEstado,
+      estadoActual,
+      sale
+    })
+  };
+
+  const confirmarCambioEstado = async () => {
+    if (!estadoChangeModal.saleId || !estadoChangeModal.nuevoEstado) return
+    
     try {
       // Usar endpoints específicos para cambios de estado
-      if (nuevoEstado === 'entregado') {
-        await api.patch(`/credits/sales/${saleId}/entregado`);
-      } else if (nuevoEstado === 'cancelado') {
-        if (!confirm('¿Cancelar esta venta?')) return;
-        await api.patch(`/credits/sales/${saleId}/cancelado`);
+      if (estadoChangeModal.nuevoEstado === 'entregado') {
+        await api.patch(`/credits/sales/${estadoChangeModal.saleId}/entregado`);
+      } else if (estadoChangeModal.nuevoEstado === 'cancelado') {
+        await api.patch(`/credits/sales/${estadoChangeModal.saleId}/cancelado`);
       } else {
         // Para otros estados, usar endpoint genérico si existe
-        await api.patch(`/credits/sales/${saleId}/status`, { status: nuevoEstado });
+        await api.patch(`/credits/sales/${estadoChangeModal.saleId}/status`, { status: estadoChangeModal.nuevoEstado });
       }
+      
+      // Cerrar modal
+      setEstadoChangeModal({ show: false, saleId: null, nuevoEstado: null, estadoActual: null, sale: null })
+      
       loadCredits();
     } catch (error: any) {
       alert(error.response?.data?.detail || 'Error al cambiar estado');
+      // Cerrar modal en caso de error también
+      setEstadoChangeModal({ show: false, saleId: null, nuevoEstado: null, estadoActual: null, sale: null })
     }
   };
 
@@ -446,7 +477,7 @@ export default function CreditsPage() {
                         {(userRole === 'admin' || userRole === 'owner') ? (
                           <select
                             value={credit.credit_status}
-                            onChange={(e) => cambiarEstado(credit.id, e.target.value)}
+                            onChange={(e) => cambiarEstado(credit.id, e.target.value, credit.credit_status)}
                             className={`px-2 py-1 text-xs font-semibold rounded-full border-0 ${
                               credit.credit_status === 'pagado'
                                 ? 'bg-green-100 text-green-800'
@@ -715,6 +746,73 @@ export default function CreditsPage() {
                   className="bg-gray-300 text-gray-700 px-6 py-2 rounded-lg hover:bg-gray-400"
                 >
                   Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal de confirmación de cambio de estado */}
+        {estadoChangeModal.show && estadoChangeModal.sale && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+              <h3 className="text-lg font-semibold mb-4 text-gray-900">⚠️ Confirmar cambio de estado</h3>
+              
+              <div className="mb-4 space-y-3">
+                <p className="text-gray-700">
+                  ¿Estás seguro de cambiar el estado de este apartado?
+                </p>
+                
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                  <p className="text-sm"><strong>Venta #:</strong> {estadoChangeModal.saleId}</p>
+                  <p className="text-sm"><strong>Cliente:</strong> {estadoChangeModal.sale.customer_name || 'Sin nombre'}</p>
+                  <p className="text-sm"><strong>Total:</strong> ${estadoChangeModal.sale.total.toFixed(2)}</p>
+                  <p className="text-sm"><strong>Saldo pendiente:</strong> ${estadoChangeModal.sale.balance.toFixed(2)}</p>
+                </div>
+                
+                <div className="flex items-center justify-center space-x-3 py-2">
+                  <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                    estadoChangeModal.estadoActual === 'pagado'
+                      ? 'bg-green-100 text-green-800'
+                      : estadoChangeModal.estadoActual === 'entregado'
+                      ? 'bg-blue-100 text-blue-800'
+                      : estadoChangeModal.estadoActual === 'vencido'
+                      ? 'bg-red-100 text-red-800'
+                      : estadoChangeModal.estadoActual === 'cancelado'
+                      ? 'bg-gray-100 text-gray-800'
+                      : 'bg-yellow-100 text-yellow-800'
+                  }`}>
+                    {estadoChangeModal.estadoActual?.toUpperCase()}
+                  </span>
+                  <span className="text-2xl text-gray-400">→</span>
+                  <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                    estadoChangeModal.nuevoEstado === 'pagado'
+                      ? 'bg-green-100 text-green-800'
+                      : estadoChangeModal.nuevoEstado === 'entregado'
+                      ? 'bg-blue-100 text-blue-800'
+                      : estadoChangeModal.nuevoEstado === 'vencido'
+                      ? 'bg-red-100 text-red-800'
+                      : estadoChangeModal.nuevoEstado === 'cancelado'
+                      ? 'bg-gray-100 text-gray-800'
+                      : 'bg-yellow-100 text-yellow-800'
+                  }`}>
+                    {estadoChangeModal.nuevoEstado?.toUpperCase()}
+                  </span>
+                </div>
+              </div>
+              
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => setEstadoChangeModal({ show: false, saleId: null, nuevoEstado: null, estadoActual: null, sale: null })}
+                  className="flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={confirmarCambioEstado}
+                  className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                >
+                  Confirmar
                 </button>
               </div>
             </div>

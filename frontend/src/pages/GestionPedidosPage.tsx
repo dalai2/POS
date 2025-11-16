@@ -138,6 +138,15 @@ export default function GestionPedidosPage() {
   const [pedidoHistorial, setPedidoHistorial] = useState<Pedido | null>(null)
   const [statusHistory, setStatusHistory] = useState<StatusHistoryEntry[]>([])
   const [ticketsByPedido, setTicketsByPedido] = useState<Record<number, TicketRecord[]>>({})
+  
+  // Modal para confirmar cambio de estado
+  const [estadoChangeModal, setEstadoChangeModal] = useState<{
+    show: boolean
+    pedidoId: number | null
+    nuevoEstado: string | null
+    estadoActual: string | null
+    pedido: Pedido | null
+  }>({ show: false, pedidoId: null, nuevoEstado: null, estadoActual: null, pedido: null })
 
   useEffect(() => {
     if (!localStorage.getItem('access')) {
@@ -229,20 +238,18 @@ export default function GestionPedidosPage() {
       
       // Cargar tickets de abonos (solo tickets de pedidos, no de ventas)
       try {
-        const ticketsResponse = await api.get(`/tickets/by-sale/${pedido.id}`)
+        const ticketsResponse = await api.get(`/tickets/by-pedido/${pedido.id}`)
         const allTickets = ticketsResponse.data || []
         
-        // Filtrar solo tickets de pedidos:
-        // - Tickets con kind que empiece con 'pedido' (pedido-payment-{id})
-        // - Excluir tickets de ventas (kind 'sale' que es específico de ventas)
-        // - Para 'payment': solo incluir si NO hay tickets con 'pedido' (compatibilidad con tickets antiguos)
         const hasPedidoTickets = allTickets.some((t: TicketRecord) => t.kind.startsWith('pedido'))
         const pedidoTickets = allTickets.filter((ticket: TicketRecord) => {
-          // Excluir tickets de ventas
-          if (ticket.kind === 'sale') return false
-          // Incluir tickets que empiecen con 'pedido'
+          if (pedido.tipo_pedido === 'contado') {
+            // Pedidos de contado: aceptar tickets iniciales guardados como 'payment' o, por compatibilidad, 'sale'
+            return ticket.kind === 'payment' || ticket.kind === 'sale'
+          }
+          // Apartados: incluir tickets generados por pagos parciales
           if (ticket.kind.startsWith('pedido')) return true
-          // Incluir 'payment' solo si no hay tickets con 'pedido' (para compatibilidad)
+          // Fallback legacy: si no existen tickets 'pedido-*', usa el ticket 'payment'
           if (ticket.kind === 'payment' && !hasPedidoTickets) return true
           return false
         })
@@ -297,7 +304,7 @@ export default function GestionPedidosPage() {
         
         // Save ticket to database
         await saveTicket({
-          saleId: pedidoSeleccionado.id,
+          pedidoId: pedidoSeleccionado.id,
           kind: `pedido-payment-${response.data.id}`,
           html: ticketHTML
         })
@@ -339,25 +346,47 @@ export default function GestionPedidosPage() {
     }
   }
 
-  const actualizarEstado = async (pedidoId: number, nuevoEstado: string) => {
+  const actualizarEstado = async (pedidoId: number, nuevoEstado: string, estadoActual: string) => {
+    // Encontrar el pedido para obtener más información
+    const pedido = pedidos.find(p => p.id === pedidoId)
+    if (!pedido) return
+    
+    // Mostrar modal de confirmación
+    setEstadoChangeModal({
+      show: true,
+      pedidoId,
+      nuevoEstado,
+      estadoActual,
+      pedido
+    })
+  }
+
+  const confirmarCambioEstado = async () => {
+    if (!estadoChangeModal.pedidoId || !estadoChangeModal.nuevoEstado) return
+    
     try {
-      await api.put(`/productos-pedido/pedidos/${pedidoId}`, {
-        estado: nuevoEstado
+      await api.put(`/productos-pedido/pedidos/${estadoChangeModal.pedidoId}`, {
+        estado: estadoChangeModal.nuevoEstado
       })
       setMsg('✅ Estado actualizado exitosamente')
       
       // Actualizar solo la fila específica en lugar de recargar toda la lista
       setPedidos(prevPedidos => 
         prevPedidos.map(p => 
-          p.id === pedidoId 
-            ? { ...p, estado: nuevoEstado }
+          p.id === estadoChangeModal.pedidoId 
+            ? { ...p, estado: estadoChangeModal.nuevoEstado! }
             : p
         )
       )
       
+      // Cerrar modal
+      setEstadoChangeModal({ show: false, pedidoId: null, nuevoEstado: null, estadoActual: null, pedido: null })
+      
       setTimeout(() => setMsg(''), 3000)
     } catch (error: any) {
       setMsg(error?.response?.data?.detail || 'Error al actualizar el estado')
+      // Cerrar modal en caso de error también
+      setEstadoChangeModal({ show: false, pedidoId: null, nuevoEstado: null, estadoActual: null, pedido: null })
     }
   }
 
@@ -911,7 +940,7 @@ export default function GestionPedidosPage() {
                         {(userRole === 'admin' || userRole === 'owner') ? (
                           <select
                             value={p.estado}
-                            onChange={(e) => actualizarEstado(p.id, e.target.value)}
+                            onChange={(e) => actualizarEstado(p.id, e.target.value, p.estado)}
                             className={`px-2 py-1 rounded-full text-xs font-medium border-0 ${getEstadoColor(p.estado)}`}
                           >
                             <option value="pendiente" disabled={p.estado === 'pagado'}>Pendiente</option>
@@ -1088,7 +1117,8 @@ export default function GestionPedidosPage() {
                       const pedidoTickets = ticketsByPedido[pedidoHistorial.id] || [];
                       console.log('DEBUG Pedido Tickets:', pedidoHistorial.id, pedidoTickets);
                       return pagosPedido.map((pago) => {
-                        const isAbono = pago.tipo_pago !== 'anticipo';
+                        const isInitialPayment = pago.tipo_pago === 'anticipo' || pago.tipo_pago === 'total';
+                        const isAbono = !isInitialPayment;
                         if (isAbono) abonoCounter += 1;
                         
                         // Find ticket for this payment
@@ -1098,13 +1128,16 @@ export default function GestionPedidosPage() {
                         if (isAbono) {
                           ticket = pedidoTickets.find(t => t.kind === `pedido-payment-${pago.id}`);
                         } else {
-                          // Initial payment - look for 'payment' or 'sale' kind
-                          ticket = pedidoTickets.find(t => t.kind === 'payment' || t.kind === 'sale');
+                          ticket =
+                            pedidoTickets.find(t => t.kind === `pedido-payment-${pago.id}`) ||
+                            pedidoTickets.find(t => t.kind === 'payment' || t.kind === 'sale');
                         }
                         
                         console.log(`DEBUG Pago ${pago.id}: tipo_pago=${pago.tipo_pago}, isAbono=${isAbono}, ticket=`, ticket);
                         
-                        const ticketLabel = isAbono ? `Ticket ${abonoCounter}` : 'Ticket anticipo';
+                        const ticketLabel = isAbono
+                          ? `Ticket ${abonoCounter}`
+                          : (pago.tipo_pago === 'total' ? 'Ticket contado' : 'Ticket anticipo');
                         
                         return (
                           <tr key={pago.id}>
@@ -1186,6 +1219,58 @@ export default function GestionPedidosPage() {
                 className="bg-gray-300 text-gray-700 px-6 py-2 rounded-lg hover:bg-gray-400"
               >
                 Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de confirmación de cambio de estado */}
+      {estadoChangeModal.show && estadoChangeModal.pedido && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold mb-4 text-gray-900">⚠️ Confirmar cambio de estado</h3>
+            
+            <div className="mb-4 space-y-3">
+              <p className="text-gray-700">
+                ¿Estás seguro de cambiar el estado de este pedido?
+              </p>
+              
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                <p className="text-sm"><strong>Pedido #:</strong> {estadoChangeModal.pedidoId}</p>
+                <p className="text-sm"><strong>Cliente:</strong> {estadoChangeModal.pedido.cliente_nombre}</p>
+                <p className="text-sm">
+                  <strong>Producto:</strong> {
+                    estadoChangeModal.pedido.items && estadoChangeModal.pedido.items.length > 0
+                      ? estadoChangeModal.pedido.items.map(item => item.modelo).join(', ')
+                      : getPedidoProductoLabel(estadoChangeModal.pedido)
+                  }
+                </p>
+              </div>
+              
+              <div className="flex items-center justify-center space-x-3 py-2">
+                <span className={`px-3 py-1 rounded-full text-sm font-medium ${getEstadoColor(estadoChangeModal.estadoActual || '')}`}>
+                  {getEstadoTexto(estadoChangeModal.estadoActual || '')}
+                </span>
+                <span className="text-2xl text-gray-400">→</span>
+                <span className={`px-3 py-1 rounded-full text-sm font-medium ${getEstadoColor(estadoChangeModal.nuevoEstado || '')}`}>
+                  {getEstadoTexto(estadoChangeModal.nuevoEstado || '')}
+                </span>
+              </div>
+            </div>
+            
+            <div className="flex space-x-3">
+              <button
+                onClick={() => setEstadoChangeModal({ show: false, pedidoId: null, nuevoEstado: null, estadoActual: null, pedido: null })}
+                className="flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmarCambioEstado}
+                className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+              >
+                Confirmar
               </button>
             </div>
           </div>

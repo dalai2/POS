@@ -575,7 +575,7 @@ export default function PedidosPage() {
           
           // Save ticket to database
           await saveTicket({
-            saleId: pedido.id,
+            pedidoId: pedido.id,
             kind: 'payment',
             html: ticketHTML
           })
