@@ -1,0 +1,128 @@
+================================================================================
+PRODUCTION MIGRATION CHECKLIST - SALES SCHEMA SPLIT (Contado vs Apartado)
+================================================================================
+
+CURRENT ISSUE IN PROD:
+- payments.sale_id is still NOT NULL (migration not applied)
+- items_venta_contado.id may not have auto-increment
+- This blocks creation of new cash sales (ventas_contado)
+
+================================================================================
+STEP 1: DIAGNOSE CURRENT STATE (Run first, no changes)
+================================================================================
+
+File: backend/migrations/2025_11_prod_diagnose_before_fix.sql
+
+This will tell you:
+- Is payments.sale_id nullable?
+- Do the new tables exist (ventas_contado, apartados, etc)?
+- Do id columns have auto-increment?
+- Are there any orphaned records?
+
+Run this in pgAdmin to see the status. If you see "✗" marks, note them.
+
+================================================================================
+STEP 2: CRITICAL FIXES (If needed)
+================================================================================
+
+If SECTION 1 shows "✗ NOT NULL":
+>>> Execute: backend/migrations/2025_11_prod_make_sale_id_nullable.sql
+>>> This makes payments.sale_id nullable to support venta_contado_id
+
+If SECTION 5 shows "✗ NO DEFAULT" on items_venta_contado or items_apartado:
+>>> Execute: backend/migrations/2025_11_prod_fix_identity_sequences.sql
+>>> This adds auto-increment to id columns
+
+If you see "column customer_name does not exist" error:
+>>> Execute: backend/migrations/2025_11_add_customer_fields_to_ventas_contado.sql
+>>> This adds customer_name, customer_phone, customer_address fields to ventas_contado
+
+If SECTION 4 shows "✗ MISSING" on any table:
+>>> Execute: backend/migrations/2025_11_split_sales_contado_apartado_schema.sql (if not done)
+>>> Execute: backend/migrations/2025_11_split_sales_contado_apartado_backfill.sql (if not done)
+
+================================================================================
+STEP 3: OPTIONAL - CHECK FOR DATA ISSUES
+================================================================================
+
+File: backend/migrations/2025_11_check_folio_duplicates.sql
+
+This checks for:
+- Duplicate folio_apartado values
+- ID gaps in apartados
+- Sequence out of sync with actual data
+
+Run if you see duplicate folio errors or data integrity issues.
+
+================================================================================
+STEP 4: FULL VERIFICATION
+================================================================================
+
+File: backend/migrations/2025_11_verify_prod.sql
+
+Runs comprehensive checks on:
+- All new tables exist
+- All columns present
+- All foreign keys configured
+- No orphaned records
+- Sequences properly set
+
+================================================================================
+RECOMMENDED EXECUTION ORDER (Complete Migration)
+================================================================================
+
+If starting fresh on production:
+
+1. 2025_11_split_sales_contado_apartado_schema.sql (creates tables)
+2. 2025_11_split_sales_contado_apartado_backfill.sql (migrates data)
+3. 2025_11_renumber_apartados_ventas_contado.sql (optional, for UI continuity)
+4. 2025_11_fix_identity_columns.sql (ensure auto-increment)
+5. 2025_11_make_sale_id_nullable.sql (make payments.sale_id nullable)
+6. 2025_11_verify_prod.sql (verify everything worked)
+
+If production already partially migrated:
+
+1. 2025_11_prod_diagnose_before_fix.sql (see what's wrong)
+2. Apply only the fixes needed based on diagnosis results
+3. 2025_11_verify_prod.sql (confirm fixes worked)
+
+================================================================================
+TROUBLESHOOTING
+================================================================================
+
+ERROR: "duplicate key value violates unique constraint uq_apartados_folio"
+>>> Run: 2025_11_check_folio_duplicates.sql
+>>> Then manually inspect duplicate folios and decide which to keep/delete
+
+ERROR: "null value in column id of relation items_venta_contado"
+>>> Run: 2025_11_prod_fix_identity_sequences.sql
+>>> Ensures id columns have auto-increment sequences
+
+ERROR: "null value in column sale_id violates not-null constraint"
+>>> Run: 2025_11_prod_make_sale_id_nullable.sql
+>>> Makes payments.sale_id nullable for new venta_contado_id linkage
+
+================================================================================
+FILES READY FOR PRODUCTION
+================================================================================
+
+Migration files (in order):
+1. 2025_11_split_sales_contado_apartado_schema.sql
+2. 2025_11_split_sales_contado_apartado_backfill.sql
+3. 2025_11_renumber_apartados_ventas_contado.sql (optional)
+4. 2025_11_fix_identity_columns.sql
+5. 2025_11_make_sale_id_nullable.sql
+
+Verification/Diagnostic scripts:
+- 2025_11_prod_diagnose_before_fix.sql (run first to see current state)
+- 2025_11_prod_make_sale_id_nullable.sql (force nullable if needed)
+- 2025_11_prod_fix_identity_sequences.sql (force sequences if needed)
+- 2025_11_check_folio_duplicates.sql (check for duplicate folios)
+- 2025_11_verify_prod.sql (comprehensive final verification)
+
+Backend code updates:
+- backend/app/routes/sales.py (fixed NameError in create_sale)
+- backend/app/routes/tickets.py (updated /tickets/by-sale to find apartado tickets)
+
+================================================================================
+

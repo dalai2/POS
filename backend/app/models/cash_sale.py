@@ -22,6 +22,11 @@ class VentasContado(Base):
     vendedor_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     utilidad = Column(Numeric(10, 2), nullable=True, default=0)
     total_cost = Column(Numeric(10, 2), nullable=True, default=0)
+    
+    # Customer information (optional, for better ticket reporting)
+    customer_name = Column(String(255), nullable=True)
+    customer_phone = Column(String(50), nullable=True)
+    customer_address = Column(String(500), nullable=True)
 
     items = relationship("ItemVentaContado", back_populates="venta", cascade="all, delete-orphan")
 

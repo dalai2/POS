@@ -273,6 +273,9 @@ async def create_sale(
             vendedor_id=vendedor_id,
             utilidad=Decimal(str(utilidad)) if utilidad is not None else None,
             total_cost=Decimal(str(total_cost)) if total_cost is not None else None,
+            customer_name=customer_name,
+            customer_phone=customer_phone,
+            customer_address=customer_address,
         )
         db.add(venta)
         db.flush()
@@ -322,6 +325,9 @@ async def create_sale(
             vendedor_id=venta.vendedor_id,
             utilidad=venta.utilidad,
             total_cost=venta.total_cost,
+            customer_name=venta.customer_name,
+            customer_phone=venta.customer_phone,
+            customer_address=venta.customer_address,
             amount_paid=paid,
             payments=payments_list
         )

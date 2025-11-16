@@ -958,7 +958,7 @@ def _calculate_ventas_pasivas(
     
     # Abonos de apartados (nuevo y viejo esquema): filtrar por fecha de creación del abono
     # Considerar tanto CreditPayment.sale_id (legacy) como CreditPayment.apartado_id (nuevo esquema)
-    abonos_apartados_dia = db.query(CreditPayment).filter(
+        abonos_apartados_dia = db.query(CreditPayment).filter(
         CreditPayment.tenant_id == tenant.id,
         CreditPayment.created_at >= start_datetime,
         CreditPayment.created_at <= end_datetime
@@ -980,23 +980,23 @@ def _calculate_ventas_pasivas(
                 Sale.tenant_id == tenant.id,
                 Sale.tipo_venta == "credito",
             ).first()
-
-            # Obtener todos los abonos del apartado para identificar el último que liquidó
-            todos_abonos = db.query(CreditPayment).filter(
-                CreditPayment.sale_id == abono.sale_id
-            ).order_by(CreditPayment.created_at.desc()).all()
-
-            # Identificar el último abono que cambió el estado a pagado
-            ultimo_abono_liquidante = None
-            if apartado and apartado.credit_status in ['pagado', 'entregado']:
-                # Si el apartado está pagado, el último abono es el que lo liquidó
-                if todos_abonos:
-                    ultimo_abono_liquidante = todos_abonos[0]
-
-            # Excluir el último abono que liquidó el apartado
-            if ultimo_abono_liquidante and abono.id == ultimo_abono_liquidante.id:
-                continue  # Este abono ya fue contado en ventas de liquidación
-
+        
+        # Obtener todos los abonos del apartado para identificar el último que liquidó
+        todos_abonos = db.query(CreditPayment).filter(
+            CreditPayment.sale_id == abono.sale_id
+        ).order_by(CreditPayment.created_at.desc()).all()
+        
+        # Identificar el último abono que cambió el estado a pagado
+        ultimo_abono_liquidante = None
+        if apartado and apartado.credit_status in ['pagado', 'entregado']:
+            # Si el apartado está pagado, el último abono es el que lo liquidó
+            if todos_abonos:
+                ultimo_abono_liquidante = todos_abonos[0]
+        
+        # Excluir el último abono que liquidó el apartado
+        if ultimo_abono_liquidante and abono.id == ultimo_abono_liquidante.id:
+            continue  # Este abono ya fue contado en ventas de liquidación
+        
         # Nuevo esquema: abonos ligados a Apartado.apartado_id
         # Para simplificar, contamos todos los abonos (el cálculo de liquidación ya se hace en _process_new_schema_stats)
         amount = float(abono.amount or 0)
@@ -2064,7 +2064,7 @@ def _build_historiales(
             "vendedor": vendedor,
             "motivo": motivo,
         })
-
+    
     # Historial de abonos de apartados: solo apartados CREADOS en el periodo
     todos_abonos_apartados = db.query(CreditPayment).join(Sale).filter(
         Sale.tenant_id == tenant.id,
