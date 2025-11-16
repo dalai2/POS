@@ -274,61 +274,6 @@ export default function CreditsPage() {
     }
   };
 
-  const regenerarTicket = async (payment: CreditPayment, sale: CreditSale) => {
-    try {
-      // Get sale items
-      const saleResponse = await api.get(`/sales/${sale.id}`);
-      const saleItems = saleResponse.data.items || [];
-      
-      // Calculate previous paid amount (all payments before this one)
-      const paymentIndex = sale.payments.findIndex(p => p.id === payment.id);
-      const previousPaid = sale.payments
-        .slice(0, paymentIndex)
-        .reduce((sum, p) => sum + p.amount, 0);
-      
-      const newPaid = previousPaid + payment.amount;
-      const newBalance = sale.total - newPaid;
-      
-      // Generate ticket
-      const logoBase64 = await getLogoAsBase64();
-      const ticketHTML = generateApartadoPaymentTicketHTML({
-        sale: sale,
-        saleItems: saleItems,
-        paymentData: {
-          amount: payment.amount,
-          method: payment.payment_method,
-          previousPaid: previousPaid,
-          newPaid: newPaid,
-          newBalance: newBalance
-        },
-        vendedorEmail: sale.vendedor_email || undefined,
-        logoBase64
-      });
-      
-      // Save ticket
-      await saveTicket({
-        saleId: sale.id,
-        kind: `payment-${payment.id}`,
-        html: ticketHTML
-      });
-      
-      alert('✅ Ticket generado y guardado correctamente');
-      
-      // Reload tickets
-      try {
-        const ticketsResponse = await api.get(`/tickets/by-sale/${sale.id}`);
-        setTicketsBySale(prev => ({ ...prev, [sale.id]: ticketsResponse.data || [] }));
-      } catch (error) {
-        console.error('Error reloading tickets:', error);
-      }
-      
-      // Print ticket
-      openAndPrintTicket(ticketHTML);
-    } catch (error: any) {
-      alert(error.response?.data?.detail || 'Error al generar ticket');
-    }
-  };
-
   // Filter credits by search term
   const filteredCredits = credits.filter(credit => {
     if (!searchFilter.trim()) return true;
@@ -744,13 +689,7 @@ export default function CreditsPage() {
                                     {ticketLabel}
                                   </button>
                                 ) : (
-                                  <button
-                                    className="text-orange-600 hover:text-orange-800 text-xs font-medium"
-                                    onClick={() => regenerarTicket(pago, creditHistorial)}
-                                    title="Generar ticket para este pago"
-                                  >
-                                    🔄 Generar ticket
-                                  </button>
+                                  <span className="text-gray-400 text-xs">No disponible</span>
                                 )}
                               </td>
                             </tr>
