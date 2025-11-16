@@ -407,21 +407,26 @@ export const generateApartadoPaymentTicketHTML = (params: {
   let totalItems = 0
 
   saleItems.forEach((item) => {
+    // Get product data from either product or product_snapshot
+    const product = item.product || item.product_snapshot || {}
+    
     const descParts = []
-    if (item.product?.name) descParts.push(item.product.name)
-    if (item.product?.modelo) descParts.push(item.product.modelo)
-    if (item.product?.color) descParts.push(item.product.color)
-    if (item.product?.quilataje) descParts.push(item.product.quilataje)
-    if (item.product?.peso_gramos) {
-      const peso = Number(item.product.peso_gramos)
+    if (product.name) descParts.push(product.name)
+    if (product.modelo) descParts.push(product.modelo)
+    if (product.nombre) descParts.push(product.nombre)
+    if (product.color) descParts.push(product.color)
+    if (product.quilataje) descParts.push(product.quilataje)
+    if (product.peso_gramos) {
+      const peso = Number(product.peso_gramos)
       if (peso === Math.floor(peso)) {
         descParts.push(`${peso}g`)
       } else {
         descParts.push(peso.toFixed(3).replace(/\.?0+$/, '') + 'g')
       }
     }
-    if (item.product?.talla) descParts.push(item.product.talla)
-    const description = descParts.length > 0 ? descParts.join('-') : 'Producto sin descripción'
+    if (product.talla) descParts.push(product.talla)
+    // If no description parts, use item.name as fallback
+    const description = descParts.length > 0 ? descParts.join('-') : (item.name || 'Producto sin descripción')
 
     const unitPrice = Number(item.unit_price || 0)
     const discountPct = Number(item.discount_pct || 0)
@@ -436,11 +441,12 @@ export const generateApartadoPaymentTicketHTML = (params: {
 
     const itemTotal = unitPrice * quantity
     const discountDisplay = discountPct > 0 ? `${discountPct.toFixed(1)}%` : '-'
+    const codigo = product.codigo || item.codigo || ''
 
     itemsHTML += `
       <tr>
         <td>${quantity}</td>
-        <td>${item.product?.codigo || ''}</td>
+        <td>${codigo}</td>
         <td>${description}</td>
         <td>$${originalPrice.toFixed(2)}</td>
         <td>${discountDisplay}</td>
