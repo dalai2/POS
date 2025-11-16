@@ -209,9 +209,21 @@ export default function CreditsPage() {
       // Get logo as base64
       const logoBase64 = await getLogoAsBase64();
       
-      // Calculate payment amounts
-      const previousPaid = apartado.amount_paid - pago.amount;
-      const newPaid = apartado.amount_paid;
+      // Load all payments to find the order and calculate previousPaid correctly
+      const allPayments = apartado.payments.sort((a, b) => 
+        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      );
+      
+      // Find the index of current payment
+      const paymentIndex = allPayments.findIndex(p => p.id === pago.id);
+      
+      // Sum all previous payments
+      let previousPaid = 0;
+      for (let i = 0; i < paymentIndex; i++) {
+        previousPaid += allPayments[i].amount;
+      }
+      
+      const newPaid = previousPaid + pago.amount;
       const newBalance = apartado.total - newPaid;
       
       // Generate ticket HTML
@@ -221,7 +233,7 @@ export default function CreditsPage() {
         paymentData: {
           amount: pago.amount,
           method: pago.payment_method,
-          previousPaid: Math.max(0, previousPaid),
+          previousPaid,
           newPaid,
           newBalance: Math.max(0, newBalance)
         },
