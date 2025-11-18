@@ -28,6 +28,7 @@ class SalesData(TypedDict):
     """Structure for sales data returned by _get_sales_by_payment_date."""
     ventas_contado: List[VentasContado]
     apartados_pendientes: List[Apartado]
+    apartados_liquidados: List[Apartado]
 
 
 class PedidosData(TypedDict):
@@ -124,6 +125,7 @@ def get_detailed_corte_caja(
         start_datetime=start_datetime,
         end_datetime=end_datetime,
         counters=counters,
+        apartados_liquidados=sales_data['apartados_liquidados'],
     )
     
     ventas_contado_period = sales_data['ventas_contado']
@@ -303,6 +305,40 @@ def get_detailed_corte_caja(
     }
 
 
+def _get_apartados_liquidados_by_payment_date(
+    db: Session,
+    tenant: Tenant,
+    start_datetime: datetime,
+    end_datetime: datetime
+) -> List[Apartado]:
+    """Get apartados liquidados filtered by last payment date (liquidation moment)."""
+    # Obtener la fecha del último pago para cada apartado pagado
+    # Usar CreditPayment que es la tabla de pagos de apartados
+    last_payment_subq = (
+        db.query(
+            CreditPayment.apartado_id.label("apartado_id"),
+            func.max(CreditPayment.created_at).label("last_payment_at")
+        )
+        .filter(CreditPayment.apartado_id.isnot(None))
+        .group_by(CreditPayment.apartado_id)
+        .subquery()
+    )
+    
+    apartados_liquidados = (
+        db.query(Apartado)
+        .join(last_payment_subq, last_payment_subq.c.apartado_id == Apartado.id)
+        .filter(
+            Apartado.tenant_id == tenant.id,
+            Apartado.credit_status.in_(['pagado', 'entregado']),
+            last_payment_subq.c.last_payment_at >= start_datetime,
+            last_payment_subq.c.last_payment_at <= end_datetime
+        )
+        .all()
+    )
+    
+    return apartados_liquidados
+
+
 def _get_sales_by_payment_date(
     db: Session,
     tenant: Tenant,
@@ -316,6 +352,7 @@ def _get_sales_by_payment_date(
         VentasContado.created_at <= end_datetime
     ).all()
     
+    # Obtener apartados pendientes por fecha de creación
     apartados_pendientes = db.query(Apartado).filter(
         Apartado.tenant_id == tenant.id,
         Apartado.credit_status.in_(['pendiente', 'vencido']),
@@ -323,9 +360,15 @@ def _get_sales_by_payment_date(
         Apartado.created_at <= end_datetime
     ).all()
     
+    # Obtener apartados liquidados por fecha de liquidación (último pago)
+    apartados_liquidados = _get_apartados_liquidados_by_payment_date(
+        db, tenant, start_datetime, end_datetime
+    )
+    
     return {
         'ventas_contado': ventas_contado,
         'apartados_pendientes': apartados_pendientes,
+        'apartados_liquidados': apartados_liquidados,
     }
 
 
@@ -479,11 +522,15 @@ def _process_new_schema_stats(
     start_datetime: datetime,
     end_datetime: datetime,
     counters: Dict[str, Any],
+    apartados_liquidados: List[Apartado] = None,
 ) -> None:
     """
     Complement counters with data from new schema tables:
     - VentasContado / ItemVentaContado
     - Apartado (estado pagado/entregado/pendiente/vencido/cancelado)
+    
+    Args:
+        apartados_liquidados: Pre-filtered apartados liquidados (if provided, skips liquidados query)
     """
     # --- Ventas de contado nuevas ---
     ventas_contado = db.query(VentasContado).filter(
@@ -581,31 +628,45 @@ def _process_new_schema_stats(
             counters['total_efectivo_contado'] += efectivo_venta
             counters['total_tarjeta_contado'] += tarjeta_venta
 
-    # --- Apartados nuevos ---
-    apartados = db.query(Apartado).filter(
+    # --- Apartados liquidados (pre-filtrados por fecha de liquidación) ---
+    if apartados_liquidados:
+        for ap in apartados_liquidados:
+            total = float(ap.total or 0)
+            
+            # Contar como ventas de crédito liquidadas
+            counters['ventas_credito_count'] += 1
+            counters['ventas_credito_total'] += total
+            counters['credito_ventas'] += total
+            counters['total_credito'] += total
+            counters['credito_count'] += 1
+            
+            # Calcular costos y piezas
+            items = db.query(ItemApartado).filter(ItemApartado.apartado_id == ap.id).all()
+            for item in items:
+                qty = int(item.quantity or 0)
+                counters['num_piezas_pedidos_apartados_liquidados'] += qty
+                
+                if item.product_id:
+                    product = db.query(Product).filter(Product.id == item.product_id).first()
+                    if product and product.cost_price:
+                        cost = float(product.cost_price) * qty
+                        counters['costo_apartados_liquidados'] += cost
+                        counters['costo_total'] += cost
+
+    # --- Apartados pendientes y vencidos/cancelados (filtrar por fecha de creación) ---
+    apartados_otros = db.query(Apartado).filter(
         Apartado.tenant_id == tenant.id,
+        Apartado.credit_status.in_(['pendiente', 'vencido', 'cancelado']),
         Apartado.created_at >= start_datetime,
         Apartado.created_at <= end_datetime,
     ).all()
 
-    for ap in apartados:
+    for ap in apartados_otros:
         total = float(ap.total or 0)
         amount_paid = float(ap.amount_paid or 0)
         saldo_pendiente = max(0.0, total - amount_paid)
 
-        if ap.credit_status in ['pagado', 'entregado']:
-            # Tratarlos como apartados liquidados (similar a ventas_credito)
-            # Para resumen general: usar el TOTAL del apartado (el saldo total que se liquidó)
-            # No usar el total pagado, sino el total del apartado
-            
-            counters['ventas_credito_count'] += 1
-            counters['ventas_credito_total'] += total
-            counters['credito_ventas'] += total
-            # CAMBIO: Usar el total del apartado (ap.total), no el total pagado
-            counters['total_credito'] += total  # total = ap.total (el saldo total que se liquidó)
-            # CORRECCIÓN: Incrementar credito_count para que se cuente en liquidaciones
-            counters['credito_count'] += 1
-        elif ap.credit_status in ['pendiente', 'vencido']:
+        if ap.credit_status in ['pendiente', 'vencido']:
             # Pendiente de cobro
             counters['pendiente_credito'] += saldo_pendiente
 
