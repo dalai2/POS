@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Column, Integer, Numeric, ForeignKey, DateTime, String
+from sqlalchemy import Column, Integer, Numeric, ForeignKey, DateTime, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 
@@ -27,6 +27,7 @@ class Apartado(Base):
     customer_name = Column(String(255), nullable=True)
     customer_phone = Column(String(50), nullable=True)
     customer_address = Column(String(500), nullable=True)
+    notas_cliente = Column(Text, nullable=True)
 
     amount_paid = Column(Numeric(10, 2), nullable=True, default=0)
     credit_status = Column(String(20), nullable=True, default="pendiente")

@@ -33,6 +33,7 @@ interface CreditSale {
   id: number;
   customer_name: string | null;
   customer_phone: string | null;
+  notas_cliente: string | null;
   total: number;
   amount_paid: number;
   balance: number;
@@ -71,6 +72,13 @@ export default function CreditsPage() {
     estadoActual: string | null
     sale: CreditSale | null
   }>({ show: false, saleId: null, nuevoEstado: null, estadoActual: null, sale: null });
+  
+  // Modal para editar notas del cliente
+  const [notasModal, setNotasModal] = useState<{
+    show: boolean
+    creditId: number | null
+    notas: string
+  }>({ show: false, creditId: null, notas: '' });
 
   useEffect(() => {
     (async () => {
@@ -120,7 +128,7 @@ export default function CreditsPage() {
       // Generate and save ticket
       try {
         // Get sale items
-        const saleResponse = await api.get(`/sales/${selectedCredit.id}`);
+        const saleResponse = await api.get(`/apartados/${selectedCredit.id}`);
         const saleItems = saleResponse.data.items || [];
         
         // Generate ticket HTML
@@ -145,7 +153,7 @@ export default function CreditsPage() {
         
         // Save ticket to database
         await saveTicket({
-          saleId: selectedCredit.id,
+          apartadoId: selectedCredit.id,  // Usar apartadoId en lugar de saleId
           kind: `payment-${response.data.id}`,
           html: ticketHTML
         });
@@ -203,7 +211,7 @@ export default function CreditsPage() {
   const regenerarTicketApartado = async (apartado: CreditSale, pago: CreditPayment) => {
     try {
       // Get sale items
-      const saleResponse = await api.get(`/sales/${apartado.id}`);
+      const saleResponse = await api.get(`/apartados/${apartado.id}`);
       const saleItems = saleResponse.data.items || [];
       
       // Get logo as base64
@@ -243,7 +251,7 @@ export default function CreditsPage() {
       
       // Save or update ticket in database
       await saveTicket({
-        saleId: apartado.id,
+        apartadoId: apartado.id,  // Usar apartadoId en lugar de saleId
         kind: `payment-${pago.id}`,
         html: ticketHTML
       });
@@ -351,6 +359,28 @@ export default function CreditsPage() {
       alert(error.response?.data?.detail || 'Error al cambiar estado');
       // Cerrar modal en caso de error también
       setEstadoChangeModal({ show: false, saleId: null, nuevoEstado: null, estadoActual: null, sale: null })
+    }
+  };
+
+  const abrirModalNotas = (credit: CreditSale) => {
+    setNotasModal({
+      show: true,
+      creditId: credit.id,
+      notas: credit.notas_cliente || ''
+    });
+  };
+
+  const guardarNotas = async () => {
+    if (notasModal.creditId === null) return;
+    
+    try {
+      await api.put(`/apartados/${notasModal.creditId}`, {
+        notas_cliente: notasModal.notas || null
+      });
+      setNotasModal({ show: false, creditId: null, notas: '' });
+      loadCredits();
+    } catch (error: any) {
+      alert(error.response?.data?.detail || 'Error al guardar notas');
     }
   };
 
@@ -542,6 +572,18 @@ export default function CreditsPage() {
                         </div>
                         {credit.customer_phone && (
                           <div className="text-xs text-gray-500">{credit.customer_phone}</div>
+                        )}
+                        <button
+                          onClick={() => abrirModalNotas(credit)}
+                          className="mt-1 text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                        >
+                          <span>📝</span>
+                          <span>{credit.notas_cliente ? 'Editar notas' : 'Agregar notas'}</span>
+                        </button>
+                        {credit.notas_cliente && (
+                          <div className="mt-1 text-xs text-gray-600 italic bg-yellow-50 p-1 rounded">
+                            {credit.notas_cliente}
+                          </div>
                         )}
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap text-sm">
@@ -902,6 +944,43 @@ export default function CreditsPage() {
                   className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
                 >
                   Confirmar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal para editar notas del cliente */}
+        {notasModal.show && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+              <h3 className="text-lg font-semibold mb-4 text-gray-900">📝 Notas del Cliente</h3>
+              
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Notas (para recordatorios sobre el cliente o producto)
+                </label>
+                <textarea
+                  value={notasModal.notas}
+                  onChange={(e) => setNotasModal({ ...notasModal, notas: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  rows={4}
+                  placeholder="Ej: Cliente grabado, producto personalizado, etc."
+                />
+              </div>
+              
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => setNotasModal({ show: false, creditId: null, notas: '' })}
+                  className="flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={guardarNotas}
+                  className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                >
+                  Guardar
                 </button>
               </div>
             </div>

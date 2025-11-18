@@ -8,7 +8,7 @@ import { RemovePiecesModal } from '../components/inventory/RemovePiecesModal';
 
 export default function InventoryControlPage() {
   const userRole = localStorage.getItem('role') || '';
-  const [activeTab, setActiveTab] = useState<'control' | 'stock' | 'pedidos' | 'eliminado' | 'devuelto' | 'apartado'>('control');
+  const [activeTab, setActiveTab] = useState<'control' | 'stock' | 'pedidos' | 'pedidos-estado-pedido' | 'pedidos-recibidos' | 'eliminado' | 'devuelto' | 'apartado'>('control');
   const [showRemoveModal, setShowRemoveModal] = useState(false);
 
   const {
@@ -21,6 +21,8 @@ export default function InventoryControlPage() {
     stockEliminado,
     stockDevuelto,
     stockApartado,
+    stockPedidosEstadoPedido,
+    pedidosRecibidosApartados,
     closeMsg,
     closing,
     isDayClosed,
@@ -36,6 +38,8 @@ export default function InventoryControlPage() {
     getStockEliminado,
     getStockDevuelto,
     getStockApartado,
+    getStockPedidosEstadoPedido,
+    getPedidosRecibidosApartados,
     resetCloseMessage,
   } = useInventoryReport();
 
@@ -43,8 +47,10 @@ export default function InventoryControlPage() {
     if (activeTab === 'stock') {
       // En tab stock, no pasar fecha (mostrar stock actual)
       getStockGrouped();
-    } else if (activeTab === 'pedidos') {
-      getStockPedidos();
+    } else if (activeTab === 'pedidos-estado-pedido') {
+      getStockPedidosEstadoPedido();
+    } else if (activeTab === 'pedidos-recibidos') {
+      getPedidosRecibidosApartados();
     } else if (activeTab === 'eliminado') {
       getStockEliminado();
     } else if (activeTab === 'devuelto') {
@@ -122,18 +128,32 @@ export default function InventoryControlPage() {
               Stock Actual
             </button>
             <button
-              onClick={() => setActiveTab('pedidos')}
+              onClick={() => setActiveTab('pedidos-estado-pedido')}
               className={`px-6 py-3 font-medium transition-all ${
-                activeTab === 'pedidos'
+                activeTab === 'pedidos-estado-pedido'
                   ? 'border-b-2'
                   : 'opacity-60 hover:opacity-100'
               }`}
               style={{
                 color: '#2e4354',
-                borderBottomColor: activeTab === 'pedidos' ? '#2e4354' : 'transparent',
+                borderBottomColor: activeTab === 'pedidos-estado-pedido' ? '#2e4354' : 'transparent',
               }}
             >
               Stock de Pedidos
+            </button>
+            <button
+              onClick={() => setActiveTab('pedidos-recibidos')}
+              className={`px-6 py-3 font-medium transition-all ${
+                activeTab === 'pedidos-recibidos'
+                  ? 'border-b-2'
+                  : 'opacity-60 hover:opacity-100'
+              }`}
+              style={{
+                color: '#2e4354',
+                borderBottomColor: activeTab === 'pedidos-recibidos' ? '#2e4354' : 'transparent',
+              }}
+            >
+              Pedidos Recibidos
             </button>
             <button
               onClick={() => setActiveTab('eliminado')}
@@ -322,11 +342,11 @@ export default function InventoryControlPage() {
           </div>
         )}
 
-        {activeTab === 'pedidos' && (
+        {activeTab === 'pedidos-estado-pedido' && (
           <div>
             <div className="mb-4 flex justify-between items-center">
               <button
-                onClick={getStockPedidos}
+                onClick={getStockPedidosEstadoPedido}
                 disabled={loading}
                 className="px-5 py-2.5 rounded-lg font-medium transition-all shadow-md hover:shadow-lg disabled:opacity-50"
                 style={{ backgroundColor: '#2e4354', color: '#ffffff' }}
@@ -334,7 +354,155 @@ export default function InventoryControlPage() {
                 {loading ? 'Cargando...' : '🔄 Actualizar'}
               </button>
             </div>
-            {stockPedidos && <StockGroupedView stock={stockPedidos} loading={loading} />}
+            {stockPedidosEstadoPedido && stockPedidosEstadoPedido.length > 0 ? (
+              <div className="rounded-xl shadow-lg overflow-hidden" style={{ backgroundColor: '#ffffff', border: '1px solid rgba(46, 67, 84, 0.1)' }}>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full">
+                    <thead style={{ backgroundColor: '#2e4354' }}>
+                      <tr>
+                        <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider" style={{ color: '#ffffff' }}>
+                          Modelo
+                        </th>
+                        <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider" style={{ color: '#ffffff' }}>
+                          Nombre
+                        </th>
+                        <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider" style={{ color: '#ffffff' }}>
+                          Quilataje
+                        </th>
+                        <th className="px-6 py-4 text-center text-xs font-bold uppercase tracking-wider" style={{ color: '#ffffff' }}>
+                          Cantidad
+                        </th>
+                        <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider" style={{ color: '#ffffff' }}>
+                          Folio Pedido
+                        </th>
+                        <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider" style={{ color: '#ffffff' }}>
+                          Cliente
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {stockPedidosEstadoPedido.map((item: any, index: number) => (
+                        <tr
+                          key={index}
+                          className="transition-all"
+                          style={{
+                            backgroundColor: index % 2 === 0 ? '#ffffff' : '#f0f7f7',
+                            borderBottom: '1px solid rgba(46, 67, 84, 0.08)'
+                          }}
+                        >
+                          <td className="px-6 py-4 whitespace-nowrap" style={{ color: '#2e4354' }}>
+                            {item.modelo || '-'}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap" style={{ color: '#2e4354' }}>
+                            {item.nombre || '-'}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap" style={{ color: '#2e4354' }}>
+                            {item.quilataje || '-'}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-center" style={{ color: '#2e4354' }}>
+                            {item.cantidad}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap" style={{ color: '#2e4354' }}>
+                            {item.folio_pedido || '-'}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap" style={{ color: '#2e4354' }}>
+                            {item.cliente_nombre || '-'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : (
+              <div className="p-12 text-center">
+                <span className="text-6xl mb-4 block">📭</span>
+                <p className="text-xl font-medium" style={{ color: '#2e4354' }}>No hay pedidos con estado 'pedido'</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'pedidos-recibidos' && (
+          <div>
+            <div className="mb-4 flex justify-between items-center">
+              <button
+                onClick={getPedidosRecibidosApartados}
+                disabled={loading}
+                className="px-5 py-2.5 rounded-lg font-medium transition-all shadow-md hover:shadow-lg disabled:opacity-50"
+                style={{ backgroundColor: '#2e4354', color: '#ffffff' }}
+              >
+                {loading ? 'Cargando...' : '🔄 Actualizar'}
+              </button>
+            </div>
+            {pedidosRecibidosApartados && pedidosRecibidosApartados.length > 0 ? (
+              <div className="rounded-xl shadow-lg overflow-hidden" style={{ backgroundColor: '#ffffff', border: '1px solid rgba(46, 67, 84, 0.1)' }}>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full">
+                    <thead style={{ backgroundColor: '#2e4354' }}>
+                      <tr>
+                        <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider" style={{ color: '#ffffff' }}>
+                          Folio
+                        </th>
+                        <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider" style={{ color: '#ffffff' }}>
+                          Cliente
+                        </th>
+                        <th className="px-6 py-4 text-center text-xs font-bold uppercase tracking-wider" style={{ color: '#ffffff' }}>
+                          Cantidad
+                        </th>
+                        <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider" style={{ color: '#ffffff' }}>
+                          Total
+                        </th>
+                        <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider" style={{ color: '#ffffff' }}>
+                          Items
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pedidosRecibidosApartados.map((pedido: any, index: number) => (
+                        <tr
+                          key={pedido.id}
+                          className="transition-all"
+                          style={{
+                            backgroundColor: index % 2 === 0 ? '#ffffff' : '#f0f7f7',
+                            borderBottom: '1px solid rgba(46, 67, 84, 0.08)'
+                          }}
+                        >
+                          <td className="px-6 py-4 whitespace-nowrap" style={{ color: '#2e4354' }}>
+                            {pedido.folio_pedido || '-'}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap" style={{ color: '#2e4354' }}>
+                            {pedido.cliente_nombre || '-'}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-center" style={{ color: '#2e4354' }}>
+                            {pedido.cantidad || 0}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right" style={{ color: '#2e4354' }}>
+                            ${pedido.total?.toFixed(2) || '0.00'}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap" style={{ color: '#2e4354' }}>
+                            {pedido.items && pedido.items.length > 0 ? (
+                              <div>
+                                {pedido.items.map((item: any, idx: number) => (
+                                  <div key={idx} className="text-sm">
+                                    {item.nombre} {item.modelo ? `(${item.modelo})` : ''} ({item.cantidad})
+                                  </div>
+                                ))}
+                              </div>
+                            ) : '-'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : (
+              <div className="p-12 text-center">
+                <span className="text-6xl mb-4 block">📭</span>
+                <p className="text-xl font-medium" style={{ color: '#2e4354' }}>No hay pedidos recibidos</p>
+              </div>
+            )}
           </div>
         )}
 

@@ -524,7 +524,7 @@ export default function PedidosPage() {
       }
       
       console.log('Sending pedido data:', pedidoData)
-      const response = await api.post('/productos-pedido/pedidos/', pedidoData)
+      const response = await api.post('/pedidos/', pedidoData)
       
       // Generate ticket for the pedido (both apartado and contado)
       if (response.data) {

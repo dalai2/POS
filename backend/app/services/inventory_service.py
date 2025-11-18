@@ -10,8 +10,9 @@ from datetime import datetime, date, timezone as tz, timedelta, timezone
 from app.models.tenant import Tenant
 from app.models.inventory_movement import InventoryMovement
 from app.models.product import Product
-from app.models.sale import Sale, SaleItem
-from app.models.producto_pedido import Pedido, ProductoPedido
+from app.models.venta_contado import VentasContado, ItemVentaContado
+from app.models.apartado import Apartado, ItemApartado
+from app.models.producto_pedido import Pedido, ProductoPedido, PedidoItem
 
 
 # TypedDict definitions for better type safety
@@ -74,6 +75,8 @@ class InventoryReportData(TypedDict):
     total_entradas: int
     total_salidas: int
     piezas_devueltas_total: int
+    piezas_vendidas_por_nombre: Dict[str, int]
+    piezas_entregadas_por_nombre: Dict[str, int]
 
 
 def get_inventory_report(
@@ -144,36 +147,45 @@ def get_inventory_report(
         Pedido.updated_at <= end_datetime
     ).all()
     
-    ventas_apartado_devueltas = db.query(Sale).filter(
-        Sale.tenant_id == tenant.id,
-        Sale.tipo_venta == 'credito',
-        Sale.return_of_id.isnot(None),
-        Sale.created_at >= start_datetime,
-        Sale.created_at <= end_datetime
+    ventas_contado_devueltas = db.query(VentasContado).filter(
+        VentasContado.tenant_id == tenant.id,
+        VentasContado.return_of_id.isnot(None),
+        VentasContado.created_at >= start_datetime,
+        VentasContado.created_at <= end_datetime
     ).all()
     
-    # Get ventas de apartado vencidas/canceladas (sin return_of_id, solo por status)
-    ventas_apartado_vencidas_canceladas = db.query(Sale).filter(
-        Sale.tenant_id == tenant.id,
-        Sale.tipo_venta == 'credito',
-        Sale.credit_status.in_(['vencido', 'cancelado']),
-        Sale.return_of_id.is_(None),  # No devueltas, solo vencidas/canceladas
-        Sale.created_at >= start_datetime,
-        Sale.created_at <= end_datetime
+    apartados_cancelados_vencidos = db.query(Apartado).filter(
+        Apartado.tenant_id == tenant.id,
+        Apartado.credit_status.in_(['vencido', 'cancelado']),
+        Apartado.created_at >= start_datetime,
+        Apartado.created_at <= end_datetime
     ).all()
     
     # Count pieces from pedidos devueltos
     total_piezas_devueltas = sum(p.cantidad for p in pedidos_devueltos)
     
-    # Count pieces from ventas apartado devueltas
-    for sale in ventas_apartado_devueltas:
-        items = db.query(SaleItem).filter(SaleItem.sale_id == sale.id).all()
-        total_piezas_devueltas += sum(item.quantity for item in items)
+    # Count pieces from ventas de contado devueltas (nuevo esquema)
+    ventas_contado_ids = [venta.id for venta in ventas_contado_devueltas]
+    if ventas_contado_ids:
+        items_dev = db.query(ItemVentaContado).filter(
+            ItemVentaContado.venta_id.in_(ventas_contado_ids)
+        ).all()
+        total_piezas_devueltas += sum(abs(int(item.quantity or 0)) for item in items_dev)
     
-    # Count pieces from ventas apartado vencidas/canceladas
-    for sale in ventas_apartado_vencidas_canceladas:
-        items = db.query(SaleItem).filter(SaleItem.sale_id == sale.id).all()
-        total_piezas_devueltas += sum(item.quantity for item in items)
+    # Count pieces from apartados cancelados/vencidos
+    apartados_ids = [ap.id for ap in apartados_cancelados_vencidos]
+    if apartados_ids:
+        items_ap = db.query(ItemApartado).filter(
+            ItemApartado.apartado_id.in_(apartados_ids)
+        ).all()
+        total_piezas_devueltas += sum(int(item.quantity or 0) for item in items_ap)
+    
+    piezas_por_nombre = _build_piezas_por_nombre_resumen(
+        db=db,
+        tenant=tenant,
+        start_datetime=start_datetime,
+        end_datetime=end_datetime,
+    )
     
     return {
         'piezas_ingresadas': piezas_ingresadas,
@@ -184,6 +196,8 @@ def get_inventory_report(
         'total_entradas': total_entradas,
         'total_salidas': total_salidas,
         'piezas_devueltas_total': total_piezas_devueltas,
+        'piezas_vendidas_por_nombre': piezas_por_nombre['vendidas'],
+        'piezas_entregadas_por_nombre': piezas_por_nombre['entregadas'],
     }
 
 
@@ -280,74 +294,53 @@ def _get_piezas_devueltas_by_date_range(
     end_datetime: datetime
 ) -> List[PiezaDevueltaData]:
     """
-    Get all returned pieces (ventas with return_of_id, ventas de apartado devueltas, ventas de apartado vencidas/canceladas, and pedidos cancelados/vencidos).
-    Uses datetime range comparison to handle timezone differences.
+    Get all returned pieces (ventas con devolución, apartados cancelados/vencidos y pedidos cancelados/vencidos).
+    Usa el nuevo esquema (VentasContado/Apartado/Pedido).
     """
     result = []
     
-    # Get returned sales (ventas with return_of_id) - includes all returned sales
-    returned_sales = db.query(Sale).filter(
-        Sale.tenant_id == tenant.id,
-        Sale.return_of_id.isnot(None),
-        Sale.created_at >= start_datetime,
-        Sale.created_at <= end_datetime
-    ).order_by(Sale.created_at.desc()).all()
+    ventas_contado_devueltas = db.query(VentasContado).filter(
+        VentasContado.tenant_id == tenant.id,
+        VentasContado.return_of_id.isnot(None),
+        VentasContado.created_at >= start_datetime,
+        VentasContado.created_at <= end_datetime
+    ).order_by(VentasContado.created_at.desc()).all()
     
-    # Get returned credit sales (ventas de apartado devueltas) - tipo_venta='credito' with return_of_id
-    returned_credit_sales = db.query(Sale).filter(
-        Sale.tenant_id == tenant.id,
-        Sale.tipo_venta == 'credito',
-        Sale.return_of_id.isnot(None),
-        Sale.created_at >= start_datetime,
-        Sale.created_at <= end_datetime
-    ).order_by(Sale.created_at.desc()).all()
+    apartados_vencidos_cancelados = db.query(Apartado).filter(
+        Apartado.tenant_id == tenant.id,
+        Apartado.credit_status.in_(['vencido', 'cancelado']),
+        Apartado.created_at >= start_datetime,
+        Apartado.created_at <= end_datetime
+    ).order_by(Apartado.created_at.desc()).all()
     
-    # Get ventas de apartado vencidas/canceladas (sin return_of_id, solo por status)
-    ventas_apartado_vencidas_canceladas = db.query(Sale).filter(
-        Sale.tenant_id == tenant.id,
-        Sale.tipo_venta == 'credito',
-        Sale.credit_status.in_(['vencido', 'cancelado']),
-        Sale.return_of_id.is_(None),  # No devueltas, solo vencidas/canceladas
-        Sale.created_at >= start_datetime,
-        Sale.created_at <= end_datetime
-    ).order_by(Sale.created_at.desc()).all()
-    
-    # Combine all sales lists, avoiding duplicates
-    all_returned_sales = {s.id: s for s in returned_sales}
-    for s in returned_credit_sales:
-        if s.id not in all_returned_sales:
-            all_returned_sales[s.id] = s
-    for s in ventas_apartado_vencidas_canceladas:
-        if s.id not in all_returned_sales:
-            all_returned_sales[s.id] = s
-    returned_sales = list(all_returned_sales.values())
-    
-    for sale in returned_sales:
-        # Get sale items to get product info
-        items = db.query(SaleItem).filter(SaleItem.sale_id == sale.id).all()
-        
-        # Determine motivo based on sale type and status
-        motivo = 'Devolución de venta'
-        if sale.tipo_venta == 'credito':
-            if sale.return_of_id is not None:
-                motivo = 'Devolución de apartado'
-            elif sale.credit_status == 'vencido':
-                motivo = 'Apartado vencido'
-            elif sale.credit_status == 'cancelado':
-                motivo = 'Apartado cancelado'
-        
-        folio = sale.folio_apartado if sale.folio_apartado else f'VENTA-{sale.id}'
-        
+    for venta in ventas_contado_devueltas:
+        items = db.query(ItemVentaContado).filter(ItemVentaContado.venta_id == venta.id).all()
         for item in items:
             pieza_data: PiezaDevueltaData = {
-                'id': sale.id,
+                'id': venta.id,
                 'tipo': 'venta',
-                'folio': folio,
-                'cliente_nombre': sale.customer_name,
+                'folio': venta.folio_venta or f'VENTA-{venta.id}',
+                'cliente_nombre': venta.customer_name,
+                'producto_nombre': item.name,
+                'cantidad': abs(int(item.quantity or 0)),
+                'motivo': 'Devolución de venta',
+                'fecha': venta.created_at.isoformat() if venta.created_at else '',
+            }
+            result.append(pieza_data)
+    
+    for apartado in apartados_vencidos_cancelados:
+        items = db.query(ItemApartado).filter(ItemApartado.apartado_id == apartado.id).all()
+        motivo = 'Apartado vencido' if apartado.credit_status == 'vencido' else 'Apartado cancelado'
+        for item in items:
+            pieza_data: PiezaDevueltaData = {
+                'id': apartado.id,
+                'tipo': 'apartado',
+                'folio': apartado.folio_apartado or f'AP-{apartado.id}',
+                'cliente_nombre': apartado.customer_name,
                 'producto_nombre': item.name,
                 'cantidad': item.quantity,
                 'motivo': motivo,
-                'fecha': sale.created_at.isoformat() if sale.created_at else '',
+                'fecha': apartado.created_at.isoformat() if apartado.created_at else '',
             }
             result.append(pieza_data)
     
@@ -463,6 +456,112 @@ def _group_pieces_by_attributes(
         })
     
     return list(groups.values())
+
+
+def _build_piezas_por_nombre_resumen(
+    db: Session,
+    tenant: Tenant,
+    start_datetime: datetime,
+    end_datetime: datetime,
+) -> Dict[str, Dict[str, int]]:
+    """
+    Agrupa piezas vendidas y entregadas por nombre dentro del rango seleccionado.
+    Vendidas = ventas de contado (nuevo esquema + legacy).
+    Entregadas = apartados/pedidos liquidados (nuevo esquema + legacy).
+    """
+    vendidas: Dict[str, int] = {}
+    entregadas: Dict[str, int] = {}
+    
+    def _add(target: Dict[str, int], nombre: Optional[str], cantidad: int) -> None:
+        if not cantidad:
+            return
+        key = (nombre or "").strip() or "Sin nombre"
+        target[key] = target.get(key, 0) + int(cantidad)
+    
+    # Ventas de contado (nuevo esquema)
+    ventas_contado = db.query(VentasContado).filter(
+        VentasContado.tenant_id == tenant.id,
+        VentasContado.created_at >= start_datetime,
+        VentasContado.created_at <= end_datetime,
+        VentasContado.return_of_id.is_(None),
+    ).all()
+    venta_ids = [v.id for v in ventas_contado]
+    if venta_ids:
+        items = db.query(ItemVentaContado).filter(
+            ItemVentaContado.venta_id.in_(venta_ids)
+        ).all()
+        product_ids = [item.product_id for item in items if item.product_id]
+        products = {
+            p.id: p for p in db.query(Product).filter(Product.id.in_(product_ids)).all()
+        } if product_ids else {}
+        for item in items:
+            product = products.get(item.product_id) if item.product_id else None
+            nombre = product.name if product else item.name
+            _add(vendidas, nombre, int(item.quantity or 0))
+    
+    # Apartados liquidados (nuevo esquema)
+    apartados_liquidados = db.query(Apartado).filter(
+        Apartado.tenant_id == tenant.id,
+        Apartado.credit_status.in_(["pagado", "entregado"]),
+        Apartado.created_at >= start_datetime,
+        Apartado.created_at <= end_datetime,
+    ).all()
+    apartado_ids = [a.id for a in apartados_liquidados]
+    if apartado_ids:
+        items = db.query(ItemApartado).filter(
+            ItemApartado.apartado_id.in_(apartado_ids)
+        ).all()
+        product_ids = [item.product_id for item in items if item.product_id]
+        products = {
+            p.id: p for p in db.query(Product).filter(Product.id.in_(product_ids)).all()
+        } if product_ids else {}
+        for item in items:
+            product = products.get(item.product_id) if item.product_id else None
+            nombre = product.name if product else item.name
+            _add(entregadas, nombre, int(item.quantity or 0))
+    
+    # Pedidos liquidados (nuevo esquema)
+    pedidos_liquidados = db.query(Pedido).filter(
+        Pedido.tenant_id == tenant.id,
+        Pedido.tipo_pedido == 'apartado',
+        Pedido.estado.in_(["pagado", "entregado"]),
+        Pedido.created_at >= start_datetime,
+        Pedido.created_at <= end_datetime,
+    ).all()
+    pedido_ids = [p.id for p in pedidos_liquidados]
+    pedido_items_map: Dict[int, List[PedidoItem]] = {}
+    if pedido_ids:
+        pedido_items = db.query(PedidoItem).filter(
+            PedidoItem.pedido_id.in_(pedido_ids)
+        ).all()
+        for item in pedido_items:
+            pedido_items_map.setdefault(item.pedido_id, []).append(item)
+    producto_ids = [
+        pedido.producto_pedido_id for pedido in pedidos_liquidados
+        if pedido.producto_pedido_id is not None
+    ]
+    productos_map = {
+        prod.id: prod
+        for prod in db.query(ProductoPedido).filter(ProductoPedido.id.in_(producto_ids)).all()
+    } if producto_ids else {}
+    for pedido in pedidos_liquidados:
+        items = pedido_items_map.get(pedido.id, [])
+        if items:
+            for item in items:
+                nombre = item.nombre or item.modelo or "Sin nombre"
+                _add(entregadas, nombre, int(item.cantidad or 0))
+        else:
+            producto = productos_map.get(pedido.producto_pedido_id) if pedido.producto_pedido_id else None
+            nombre = (producto.nombre if producto and producto.nombre else producto.modelo) if producto else "Sin nombre"
+            _add(entregadas, nombre, int(pedido.cantidad or 0))
+    
+    vendidas_ordenadas = dict(sorted(vendidas.items(), key=lambda kv: kv[0]))
+    entregadas_ordenadas = dict(sorted(entregadas.items(), key=lambda kv: kv[0]))
+    
+    return {
+        "vendidas": vendidas_ordenadas,
+        "entregadas": entregadas_ordenadas,
+    }
 
 
 def _build_inventory_snapshot(
@@ -584,12 +683,11 @@ def get_stock_grouped_historical(
             InventoryMovement.created_at > target_datetime_end
         ).all()
         
-        # Get sale items that happened AFTER target_date
-        sales_after = db.query(SaleItem).join(Sale).filter(
-            Sale.tenant_id == tenant.id,
-            SaleItem.product_id == product.id,
-            Sale.created_at > target_datetime_end,
-            Sale.return_of_id == None  # Don't count returned sales
+        # Get sale items that happened AFTER target_date (usar VentasContado)
+        ventas_contado_after = db.query(ItemVentaContado).join(VentasContado).filter(
+            VentasContado.tenant_id == tenant.id,
+            ItemVentaContado.product_id == product.id,
+            VentasContado.created_at > target_datetime_end
         ).all()
         
         # Calculate historical stock by reversing future changes
@@ -604,10 +702,10 @@ def get_stock_grouped_historical(
                 # If it was a salida (removal), add it back to get historical stock
                 historical_stock += movement.quantity
         
-        # Reverse sales after target date
-        for sale_item in sales_after:
+        # Reverse ventas de contado after target date
+        for item in ventas_contado_after:
             # Sales reduce stock, so add them back
-            historical_stock += sale_item.quantity
+            historical_stock += item.quantity
         
         # Stock can't be negative (data inconsistency protection)
         historical_stocks[product.id] = max(0, historical_stock)
@@ -743,54 +841,26 @@ def get_stock_eliminado(
     tenant: Tenant
 ) -> List[Dict[str, Any]]:
     """
-    Get stock from eliminated products (active=False) and pedidos entregados (tipo_pedido='apartado').
+    Get stock from eliminated pieces (movements tipo 'salida' with notes/motivo).
+    Only shows pieces that were removed from inventory with a reason (defectuoso, etc.).
+    EXCLUDES pedidos entregados and any pedido status.
     """
-    # Get products with active=False
-    products = db.query(Product).filter(
-        Product.tenant_id == tenant.id,
-        Product.active == False,
-        Product.stock > 0
-    ).all()
+    # Get all salida movements with notes (eliminaciones con motivo)
+    movements = db.query(InventoryMovement).join(Product).filter(
+        InventoryMovement.tenant_id == tenant.id,
+        InventoryMovement.movement_type == 'salida',
+        InventoryMovement.notes.isnot(None),
+        InventoryMovement.notes != ''
+    ).order_by(InventoryMovement.created_at.desc()).all()
     
-    # Get pedidos entregados (tipo_pedido='apartado')
-    pedidos_entregados = db.query(Pedido).filter(
-        Pedido.tenant_id == tenant.id,
-        Pedido.estado == 'entregado',
-        Pedido.tipo_pedido == 'apartado'
-    ).all()
-    
-    # Get products from pedidos entregados
-    product_ids_from_pedidos = set()
-    for pedido in pedidos_entregados:
-        producto_pedido = db.query(ProductoPedido).filter(
-            ProductoPedido.id == pedido.producto_pedido_id
-        ).first()
-        if producto_pedido and producto_pedido.codigo:
-            product = db.query(Product).filter(
-                Product.tenant_id == tenant.id,
-                Product.codigo == producto_pedido.codigo,
-                Product.stock > 0
-            ).first()
-            if product:
-                product_ids_from_pedidos.add(product.id)
-    
-    # Get products from pedidos entregados
-    if product_ids_from_pedidos:
-        products_from_pedidos = db.query(Product).filter(
-            Product.tenant_id == tenant.id,
-            Product.id.in_(list(product_ids_from_pedidos)),
-            Product.stock > 0
-        ).all()
-        # Combine with eliminated products, avoiding duplicates
-        product_dict = {p.id: p for p in products}
-        for p in products_from_pedidos:
-            if p.id not in product_dict:
-                product_dict[p.id] = p
-        products = list(product_dict.values())
-    
+    # Group by product attributes
     groups: Dict[str, Dict[str, Any]] = {}
     
-    for product in products:
+    for mov in movements:
+        product = db.query(Product).filter(Product.id == mov.product_id).first()
+        if not product:
+            continue
+        
         key = "|".join([
             str(product.name or ''),
             str(product.modelo or ''),
@@ -816,13 +886,15 @@ def get_stock_eliminado(
                 'productos': []
             }
         
-        groups[key]['cantidad_total'] += product.stock
+        groups[key]['cantidad_total'] += mov.quantity
         groups[key]['productos'].append({
             'id': product.id,
             'codigo': product.codigo,
-            'stock': product.stock,
+            'stock': mov.quantity,  # Cantidad eliminada
             'precio': float(product.price),
             'costo': float(product.cost_price),
+            'motivo': mov.notes,  # Motivo de eliminación
+            'fecha_eliminacion': mov.created_at.isoformat() if mov.created_at else None
         })
     
     return list(groups.values())
@@ -833,66 +905,118 @@ def get_stock_devuelto(
     tenant: Tenant
 ) -> List[Dict[str, Any]]:
     """
-    Get stock from returned products (products that came from returns).
+    Get stock from returned products (ventas devueltas, apartados vencidos/cancelados, pedidos cancelados/vencidos).
+    Includes:
+    - VentasContado with return_of_id (ventas devueltas)
+    - Apartados vencidos/cancelados
+    - Pedidos cancelados/vencidos
     """
-    # Get all inventory movements from devoluciones
-    movements = db.query(InventoryMovement).join(Product).filter(
-        InventoryMovement.tenant_id == tenant.id,
-        InventoryMovement.movement_type == 'entrada',
-        or_(
-            InventoryMovement.notes.like('%Devolución%'),
-            InventoryMovement.notes.like('%devolución%'),
-            InventoryMovement.notes.like('%Cancelado%'),
-            InventoryMovement.notes.like('%Vencido%')
-        )
+    from app.models.venta_contado import VentasContado, ItemVentaContado
+    from app.models.apartado import Apartado, ItemApartado
+    
+    result_items = []
+    
+    # Get ventas de contado devueltas (return_of_id is not None)
+    ventas_devueltas = db.query(VentasContado).filter(
+        VentasContado.tenant_id == tenant.id,
+        VentasContado.return_of_id.isnot(None)
     ).all()
     
-    # Get current stock for these products
-    product_ids = [m.product_id for m in movements]
-    if not product_ids:
-        return []
+    for venta in ventas_devueltas:
+        items = db.query(ItemVentaContado).filter(ItemVentaContado.venta_id == venta.id).all()
+        for item in items:
+            product = None
+            if item.product_id:
+                product = db.query(Product).filter(Product.id == item.product_id).first()
+            
+            result_items.append({
+                'product_id': item.product_id,
+                'product_name': item.name,
+                'product_modelo': product.modelo if product else None,
+                'product_quilataje': product.quilataje if product else None,
+                'quantity': abs(item.quantity),  # Use absolute value
+                'folio': venta.folio_venta or f'V-{venta.id}',
+                'cliente': venta.customer_name,
+                'motivo': 'Devolución de venta',
+                'fecha': venta.created_at.isoformat() if venta.created_at else None
+            })
     
-    products = db.query(Product).filter(
-        Product.tenant_id == tenant.id,
-        Product.id.in_(product_ids),
-        Product.stock > 0
+    # Get apartados vencidos/cancelados
+    apartados_vencidos_cancelados = db.query(Apartado).filter(
+        Apartado.tenant_id == tenant.id,
+        Apartado.credit_status.in_(['vencido', 'cancelado'])
     ).all()
     
+    for apartado in apartados_vencidos_cancelados:
+        items = db.query(ItemApartado).filter(ItemApartado.apartado_id == apartado.id).all()
+        motivo = 'Apartado vencido' if apartado.credit_status == 'vencido' else 'Apartado cancelado'
+        for item in items:
+            product = None
+            if item.product_id:
+                product = db.query(Product).filter(Product.id == item.product_id).first()
+            
+            result_items.append({
+                'product_id': item.product_id,
+                'product_name': item.name,
+                'product_modelo': product.modelo if product else None,
+                'product_quilataje': product.quilataje if product else None,
+                'quantity': item.quantity,
+                'folio': apartado.folio_apartado or f'AP-{apartado.id}',
+                'cliente': apartado.customer_name,
+                'motivo': motivo,
+                'fecha': apartado.created_at.isoformat() if apartado.created_at else None
+            })
+    
+    # Get pedidos cancelados/vencidos
+    pedidos_cancelados_vencidos = db.query(Pedido).filter(
+        Pedido.tenant_id == tenant.id,
+        Pedido.estado.in_(['cancelado', 'vencido'])
+    ).all()
+    
+    for pedido in pedidos_cancelados_vencidos:
+        for item in pedido.items:
+            result_items.append({
+                'product_id': None,
+                'product_name': item.nombre,
+                'product_modelo': item.modelo,
+                'product_quilataje': item.quilataje,
+                'quantity': item.cantidad,
+                'folio': pedido.folio_pedido or f'PED-{pedido.id}',
+                'cliente': pedido.cliente_nombre,
+                'motivo': 'Cancelado' if pedido.estado == 'cancelado' else 'Vencido',
+                'fecha': pedido.updated_at.isoformat() if pedido.updated_at else None
+            })
+    
+    # Group by product attributes
     groups: Dict[str, Dict[str, Any]] = {}
     
-    for product in products:
+    for item in result_items:
         key = "|".join([
-            str(product.name or ''),
-            str(product.modelo or ''),
-            str(product.quilataje or ''),
-            str(product.marca or ''),
-            str(product.color or ''),
-            str(product.base or ''),
-            str(product.tipo_joya or ''),
-            str(product.talla or ''),
+            str(item['product_name'] or ''),
+            str(item['product_modelo'] or ''),
+            str(item['product_quilataje'] or ''),
         ])
         
         if key not in groups:
             groups[key] = {
-                'nombre': product.name,
-                'modelo': product.modelo,
-                'quilataje': product.quilataje,
-                'marca': product.marca,
-                'color': product.color,
-                'base': product.base,
-                'tipo_joya': product.tipo_joya,
-                'talla': product.talla,
+                'nombre': item['product_name'],
+                'modelo': item['product_modelo'],
+                'quilataje': item['product_quilataje'],
                 'cantidad_total': 0,
                 'productos': []
             }
         
-        groups[key]['cantidad_total'] += product.stock
+        groups[key]['cantidad_total'] += item['quantity']
         groups[key]['productos'].append({
-            'id': product.id,
-            'codigo': product.codigo,
-            'stock': product.stock,
-            'precio': float(product.price),
-            'costo': float(product.cost_price),
+            'id': item['product_id'],
+            'codigo': None,
+            'stock': item['quantity'],
+            'precio': 0,
+            'costo': 0,
+            'folio': item['folio'],
+            'cliente': item['cliente'],
+            'motivo': item['motivo'],
+            'fecha': item['fecha']
         })
     
     return list(groups.values())
@@ -906,26 +1030,24 @@ def get_stock_apartado(
     Get stock from ventas de apartado with credit_status 'pendiente' or 'pagado'.
     Groups pieces by nombre, modelo, quilataje, marca, color, base, tipo_joya, talla.
     """
-    # Get sales with tipo_venta='credito' and credit_status in ['pendiente', 'pagado']
-    sales = db.query(Sale).filter(
-        Sale.tenant_id == tenant.id,
-        Sale.tipo_venta == 'credito',
-        Sale.credit_status.in_(['pendiente', 'pagado'])
+    # NUEVO: Get apartados with credit_status in ['pendiente', 'pagado']
+    apartados = db.query(Apartado).filter(
+        Apartado.tenant_id == tenant.id,
+        Apartado.credit_status.in_(['pendiente', 'pagado'])
     ).all()
     
-    # Get all sale items from these sales
-    sale_ids = [s.id for s in sales]
-    if not sale_ids:
+    # Get all apartado items
+    apartado_ids = [a.id for a in apartados]
+    if not apartado_ids:
         return []
     
-    sale_items = db.query(SaleItem).filter(
-        SaleItem.sale_id.in_(sale_ids)
+    apartado_items = db.query(ItemApartado).filter(
+        ItemApartado.apartado_id.in_(apartado_ids)
     ).all()
     
     # Group by product attributes
     groups: Dict[str, Dict[str, Any]] = {}
-    
-    for item in sale_items:
+    for item in apartado_items:
         # Get product if exists
         product = None
         if item.product_id:
@@ -934,8 +1056,8 @@ def get_stock_apartado(
                 Product.tenant_id == tenant.id
             ).first()
         
-        # Get sale info
-        sale = next((s for s in sales if s.id == item.sale_id), None)
+        # Get apartado info
+        apartado = next((a for a in apartados if a.id == item.apartado_id), None)
         
         # Create grouping key from product attributes or item name
         if product:
@@ -985,10 +1107,10 @@ def get_stock_apartado(
         
         groups[key]['cantidad_total'] += item.quantity
         
-        # Add sale info to productos list
-        folio = sale.folio_apartado if sale and sale.folio_apartado else f'APT-{item.sale_id}'
-        cliente = sale.customer_name if sale else 'N/A'
-        status = sale.credit_status if sale else 'N/A'
+        # Add apartado info to productos list (NUEVO)
+        folio = apartado.folio_apartado if apartado and apartado.folio_apartado else f'AP-{item.apartado_id}'
+        cliente = apartado.customer_name if apartado else 'N/A'
+        status = apartado.credit_status if apartado else 'N/A'
         
         groups[key]['productos'].append({
             'id': item.product_id or 0,
@@ -998,8 +1120,196 @@ def get_stock_apartado(
             'folio_apartado': folio,
             'cliente': cliente,
             'status': status,
-            'sale_id': item.sale_id,
+            'apartado_id': item.apartado_id,
         })
     
     return list(groups.values())
+
+
+def get_pedidos_recibidos(
+    db: Session,
+    tenant: Tenant
+) -> List[Dict[str, Any]]:
+    """
+    Get list of pedidos with estado='recibido'.
+    Returns list of pedidos with their details.
+    """
+    pedidos = db.query(Pedido).filter(
+        Pedido.tenant_id == tenant.id,
+        Pedido.estado == 'recibido'
+    ).order_by(Pedido.created_at.desc()).all()
+    
+    result = []
+    for pedido in pedidos:
+        # Get items for this pedido
+        items = []
+        for item in pedido.items:
+            items.append({
+                'id': item.id,
+                'modelo': item.modelo or '',
+                'nombre': item.nombre or '',
+                'codigo': item.codigo or '',
+                'cantidad': item.cantidad,
+                'precio_unitario': float(item.precio_unitario),
+                'total': float(item.total)
+            })
+        
+        result.append({
+            'id': pedido.id,
+            'folio_pedido': pedido.folio_pedido or f'PED-{pedido.id:06d}',
+            'cliente_nombre': pedido.cliente_nombre,
+            'cliente_telefono': pedido.cliente_telefono,
+            'tipo_pedido': pedido.tipo_pedido,
+            'cantidad': pedido.cantidad,
+            'precio_unitario': float(pedido.precio_unitario),
+            'total': float(pedido.total),
+            'anticipo_pagado': float(pedido.anticipo_pagado),
+            'saldo_pendiente': float(pedido.saldo_pendiente),
+            'estado': pedido.estado,
+            'created_at': pedido.created_at.isoformat() if pedido.created_at else None,
+            'items': items
+        })
+    
+    return result
+
+
+def get_pedidos_entregados(
+    db: Session,
+    tenant: Tenant
+) -> List[Dict[str, Any]]:
+    """
+    Get list of pedidos with estado='entregado'.
+    Returns list of pedidos with their details.
+    """
+    pedidos = db.query(Pedido).filter(
+        Pedido.tenant_id == tenant.id,
+        Pedido.estado == 'entregado'
+    ).order_by(Pedido.created_at.desc()).all()
+    
+    result = []
+    for pedido in pedidos:
+        # Get items for this pedido
+        items = []
+        for item in pedido.items:
+            items.append({
+                'id': item.id,
+                'modelo': item.modelo or '',
+                'nombre': item.nombre or '',
+                'codigo': item.codigo or '',
+                'cantidad': item.cantidad,
+                'precio_unitario': float(item.precio_unitario),
+                'total': float(item.total)
+            })
+        
+        result.append({
+            'id': pedido.id,
+            'folio_pedido': pedido.folio_pedido or f'PED-{pedido.id:06d}',
+            'cliente_nombre': pedido.cliente_nombre,
+            'cliente_telefono': pedido.cliente_telefono,
+            'tipo_pedido': pedido.tipo_pedido,
+            'cantidad': pedido.cantidad,
+            'precio_unitario': float(pedido.precio_unitario),
+            'total': float(pedido.total),
+            'anticipo_pagado': float(pedido.anticipo_pagado),
+            'saldo_pendiente': float(pedido.saldo_pendiente),
+            'estado': pedido.estado,
+            'created_at': pedido.created_at.isoformat() if pedido.created_at else None,
+            'fecha_entrega_real': pedido.fecha_entrega_real.isoformat() if pedido.fecha_entrega_real else None,
+            'items': items
+        })
+    
+    return result
+
+
+def get_productos_pedido_apartado(
+    db: Session,
+    tenant: Tenant
+) -> List[Dict[str, Any]]:
+    """
+    Get list of products (piezas) from pedidos apartados with estado='pedido'.
+    Returns all items from pedidos apartados that are in 'pedido' state (waiting to be ordered from suppliers).
+    Shows only: modelo, nombre, quilataje.
+    """
+    # Get pedidos apartados with estado='pedido'
+    pedidos = db.query(Pedido).filter(
+        Pedido.tenant_id == tenant.id,
+        Pedido.tipo_pedido == 'apartado',
+        Pedido.estado == 'pedido'
+    ).order_by(Pedido.created_at.desc()).all()
+    
+    result = []
+    for pedido in pedidos:
+        # Get items for this pedido
+        for item in pedido.items:
+            result.append({
+                'id': item.id,
+                'pedido_id': pedido.id,
+                'folio_pedido': pedido.folio_pedido or f'PED-{pedido.id:06d}',
+                'cliente_nombre': pedido.cliente_nombre,
+                'cliente_telefono': pedido.cliente_telefono,
+                'modelo': item.modelo or '',
+                'nombre': item.nombre or '',
+                'codigo': item.codigo or '',
+                'color': item.color or '',
+                'quilataje': item.quilataje or '',
+                'base': item.base or '',
+                'talla': item.talla or '',
+                'peso': item.peso or '',
+                'peso_gramos': float(item.peso_gramos) if item.peso_gramos else None,
+                'cantidad': item.cantidad,
+                'precio_unitario': float(item.precio_unitario),
+                'total': float(item.total),
+                'estado_pedido': pedido.estado,
+                'created_at': pedido.created_at.isoformat() if pedido.created_at else None
+            })
+    
+    return result
+
+
+def get_pedidos_recibidos_apartados(
+    db: Session,
+    tenant: Tenant
+) -> List[Dict[str, Any]]:
+    """
+    Get list of pedidos apartados with estado='recibido'.
+    Returns only pedidos apartados that have been received.
+    """
+    pedidos = db.query(Pedido).filter(
+        Pedido.tenant_id == tenant.id,
+        Pedido.tipo_pedido == 'apartado',
+        Pedido.estado == 'recibido'
+    ).order_by(Pedido.created_at.desc()).all()
+    
+    result = []
+    for pedido in pedidos:
+        # Get items for this pedido
+        items = []
+        for item in pedido.items:
+            items.append({
+                'id': item.id,
+                'modelo': item.modelo or '',
+                'nombre': item.nombre or '',
+                'codigo': item.codigo or '',
+                'cantidad': item.cantidad,
+                'precio_unitario': float(item.precio_unitario),
+                'total': float(item.total)
+            })
+        
+        result.append({
+            'id': pedido.id,
+            'folio_pedido': pedido.folio_pedido or f'PED-{pedido.id:06d}',
+            'cliente_nombre': pedido.cliente_nombre,
+            'cliente_telefono': pedido.cliente_telefono,
+            'tipo_pedido': pedido.tipo_pedido,
+            'cantidad': pedido.cantidad,
+            'precio_unitario': float(pedido.precio_unitario),
+            'total': float(pedido.total),
+            'anticipo_pagado': float(pedido.anticipo_pagado),
+            'saldo_pendiente': float(pedido.saldo_pendiente),
+            'estado': pedido.estado,
+            'created_at': pedido.created_at.isoformat() if pedido.created_at else None,
+            'items': items
+        })
+    
+    return result
 

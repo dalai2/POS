@@ -555,7 +555,8 @@ export default function ReportsPage() {
           <th>Ventas Activas</th>
           <th>Ventas Pasivas</th>
           <th>Ctas por Cobrar</th>
-          <th>Productos Liquidados</th>
+          <th>Prod. Liq. Apart.</th>
+          <th>Prod. Liq. Ped.</th>
         </tr>
       </thead>
       <tbody>
@@ -576,7 +577,8 @@ export default function ReportsPage() {
           <td style="text-align:right; font-weight:600;">$${(v.ventas_total_activa ?? 0).toFixed(2)}</td>
           <td style="text-align:right; font-weight:600;">$${(v.venta_total_pasiva ?? 0).toFixed(2)}</td>
           <td style="text-align:right; font-weight:600;">$${(v.cuentas_por_cobrar ?? 0).toFixed(2)}</td>
-          <td style="text-align:right; font-weight:600;">$${(v.productos_liquidados ?? 0).toFixed(2)}</td>
+          <td style="text-align:right; font-weight:600;">$${(v.productos_liquidados_apartados ?? 0).toFixed(2)}</td>
+          <td style="text-align:right; font-weight:600;">$${(v.productos_liquidados_pedidos ?? 0).toFixed(2)}</td>
         </tr>
         `).join('')}
       </tbody>

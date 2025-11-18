@@ -90,7 +90,8 @@ const DashboardPedidosPage: React.FC = () => {
       if (filtroFechaHasta) params.append('fecha_hasta', filtroFechaHasta);
       if (filtroUserId) params.append('user_id', filtroUserId);
       
-      const response = await api.get(`/productos-pedido/pedidos/dashboard?${params.toString()}`);
+      // Use the list endpoint with filters (dashboard endpoint not yet implemented in new route)
+      const response = await api.get(`/pedidos/?${params.toString()}`);
       setPedidos(response.data);
     } catch (err: any) {
       console.error('Error loading pedidos:', err);
@@ -126,7 +127,7 @@ const DashboardPedidosPage: React.FC = () => {
 
   const actualizarEstado = async (pedidoId: number, nuevoEstado: string) => {
     try {
-      await api.put(`/productos-pedido/pedidos/${pedidoId}/estado`, {
+      await api.put(`/pedidos/${pedidoId}`, {
         estado: nuevoEstado
       });
       
@@ -146,7 +147,7 @@ const DashboardPedidosPage: React.FC = () => {
   const actualizarFechaEntrega = async (pedidoId: number, fecha: string, tipo: 'estimada' | 'real') => {
     try {
       const field = tipo === 'estimada' ? 'fecha_entrega_estimada' : 'fecha_entrega_real';
-      await api.put(`/productos-pedido/pedidos/${pedidoId}/fechas`, {
+      await api.put(`/pedidos/${pedidoId}`, {
         [field]: fecha ? new Date(fecha).toISOString() : null
       });
       

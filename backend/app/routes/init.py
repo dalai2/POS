@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.core.database import get_db, SessionLocal, engine
+from app.core.database import get_db, SessionLocal, engine, _run_migration_notas_cliente
 from app.models.tenant import Base
 from app.services.jewelry_seed import seed_jewelry_demo
 from app.models.tenant import Tenant
+from sqlalchemy import text
 
 router = APIRouter()
 
@@ -46,6 +47,45 @@ def initialize_database():
             
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error initializing database: {str(e)}")
+
+
+@router.post("/run-migration-notas-cliente")
+def run_migration_notas_cliente():
+    """Ejecuta la migración para agregar columna notas_cliente a apartados"""
+    try:
+        with engine.connect() as connection:
+            connection.execute(text("ALTER TABLE apartados ADD COLUMN IF NOT EXISTS notas_cliente TEXT"))
+            connection.commit()
+            
+            # Verificar
+            result = connection.execute(text("""
+                SELECT column_name, data_type, is_nullable
+                FROM information_schema.columns 
+                WHERE table_name = 'apartados' 
+                AND column_name = 'notas_cliente'
+            """))
+            row = result.fetchone()
+            
+            if row:
+                return {
+                    "success": True,
+                    "message": "Migración ejecutada correctamente",
+                    "column": {
+                        "name": row[0],
+                        "type": row[1],
+                        "nullable": row[2]
+                    }
+                }
+            else:
+                return {
+                    "success": False,
+                    "message": "La columna no se pudo verificar"
+                }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
 
 
 @router.get("/database-status")

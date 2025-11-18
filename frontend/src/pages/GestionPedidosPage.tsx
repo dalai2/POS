@@ -133,6 +133,11 @@ export default function GestionPedidosPage() {
   const [montoPago, setMontoPago] = useState('')
   const [metodoPago, setMetodoPago] = useState('efectivo')
   const [tipoPago, setTipoPago] = useState('saldo')
+  const [notasModal, setNotasModal] = useState<{
+    show: boolean
+    pedidoId: number | null
+    notas: string
+  }>({ show: false, pedidoId: null, notas: '' })
   
   // Modal para historial de pagos
   const [showHistorialModal, setShowHistorialModal] = useState(false)
@@ -178,7 +183,7 @@ export default function GestionPedidosPage() {
       const qs = new URLSearchParams()
       if (filtroEstado) qs.set('estado', filtroEstado)
       
-      const r = await api.get(`/productos-pedido/pedidos/?${qs.toString()}`)
+      const r = await api.get(`/pedidos/?${qs.toString()}`)
       let pedidosData = r.data || []
       
       // Filtrar por cliente si hay filtro
@@ -238,7 +243,7 @@ export default function GestionPedidosPage() {
 
   const abrirHistorial = async (pedido: Pedido) => {
     try {
-      const response = await api.get(`/productos-pedido/pedidos/${pedido.id}/pagos`)
+      const response = await api.get(`/pedidos/${pedido.id}/pagos`)
       setPagosPedido(response.data || [])
       setPedidoHistorial(pedido)
       
@@ -338,7 +343,7 @@ export default function GestionPedidosPage() {
     }
     
     try {
-      const response = await api.post(`/productos-pedido/pedidos/${pedidoSeleccionado.id}/pagos`, {
+      const response = await api.post(`/pedidos/${pedidoSeleccionado.id}/pagos`, {
         monto: montoNum,
         metodo_pago: metodoPago,
         tipo_pago: 'saldo'
@@ -421,11 +426,33 @@ export default function GestionPedidosPage() {
     })
   }
 
+  const abrirModalNotas = (pedido: Pedido) => {
+    setNotasModal({
+      show: true,
+      pedidoId: pedido.id,
+      notas: pedido.notas_cliente || ''
+    });
+  };
+
+  const guardarNotas = async () => {
+    if (notasModal.pedidoId === null) return;
+    
+    try {
+      await api.put(`/pedidos/${notasModal.pedidoId}`, {
+        notas_cliente: notasModal.notas || null
+      });
+      setNotasModal({ show: false, pedidoId: null, notas: '' });
+      reloadPedidos();
+    } catch (error: any) {
+      alert(error.response?.data?.detail || 'Error al guardar notas');
+    }
+  };
+
   const confirmarCambioEstado = async () => {
     if (!estadoChangeModal.pedidoId || !estadoChangeModal.nuevoEstado) return
     
     try {
-      await api.put(`/productos-pedido/pedidos/${estadoChangeModal.pedidoId}`, {
+      await api.put(`/pedidos/${estadoChangeModal.pedidoId}`, {
         estado: estadoChangeModal.nuevoEstado
       })
       setMsg('✅ Estado actualizado exitosamente')
@@ -456,7 +483,7 @@ export default function GestionPedidosPage() {
       // Obtener todos los pagos del pedido para calcular el total de abonos
       let totalAbonos = 0
       try {
-        const pagosResponse = await api.get(`/productos-pedido/pedidos/${pedido.id}/pagos`)
+        const pagosResponse = await api.get(`/pedidos/${pedido.id}/pagos`)
         const pagos = pagosResponse.data || []
         totalAbonos = pagos.reduce((sum: number, pago: PagoPedido) => sum + pago.monto, 0)
       } catch (error) {
@@ -924,17 +951,21 @@ export default function GestionPedidosPage() {
                         <div>
                           <div className="font-medium">
                             {p.cliente_nombre}
-                            {p.notas_cliente && (
-                              <span 
-                                className="ml-2 text-yellow-600 cursor-help" 
-                                title={`Nota: ${p.notas_cliente}`}
-                              >
-                                📝
-                              </span>
-                            )}
                           </div>
                           {p.cliente_telefono && (
                             <div className="text-gray-500">{p.cliente_telefono}</div>
+                          )}
+                          <button
+                            onClick={() => abrirModalNotas(p)}
+                            className="mt-1 text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                          >
+                            <span>📝</span>
+                            <span>{p.notas_cliente ? 'Editar notas' : 'Agregar notas'}</span>
+                          </button>
+                          {p.notas_cliente && (
+                            <div className="mt-1 text-xs text-gray-600 italic bg-yellow-50 p-1 rounded">
+                              {p.notas_cliente}
+                            </div>
                           )}
                         </div>
                       </td>
@@ -1339,6 +1370,43 @@ export default function GestionPedidosPage() {
                 className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
               >
                 Confirmar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal para editar notas del cliente */}
+      {notasModal.show && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold mb-4 text-gray-900">📝 Notas del Cliente</h3>
+            
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Notas (para recordatorios sobre el cliente o producto)
+              </label>
+              <textarea
+                value={notasModal.notas}
+                onChange={(e) => setNotasModal({ ...notasModal, notas: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                rows={4}
+                placeholder="Ej: Cliente grabado, producto personalizado, etc."
+              />
+            </div>
+            
+            <div className="flex space-x-3">
+              <button
+                onClick={() => setNotasModal({ show: false, pedidoId: null, notas: '' })}
+                className="flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={guardarNotas}
+                className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+              >
+                Guardar
               </button>
             </div>
           </div>

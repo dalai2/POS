@@ -1,5 +1,6 @@
 import React from 'react';
 import { StockApartado } from '../../types/inventory';
+import { cleanFolio } from '../../utils/folioHelper';
 
 interface StockApartadoViewProps {
   stockApartado: StockApartado[] | null;
@@ -107,7 +108,7 @@ export const StockApartadoView: React.FC<StockApartadoViewProps> = ({ stockApart
                       ${producto.precio.toFixed(2)}
                     </td>
                     <td className="px-4 py-2 border" style={{ color: '#2e4354' }}>
-                      {producto.folio_apartado}
+                      {cleanFolio(producto.folio_apartado)}
                     </td>
                     <td className="px-4 py-2 border" style={{ color: '#2e4354' }}>
                       {producto.cliente}

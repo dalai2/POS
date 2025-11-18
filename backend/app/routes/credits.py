@@ -41,6 +41,7 @@ class CreditSaleDetail(BaseModel):
     id: int
     customer_name: Optional[str]
     customer_phone: Optional[str]
+    notas_cliente: Optional[str]
     total: float
     amount_paid: float
     balance: float
@@ -147,6 +148,7 @@ def get_credit_sales(
             "id": sale.id,
             "customer_name": sale.customer_name,
             "customer_phone": sale.customer_phone,
+            "notas_cliente": sale.notas_cliente,
             "total": float(sale.total),
             "amount_paid": float(sale.amount_paid or 0),
             "balance": balance,
@@ -204,6 +206,8 @@ def register_payment(
     
     # Update sale
     sale.amount_paid = float(sale.amount_paid or 0) + data.amount
+    if not sale.vendedor_id:
+        sale.vendedor_id = sale.user_id or current_user.id
     old_status = sale.credit_status
     new_paid = sale.amount_paid
     new_balance = float(sale.total) - new_paid

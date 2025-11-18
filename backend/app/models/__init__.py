@@ -5,8 +5,9 @@ from .metal_rate import MetalRate
 from .inventory_movement import InventoryMovement
 from .credit_payment import CreditPayment
 from .producto_pedido import ProductoPedido, Pedido, PagoPedido
+from .customer import Customer
 
-__all__ = ["Tenant", "User", "Product", "MetalRate", "InventoryMovement", "CreditPayment", "ProductoPedido", "Pedido", "PagoPedido"]
+__all__ = ["Tenant", "User", "Product", "MetalRate", "InventoryMovement", "CreditPayment", "ProductoPedido", "Pedido", "PagoPedido", "Customer"]
 
 
 

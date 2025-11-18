@@ -7,8 +7,8 @@ from sqlalchemy.orm import relationship
 from app.models.tenant import Base
 
 
-class Sale(Base):
-    __tablename__ = "sales"
+class VentasContado(Base):
+    __tablename__ = "ventas_contado"
 
     id = Column(Integer, primary_key=True, index=True)
     tenant_id = Column(Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -19,30 +19,29 @@ class Sale(Base):
     tax_amount = Column(Numeric(10, 2), nullable=False, default=0)
     total = Column(Numeric(10, 2), nullable=False, default=0)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    return_of_id = Column(Integer, ForeignKey("sales.id", ondelete="SET NULL"), nullable=True, index=True)
+    vendedor_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    utilidad = Column(Numeric(10, 2), nullable=True, default=0)
+    total_cost = Column(Numeric(10, 2), nullable=True, default=0)
     
-    # Jewelry store fields
-    tipo_venta = Column(String(20), nullable=True, default="contado", index=True)  # "contado" or "credito"
-    vendedor_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)  # Salesperson
-    utilidad = Column(Numeric(10, 2), nullable=True, default=0)  # Profit (total - total_cost)
-    total_cost = Column(Numeric(10, 2), nullable=True, default=0)  # Total cost of items sold
-    folio_apartado = Column(String(50), nullable=True, index=True)  # Folio único para apartados (credito)
+    # Folio único para ventas de contado
+    folio_venta = Column(String(50), nullable=True, index=True)
     
-    # Credit sale fields
+    # Customer information (optional, for better ticket reporting)
     customer_name = Column(String(255), nullable=True)
     customer_phone = Column(String(50), nullable=True)
     customer_address = Column(String(500), nullable=True)
-    amount_paid = Column(Numeric(10, 2), nullable=True, default=0)  # Total paid so far
-    credit_status = Column(String(20), nullable=True, default="pendiente")  # "pendiente" or "pagado"
+    
+    # Devolución: referencia a la venta original si esta es una devolución
+    return_of_id = Column(Integer, ForeignKey("ventas_contado.id", ondelete="SET NULL"), nullable=True, index=True)
 
-    items = relationship("SaleItem", back_populates="sale", cascade="all, delete-orphan")
+    items = relationship("ItemVentaContado", back_populates="venta", cascade="all, delete-orphan")
 
 
-class SaleItem(Base):
-    __tablename__ = "sale_items"
+class ItemVentaContado(Base):
+    __tablename__ = "items_venta_contado"
 
     id = Column(Integer, primary_key=True, index=True)
-    sale_id = Column(Integer, ForeignKey("sales.id", ondelete="CASCADE"), nullable=False, index=True)
+    venta_id = Column(Integer, ForeignKey("ventas_contado.id", ondelete="CASCADE"), nullable=False, index=True)
     product_id = Column(Integer, ForeignKey("products.id", ondelete="SET NULL"), nullable=True, index=True)
     name = Column(String(255), nullable=False)
     codigo = Column(String(100), nullable=True)
@@ -52,10 +51,7 @@ class SaleItem(Base):
     discount_amount = Column(Numeric(10, 2), nullable=False, default=0)
     total_price = Column(Numeric(10, 2), nullable=False, default=0)
 
-    # Snapshot JSON completo del producto al momento de la venta
     product_snapshot = Column(JSONB, nullable=True)
 
-    sale = relationship("Sale", back_populates="items")
-    product = relationship("Product")
-
+    venta = relationship("VentasContado", back_populates="items")
 

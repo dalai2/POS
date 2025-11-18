@@ -10,7 +10,9 @@ interface Vendedor {
   abonos_apartados: number;
   abonos_pedidos: number;
   cuentas_por_cobrar: number;
-  productos_liquidados?: number;
+  productos_liquidados?: number;  // Mantener para compatibilidad
+  productos_liquidados_apartados?: number;  // NUEVO: Suma de abonos que saldan apartados
+  productos_liquidados_pedidos?: number;  // NUEVO: Suma de abonos que saldan pedidos
 }
 
 interface VendorsTableProps {
@@ -37,7 +39,8 @@ export const VendorsTable: React.FC<VendorsTableProps> = ({ vendedores }) => {
               <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider" style={{ color: '#ffffff', borderRight: '1px solid rgba(255, 255, 255, 0.1)' }}>Abono Apart.</th>
               <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider" style={{ color: '#ffffff', borderRight: '1px solid rgba(255, 255, 255, 0.1)' }}>Abono Ped.</th>
               <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider" style={{ color: '#ffffff', borderRight: '1px solid rgba(255, 255, 255, 0.1)' }}>Cuentas x Cobrar</th>
-              <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider" style={{ color: '#ffffff', backgroundColor: 'rgba(0, 0, 0, 0.2)' }}>Prod. Liquidados</th>
+              <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider" style={{ color: '#ffffff', borderRight: '1px solid rgba(255, 255, 255, 0.1)', backgroundColor: 'rgba(0, 0, 0, 0.2)' }}>Prod. Liq. Apart.</th>
+              <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider" style={{ color: '#ffffff', backgroundColor: 'rgba(0, 0, 0, 0.2)' }}>Prod. Liq. Ped.</th>
             </tr>
           </thead>
           <tbody>
@@ -51,7 +54,8 @@ export const VendorsTable: React.FC<VendorsTableProps> = ({ vendedores }) => {
                 <td className="px-4 py-3 text-sm text-right" style={{ color: '#2e4354', borderRight: '1px solid rgba(46, 67, 84, 0.05)' }}>${vendedor.abonos_apartados.toFixed(2)}</td>
                 <td className="px-4 py-3 text-sm text-right" style={{ color: '#2e4354', borderRight: '1px solid rgba(46, 67, 84, 0.05)' }}>${vendedor.abonos_pedidos.toFixed(2)}</td>
                 <td className="px-4 py-3 text-sm text-right font-bold" style={{ color: '#2e4354', borderRight: '1px solid rgba(46, 67, 84, 0.05)' }}>${vendedor.cuentas_por_cobrar.toFixed(2)}</td>
-                <td className="px-4 py-3 text-sm text-right font-bold" style={{ color: '#2e4354', backgroundColor: 'rgba(46, 67, 84, 0.1)' }}>${(vendedor.productos_liquidados ?? 0).toFixed(2)}</td>
+                <td className="px-4 py-3 text-sm text-right font-bold" style={{ color: '#2e4354', borderRight: '1px solid rgba(46, 67, 84, 0.05)', backgroundColor: 'rgba(46, 67, 84, 0.1)' }}>${(vendedor.productos_liquidados_apartados ?? 0).toFixed(2)}</td>
+                <td className="px-4 py-3 text-sm text-right font-bold" style={{ color: '#2e4354', backgroundColor: 'rgba(46, 67, 84, 0.1)' }}>${(vendedor.productos_liquidados_pedidos ?? 0).toFixed(2)}</td>
               </tr>
             ))}
           </tbody>

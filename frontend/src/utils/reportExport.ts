@@ -127,7 +127,8 @@ export const buildDetailedReportCsv = (
       'Ventas Total Activa',
       'Venta Total Pasiva',
       'Cuentas por Cobrar',
-      'Productos Liquidados',
+      'Prod. Liq. Apart.',
+      'Prod. Liq. Ped.',
     ]);
     report.vendedores.forEach(v => {
       rows.push([
@@ -141,7 +142,8 @@ export const buildDetailedReportCsv = (
         `$${v.ventas_total_activa.toFixed(2)}`,
         `$${v.venta_total_pasiva.toFixed(2)}`,
         `$${v.cuentas_por_cobrar.toFixed(2)}`,
-        `$${(v.productos_liquidados ?? 0).toFixed(2)}`,
+        `$${(v.productos_liquidados_apartados ?? 0).toFixed(2)}`,
+        `$${(v.productos_liquidados_pedidos ?? 0).toFixed(2)}`,
       ]);
     });
     rows.push([]);

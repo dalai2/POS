@@ -9,8 +9,8 @@ from app.core.database import get_db
 from app.core.deps import get_tenant, get_current_user, require_admin
 from app.models.tenant import Tenant
 from app.models.user import User
-from app.models.sale import Sale, SaleItem
-from app.models.product import Product
+from app.models.venta_contado import VentasContado, ItemVentaContado
+from app.models.apartado import Apartado, ItemApartado
 from app.models.payment import Payment
 from app.models.credit_payment import CreditPayment
 from app.models.producto_pedido import Pedido, PagoPedido
@@ -40,6 +40,10 @@ class SalesByVendorReport(BaseModel):
     venta_total_pasiva: float  # Anticipos + Abonos
     cuentas_por_cobrar: float  # Saldo pendiente
     productos_liquidados: float  # Total de productos liquidados por vendedor
+    productos_liquidados_apartados: float  # NUEVO: Productos liquidados de apartados
+    productos_liquidados_pedidos: float  # NUEVO: Productos liquidados de pedidos
+    ultimo_abono_apartado: Optional[Dict[str, Any]] = None  # NUEVO: Info del último abono de apartado
+    ultimo_abono_pedido: Optional[Dict[str, Any]] = None  # NUEVO: Info del último abono de pedido
 
 
 class ResumenPiezas(BaseModel):
@@ -287,195 +291,106 @@ def get_corte_de_caja(
     tenant: Tenant = Depends(get_tenant),
     current_user: User = Depends(require_admin)
 ):
-    """
-    Generate a corte de caja (cash cut) report showing:
-    - Sales by payment method
-    - Credit payments (abonos)
-    - Profit calculations
-    - Returns
-    """
-    # Default to today if no dates provided
+    """Generate corte de caja report using corte_caja_service metrics."""
     if not start_date:
         start_date = date.today()
     if not end_date:
         end_date = date.today()
     
-    # Convert to datetime for queries (timezone-aware)
-    from datetime import timezone as tz
-    start_datetime = datetime.combine(start_date, datetime.min.time()).replace(tzinfo=tz.utc)
-    end_datetime = datetime.combine(end_date, datetime.max.time()).replace(tzinfo=tz.utc)
-    
-    # Get all sales in date range (excluding returns)
-    # Include: all "contado" sales + credit sales that are paid or delivered
-    sales_query = db.query(Sale).filter(
-        Sale.tenant_id == tenant.id,
-        Sale.created_at >= start_datetime,
-        Sale.created_at <= end_datetime,
-        Sale.return_of_id == None,
-        or_(
-            Sale.tipo_venta == "contado",
-            and_(
-                Sale.tipo_venta == "credito",
-                Sale.credit_status.in_(['pagado', 'entregado'])
-            )
+    from app.services.corte_caja_service import get_detailed_corte_caja as service_get_detailed_corte_caja
+
+    report = service_get_detailed_corte_caja(start_date, end_date, db, tenant)
+    resumen_pagos = report.get("resumen_pagos", [])
+    resumen_piezas_raw = report.get("resumen_piezas", [])
+    vendedores = report.get("vendedores", [])
+
+    def _sum_pasivos(tipo_prefix: str, metodo: str) -> float:
+        return sum(
+            float(entry.get("total", 0.0))
+            for entry in resumen_pagos
+            if entry.get("metodo_pago") == metodo
+            and entry.get("tipo_movimiento", "").lower().startswith(tipo_prefix.lower())
         )
+
+    pasivos_efectivo = sum(
+        float(entry.get("total", 0.0))
+        for entry in resumen_pagos
+        if entry.get("metodo_pago") == "Efectivo"
     )
-    
-    all_sales = sales_query.all()
-    
-    # Initialize counters
-    ventas_contado_count = 0
-    ventas_contado_total = 0.0
-    ventas_credito_count = 0
-    ventas_credito_total = 0.0
-    efectivo_ventas = 0.0
-    tarjeta_ventas = 0.0
-    credito_ventas = 0.0
-    total_cost = 0.0
-    total_profit = 0.0
-    
-    # Process each sale
-    for sale in all_sales:
-        if sale.tipo_venta == "contado":
-            ventas_contado_count += 1
-            ventas_contado_total += float(sale.total)
-            
-            # Get all payment methods for this sale
-            payments = db.query(Payment).filter(Payment.sale_id == sale.id).all()
-            for payment in payments:
-                if payment.method == "efectivo" or payment.method == "cash":
-                    efectivo_ventas += float(payment.amount)
-                elif payment.method == "tarjeta" or payment.method == "card":
-                    tarjeta_ventas += float(payment.amount)
-        else:  # credito
-            ventas_credito_count += 1
-            ventas_credito_total += float(sale.total)
-            credito_ventas += float(sale.total)
-        
-        # Accumulate costs and profits
-        if sale.total_cost:
-            total_cost += float(sale.total_cost)
-        if sale.utilidad:
-            total_profit += float(sale.utilidad)
-    
-    # Get credit payments (abonos) in date range
-    abonos = db.query(CreditPayment).filter(
-        CreditPayment.tenant_id == tenant.id,
-        CreditPayment.created_at >= start_datetime,
-        CreditPayment.created_at <= end_datetime
-    ).all()
-    
-    abonos_efectivo = 0.0
-    abonos_tarjeta = 0.0
-    
-    for abono in abonos:
-        if abono.payment_method == "efectivo":
-            abonos_efectivo += float(abono.amount)
-        elif abono.payment_method == "tarjeta":
-            abonos_tarjeta += float(abono.amount)
-    
+    pasivos_tarjeta = sum(
+        float(entry.get("total", 0.0))
+        for entry in resumen_pagos
+        if entry.get("metodo_pago") == "Tarjeta"
+    )
+
+    abonos_efectivo = (
+        _sum_pasivos("abono de apartado", "Efectivo")
+        + _sum_pasivos("abono de pedido apartado", "Efectivo")
+    )
+    abonos_tarjeta = (
+        _sum_pasivos("abono de apartado", "Tarjeta")
+        + _sum_pasivos("abono de pedido apartado", "Tarjeta")
+    )
     abonos_total = abonos_efectivo + abonos_tarjeta
     
-    # Get pedidos (orders) in date range
-    pedidos_query = db.query(Pedido).filter(
-        Pedido.tenant_id == tenant.id,
-        Pedido.created_at >= start_datetime,
-        Pedido.created_at <= end_datetime
-    )
-    
-    all_pedidos = pedidos_query.all()
-    
-    # Initialize pedidos counters
-    pedidos_count = len(all_pedidos)
-    pedidos_total = sum(float(p.total) for p in all_pedidos)
-    pedidos_anticipos = sum(float(p.anticipo_pagado) for p in all_pedidos)
-    pedidos_saldo = sum(float(p.saldo_pendiente) for p in all_pedidos)
-    
-    # Get pagos de pedidos (order payments) in date range
-    pagos_pedidos_query = db.query(PagoPedido).join(Pedido).filter(
-        Pedido.tenant_id == tenant.id,
-        PagoPedido.created_at >= start_datetime,
-        PagoPedido.created_at <= end_datetime
-    )
-    
-    pagos_pedidos = pagos_pedidos_query.all()
-    
-    # Count pedidos payments by method
-    pedidos_efectivo = 0.0
-    pedidos_tarjeta = 0.0
-    
-    for pago in pagos_pedidos:
-        if pago.metodo_pago == "efectivo":
-            pedidos_efectivo += float(pago.monto)
-        elif pago.metodo_pago == "tarjeta":
-            pedidos_tarjeta += float(pago.monto)
-    
-    pedidos_pagos_total = pedidos_efectivo + pedidos_tarjeta
-    
-    # Get returns
-    returns = db.query(Sale).filter(
-        Sale.tenant_id == tenant.id,
-        Sale.created_at >= start_datetime,
-        Sale.created_at <= end_datetime,
-        Sale.return_of_id != None
-    ).all()
-    
-    returns_count = len(returns)
-    returns_total = sum(float(r.total) for r in returns)
-    
-    cancelaciones_ventas_contado_monto = returns_total
-    cancelaciones_ventas_contado_count = returns_count
-    piezas_canceladas_ventas = 0
-    for retorno in returns:
-        sale_items = db.query(SaleItem).filter(SaleItem.sale_id == retorno.id).all()
-        piezas_canceladas_ventas += sum(item.quantity for item in sale_items)
-    
-    # Calculate totals
-    total_efectivo = efectivo_ventas + abonos_efectivo + pedidos_efectivo
-    total_tarjeta = tarjeta_ventas + abonos_tarjeta + pedidos_tarjeta
+    ventas_contado_total = float(report.get("total_contado", 0.0))
+    ventas_credito_total = float(report.get("total_credito", 0.0))
+    ventas_contado_count = int(report.get("contado_count", 0))
+    ventas_credito_count = int(report.get("credito_count", 0))
+
+    efectivo_ventas = float(report.get("total_efectivo_contado", 0.0))
+    tarjeta_ventas = float(report.get("total_tarjeta_contado", 0.0))
+    credito_ventas = ventas_credito_total
+
+    total_efectivo = efectivo_ventas + pasivos_efectivo
+    total_tarjeta = tarjeta_ventas + pasivos_tarjeta
+    returns_count = int(report.get("cancelaciones_ventas_contado_count", 0))
+    returns_total = float(report.get("cancelaciones_ventas_contado_monto", 0.0))
     total_revenue = total_efectivo + total_tarjeta + credito_ventas - returns_total
     
-    # Calculate profit margin
-    profit_margin = (total_profit / total_revenue * 100) if total_revenue > 0 else 0
-    
-    # Calculate vendor stats
-    vendor_stats = {}
-    for sale in all_sales:
-        vendedor_id = sale.vendedor_id or 0
-        if vendedor_id not in vendor_stats:
-            vendor = db.query(User).filter(User.id == vendedor_id).first() if vendedor_id > 0 else None
-            vendor_stats[vendedor_id] = {
-                "vendedor_id": vendedor_id,
-                "vendedor_name": vendor.email if vendor else "Mostrador",
-                "sales_count": 0,
-                "contado_count": 0,
-                "credito_count": 0,
-                "total_contado": 0.0,
-                "total_credito": 0.0,
-                "total_profit": 0.0,
-                "total_efectivo_contado": 0.0,
-                "total_tarjeta_contado": 0.0,
-                "total_tarjeta_neto": 0.0,
-                "anticipos_apartados": 0.0,
-                "anticipos_pedidos": 0.0,
-                "abonos_apartados": 0.0,
-                "abonos_pedidos": 0.0,
-                "ventas_total_activa": 0.0,
-                "venta_total_pasiva": 0.0,
-                "cuentas_por_cobrar": 0.0,
-                "productos_liquidados": 0.0
-            }
-        
-        vendor_stats[vendedor_id]["sales_count"] += 1
-        if sale.tipo_venta == "contado":
-            vendor_stats[vendedor_id]["contado_count"] += 1
-            vendor_stats[vendedor_id]["total_contado"] += float(sale.total)
-        else:
-            vendor_stats[vendedor_id]["credito_count"] += 1
-            vendor_stats[vendedor_id]["total_credito"] += float(sale.total)
-        vendor_stats[vendedor_id]["total_profit"] += float(sale.utilidad or 0)
-    
+    total_cost = float(report.get("costo_total", 0.0))
+    total_profit = float(report.get("utilidad_total", 0.0))
+    profit_margin = (total_profit / total_revenue * 100) if total_revenue > 0 else 0.0
 
+    resumen_piezas = [
+        ResumenPiezas(
+            nombre=item.get("nombre") or "Sin nombre",
+            modelo=item.get("modelo"),
+            quilataje=item.get("quilataje"),
+            talla=item.get("talla"),
+            piezas_vendidas=int(item.get("piezas_vendidas") or 0),
+            piezas_pedidas=int(item.get("piezas_pedidas") or 0),
+            piezas_apartadas=int(item.get("piezas_apartadas") or 0),
+            piezas_liquidadas=int(item.get("piezas_liquidadas") or 0),
+            total_piezas=int(item.get("total_piezas") or 0),
+        )
+        for item in resumen_piezas_raw
+    ]
+
+    return CorteDeCajaReport(
+        start_date=start_date.isoformat(),
+        end_date=end_date.isoformat(),
+        ventas_contado_count=ventas_contado_count,
+        ventas_contado_total=ventas_contado_total,
+        ventas_credito_count=ventas_credito_count,
+        ventas_credito_total=ventas_credito_total,
+        efectivo_ventas=efectivo_ventas,
+        tarjeta_ventas=tarjeta_ventas,
+        credito_ventas=credito_ventas,
+        abonos_efectivo=abonos_efectivo,
+        abonos_tarjeta=abonos_tarjeta,
+        abonos_total=abonos_total,
+        total_efectivo=total_efectivo,
+        total_tarjeta=total_tarjeta,
+        total_revenue=total_revenue,
+        total_cost=total_cost,
+        total_profit=total_profit,
+        profit_margin=profit_margin,
+        returns_count=returns_count,
+        returns_total=returns_total,
+        resumen_piezas=resumen_piezas,
+        vendedores=vendedores,
+    )
 
 class DailySummaryReport(BaseModel):
     fecha: str
@@ -652,7 +567,6 @@ class DetailedCorteCajaReport(BaseModel):
 
     # Resumen de Piezas
     resumen_piezas: List[ResumenPiezas]
-    total_piezas_por_nombre_sin_liquidadas: Dict[str, int]  # Total de piezas por nombre excluyendo liquidadas
 
     # Vendedores
     vendedores: List[SalesByVendorReport]
@@ -696,31 +610,83 @@ def get_sales_by_vendor(
     start_datetime = datetime.combine(start_date, datetime.min.time())
     end_datetime = datetime.combine(end_date, datetime.max.time())
     
-    # Group sales by vendedor
-    sales = db.query(Sale).filter(
-        Sale.tenant_id == tenant.id,
-        Sale.created_at >= start_datetime,
-        Sale.created_at <= end_datetime,
-        Sale.return_of_id == None,
-        Sale.vendedor_id != None
+    # NUEVO: Get ventas de contado by vendedor
+    ventas_contado = db.query(VentasContado).filter(
+        VentasContado.tenant_id == tenant.id,
+        VentasContado.created_at >= start_datetime,
+        VentasContado.created_at <= end_datetime,
+        VentasContado.vendedor_id != None
+    ).all()
+    
+    # NUEVO: Get apartados by vendedor
+    apartados = db.query(Apartado).filter(
+        Apartado.tenant_id == tenant.id,
+        Apartado.created_at >= start_datetime,
+        Apartado.created_at <= end_datetime,
+        Apartado.vendedor_id != None
+    ).all()
+    
+    # NUEVO: Get pedidos by vendedor (user_id)
+    pedidos = db.query(Pedido).filter(
+        Pedido.tenant_id == tenant.id,
+        Pedido.created_at >= start_datetime,
+        Pedido.created_at <= end_datetime,
+        Pedido.user_id != None
     ).all()
     
     # Aggregate by vendor
     vendor_stats = {}
-    for sale in sales:
-        if sale.vendedor_id not in vendor_stats:
-            vendor = db.query(User).filter(User.id == sale.vendedor_id).first()
-            vendor_stats[sale.vendedor_id] = {
-                "vendedor_id": sale.vendedor_id,
+    
+    # Process new ventas de contado
+    for venta in ventas_contado:
+        vendedor_id = venta.vendedor_id
+        if vendedor_id not in vendor_stats:
+            vendor = db.query(User).filter(User.id == vendedor_id).first()
+            vendor_stats[vendedor_id] = {
+                "vendedor_id": vendedor_id,
                 "vendedor_name": vendor.email if vendor else "Unknown",
                 "sales_count": 0,
                 "total_sales": 0.0,
                 "total_profit": 0.0
             }
         
-        vendor_stats[sale.vendedor_id]["sales_count"] += 1
-        vendor_stats[sale.vendedor_id]["total_sales"] += float(sale.total)
-        vendor_stats[sale.vendedor_id]["total_profit"] += float(sale.utilidad or 0)
+        vendor_stats[vendedor_id]["sales_count"] += 1
+        vendor_stats[vendedor_id]["total_sales"] += float(venta.total)
+        vendor_stats[vendedor_id]["total_profit"] += float(venta.utilidad or 0)
+    
+    # Process new apartados
+    for apartado in apartados:
+        vendedor_id = apartado.vendedor_id
+        if vendedor_id not in vendor_stats:
+            vendor = db.query(User).filter(User.id == vendedor_id).first()
+            vendor_stats[vendedor_id] = {
+                "vendedor_id": vendedor_id,
+                "vendedor_name": vendor.email if vendor else "Unknown",
+                "sales_count": 0,
+                "total_sales": 0.0,
+                "total_profit": 0.0
+            }
+        
+        vendor_stats[vendedor_id]["sales_count"] += 1
+        vendor_stats[vendedor_id]["total_sales"] += float(apartado.total)
+        vendor_stats[vendedor_id]["total_profit"] += float(apartado.utilidad or 0)
+    
+    # Process new pedidos
+    for pedido in pedidos:
+        vendedor_id = pedido.user_id
+        if vendedor_id not in vendor_stats:
+            vendor = db.query(User).filter(User.id == vendedor_id).first()
+            vendor_stats[vendedor_id] = {
+                "vendedor_id": vendedor_id,
+                "vendedor_name": vendor.email if vendor else "Unknown",
+                "sales_count": 0,
+                "total_sales": 0.0,
+                "total_profit": 0.0
+            }
+        
+        vendor_stats[vendedor_id]["sales_count"] += 1
+        vendor_stats[vendedor_id]["total_sales"] += float(pedido.total)
+        # Pedidos no tienen utilidad directa, se calcula desde items si es necesario
     
     return list(vendor_stats.values())
 
@@ -748,146 +714,3 @@ def get_detailed_corte_caja(
     # Call the service
     return service_get_detailed_corte_caja(start_date, end_date, db, tenant)
 
-
-def _build_resumen_piezas(
-    db: Session,
-    all_sales: List[Sale],
-    apartados_pendientes: List[Sale],
-    pedidos_pendientes: List[Pedido],
-    pedidos_liquidados: List[Pedido],
-) -> List[dict]:
-    resumen_piezas_dict: Dict[Tuple[str, str, str], Dict[str, Any]] = {}
-
-    for sale in all_sales:
-        if sale.tipo_venta == "contado":
-            items = db.query(SaleItem).filter(SaleItem.sale_id == sale.id).all()
-            for item in items:
-                product = db.query(Product).filter(Product.id == item.product_id).first()
-                if not product:
-                    continue
-                key = (product.name or "Sin nombre", product.modelo or "N/A", product.quilataje or "N/A")
-                if key not in resumen_piezas_dict:
-                    resumen_piezas_dict[key] = {
-                        "nombre": product.name or "Sin nombre",
-                        "modelo": product.modelo or "N/A",
-                        "quilataje": product.quilataje or "N/A",
-                        "piezas_vendidas": 0,
-                        "piezas_pedidas": 0,
-                        "piezas_apartadas": 0,
-                        "piezas_liquidadas": 0,
-                        "total_piezas": 0,
-                    }
-                resumen_piezas_dict[key]["piezas_vendidas"] += item.quantity
-
-    for apartado in apartados_pendientes:
-        items = db.query(SaleItem).filter(SaleItem.sale_id == apartado.id).all()
-        for item in items:
-            product = db.query(Product).filter(Product.id == item.product_id).first()
-            if not product:
-                continue
-            key = (product.name or "Sin nombre", product.modelo or "N/A", product.quilataje or "N/A")
-            if key not in resumen_piezas_dict:
-                resumen_piezas_dict[key] = {
-                    "nombre": product.name or "Sin nombre",
-                    "modelo": product.modelo or "N/A",
-                    "quilataje": product.quilataje or "N/A",
-                    "piezas_vendidas": 0,
-                    "piezas_pedidas": 0,
-                    "piezas_apartadas": 0,
-                    "piezas_liquidadas": 0,
-                    "total_piezas": 0,
-                }
-            resumen_piezas_dict[key]["piezas_apartadas"] += item.quantity
-
-    for sale in all_sales:
-        if sale.tipo_venta == "credito" and sale.credit_status in ['pagado', 'entregado']:
-            items = db.query(SaleItem).filter(SaleItem.sale_id == sale.id).all()
-            for item in items:
-                product = db.query(Product).filter(Product.id == item.product_id).first()
-                if not product:
-                    continue
-                key = (product.name or "Sin nombre", product.modelo or "N/A", product.quilataje or "N/A")
-                if key not in resumen_piezas_dict:
-                    resumen_piezas_dict[key] = {
-                        "nombre": product.name or "Sin nombre",
-                        "modelo": product.modelo or "N/A",
-                        "quilataje": product.quilataje or "N/A",
-                        "piezas_vendidas": 0,
-                        "piezas_pedidas": 0,
-                        "piezas_apartadas": 0,
-                        "piezas_liquidadas": 0,
-                        "total_piezas": 0,
-                    }
-                resumen_piezas_dict[key]["piezas_liquidadas"] += item.quantity
-
-    from app.models.producto_pedido import ProductoPedido
-
-    for pedido in pedidos_pendientes:
-        producto = db.query(ProductoPedido).filter(ProductoPedido.id == pedido.producto_pedido_id).first()
-        if not producto:
-            continue
-        key = (producto.nombre or producto.modelo or "Sin nombre", producto.modelo or "N/A", producto.quilataje or "N/A")
-        if key not in resumen_piezas_dict:
-            resumen_piezas_dict[key] = {
-                "nombre": producto.nombre or producto.modelo or "Sin nombre",
-                "modelo": producto.modelo or "N/A",
-                "quilataje": producto.quilataje or "N/A",
-                "piezas_vendidas": 0,
-                "piezas_pedidas": 0,
-                "piezas_apartadas": 0,
-                "piezas_liquidadas": 0,
-                "total_piezas": 0,
-            }
-        resumen_piezas_dict[key]["piezas_pedidas"] += pedido.cantidad
-
-    for pedido in pedidos_liquidados:
-        producto = db.query(ProductoPedido).filter(ProductoPedido.id == pedido.producto_pedido_id).first()
-        if not producto:
-            continue
-        key = (producto.nombre or producto.modelo or "Sin nombre", producto.modelo or "N/A", producto.quilataje or "N/A")
-        if key not in resumen_piezas_dict:
-            resumen_piezas_dict[key] = {
-                "nombre": producto.nombre or producto.modelo or "Sin nombre",
-                "modelo": producto.modelo or "N/A",
-                "quilataje": producto.quilataje or "N/A",
-                "piezas_vendidas": 0,
-                "piezas_pedidas": 0,
-                "piezas_apartadas": 0,
-                "piezas_liquidadas": 0,
-                "total_piezas": 0,
-            }
-        resumen_piezas_dict[key]["piezas_liquidadas"] += pedido.cantidad
-
-    for data in resumen_piezas_dict.values():
-        data["total_piezas"] = (
-            data["piezas_vendidas"]
-            + data["piezas_pedidas"]
-            + data["piezas_apartadas"]
-            + data["piezas_liquidadas"]
-        )
-
-    return sorted(
-        resumen_piezas_dict.values(),
-        key=lambda x: (x["nombre"], x["modelo"], x["quilataje"]),
-    )
-
-
-def _build_total_piezas_por_nombre_sin_liquidadas(
-    resumen_piezas: List[dict]
-) -> Dict[str, int]:
-    """Agrupa el resumen de piezas solo por nombre, sumando todas las categorías excepto liquidadas"""
-    total_por_nombre_dict: Dict[str, int] = {}
-    
-    for pieza in resumen_piezas:
-        nombre = pieza["nombre"]
-        if nombre not in total_por_nombre_dict:
-            total_por_nombre_dict[nombre] = 0
-        
-        # Sumar todas las categorías excepto liquidadas
-        total_por_nombre_dict[nombre] += (
-            pieza["piezas_vendidas"]
-            + pieza["piezas_pedidas"]
-            + pieza["piezas_apartadas"]
-        )
-    
-    return total_por_nombre_dict

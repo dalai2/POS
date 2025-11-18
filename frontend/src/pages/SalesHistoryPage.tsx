@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react'
 import Layout from '../components/Layout'
 import { api } from '../utils/api'
+import { cleanFolio } from '../utils/folioHelper'
 
-type Sale = { id: number; total: string; created_at: string; user_id?: number | null; vendedor_id?: number | null; tipo_venta?: string; user?: { email: string } }
+type Sale = { id: number; total: string; created_at: string; user_id?: number | null; vendedor_id?: number | null; tipo_venta?: string; folio_venta?: string; folio_apartado?: string; user?: { email: string } }
 type User = { id: number; email: string }
 
 export default function SalesHistoryPage() {
@@ -39,9 +40,9 @@ export default function SalesHistoryPage() {
       if (userId && userId.trim() && !isNaN(Number(userId))) qs.set('user_id', userId)
       qs.set('skip', String(nextPage * pageSize))
       qs.set('limit', String(pageSize))
-      const r = await api.get(`/sales?${qs.toString()}`)
-      // Filter to show only "contado" sales in the sidebar history
-      const contadoSales = r.data.filter((sale: Sale) => sale.tipo_venta === 'contado' || !sale.tipo_venta)
+      const r = await api.get(`/ventas?${qs.toString()}`)
+      // Filter to show only "contado" sales in the sidebar history (exclude apartados which have tipo_venta === 'abono')
+      const contadoSales = r.data.filter((sale: Sale) => sale.tipo_venta === 'contado' || (!sale.tipo_venta && !sale.folio_apartado))
       setSales(contadoSales)
     } catch (e: any) {
       const errorMsg = e?.response?.data?.detail || e?.message || 'Error cargando ventas'
@@ -281,7 +282,7 @@ export default function SalesHistoryPage() {
 
       <!-- Header Info -->
       <div class="header-info">
-        <div><strong>FOLIO :</strong> ${String(saleData.id).padStart(6, '0')}</div>
+        ${saleData.tipo_venta === 'credito' || saleData.tipo_venta === 'abono' ? `<div><strong>FOLIO DE APARTADO :</strong> ${cleanFolio(saleData.folio_apartado) || 'AP-' + String(saleData.id).padStart(6, '0')}</div>` : `<div><strong>FOLIO :</strong> ${cleanFolio(saleData.folio_venta) || 'V-' + String(saleData.id).padStart(6, '0')}</div>`}
         <div><strong>FECHA VENTA :</strong> ${formattedDate}</div>
         <div>HIDALGO #112 ZONA CENTRO, LOCAL 12, 23 Y 24 C.P: 37000. LEÓN, GTO.</div>
         <div>WhatsApp: 4776621788</div>
@@ -466,7 +467,7 @@ export default function SalesHistoryPage() {
           // Si no hay 'sale', verificar que el 'payment' sea realmente de una venta
           // Intentar obtener la venta para confirmar que existe
           try {
-            await api.get(`/sales/${id}`)
+            await api.get(`/ventas/${id}`)
             // Si la venta existe, usar el ticket 'payment'
             selectedTicket = saleTickets[saleTickets.length - 1]
             console.log(`[DEBUG] Usando ticket 'payment' (venta verificada):`, { id: selectedTicket.id, kind: selectedTicket.kind })
@@ -496,7 +497,7 @@ export default function SalesHistoryPage() {
         }
       }
       // Fallback: reconstruir desde venta
-      const r = await api.get(`/sales/${id}`)
+      const r = await api.get(`/ventas/${id}`)
       printSaleTicket(r.data)
     } catch (e: any) {
       setMsg(e?.response?.data?.detail || 'Error al cargar ticket')
@@ -535,7 +536,7 @@ export default function SalesHistoryPage() {
             if (dateTo) qs.set('date_to', new Date(dateTo).toISOString())
             if (userId && userId.trim() && !isNaN(Number(userId))) qs.set('user_id', userId)
               
-              const response = await api.get(`/sales/export?${qs.toString()}`, {
+              const response = await api.get(`/ventas/export?${qs.toString()}`, {
                 responseType: 'blob'
               })
               
@@ -558,19 +559,23 @@ export default function SalesHistoryPage() {
         <table className="w-full text-left">
           <thead><tr><th className="p-2">Folio</th><th className="p-2">Fecha</th><th className="p-2">Total</th><th className="p-2">Tipo</th><th className="p-2">Vendedor</th><th className="p-2">Acciones</th></tr></thead>
           <tbody>
-            {sales.map(s => (
+            {sales.map(s => {
+              const folio = s.tipo_venta === 'credito' || s.tipo_venta === 'abono'
+                ? (cleanFolio(s.folio_apartado) || `AP-${String(s.id).padStart(6, '0')}`)
+                : (cleanFolio(s.folio_venta) || `V-${String(s.id).padStart(6, '0')}`)
+              return (
               <tr key={s.id} className="border-t">
-                <td className="p-2">{s.id}</td>
+                <td className="p-2">{folio}</td>
                 <td className="p-2">{new Date(s.created_at).toLocaleString('es-MX', { timeZone: 'America/Mexico_City' })}</td>
                 <td className="p-2">${Number(s.total).toFixed(2)}</td>
-                <td className="p-2">{s.tipo_venta === 'credito' ? 'abono' : (s.tipo_venta || 'contado')}</td>
+                <td className="p-2">{s.tipo_venta === 'credito' || s.tipo_venta === 'abono' ? 'abono' : (s.tipo_venta || 'contado')}</td>
                 <td className="p-2">{getVendedorName(s)}</td>
                 <td className="p-2 flex gap-2">
                   <button className="btn" onClick={() => ticket(s.id)}>Ticket</button>
-                  <button className="btn" onClick={async () => { if (!confirm('¿Devolver venta completa?')) return; try { await api.post(`/sales/${s.id}/return`); await load(0); setMsg('Venta devuelta exitosamente') } catch (e:any) { setMsg(e?.response?.data?.detail || 'Error al devolver venta') } }}>Devolver</button>
+                  <button className="btn" onClick={async () => { if (!confirm('¿Devolver venta completa?')) return; try { await api.post(`/ventas/${s.id}/return`); await load(0); setMsg('Venta devuelta exitosamente') } catch (e:any) { setMsg(e?.response?.data?.detail || 'Error al devolver venta') } }}>Devolver</button>
                 </td>
               </tr>
-            ))}
+            )})}
           </tbody>
         </table>
         {msg && <p className="text-sm text-red-600">{msg}</p>}

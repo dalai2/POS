@@ -1,5 +1,6 @@
 import React from 'react';
 import { PedidoRecibido } from '../../types/inventory';
+import { cleanFolio } from '../../utils/folioHelper';
 
 interface PedidosRecibidosProps {
   pedidos: PedidoRecibido[];
@@ -42,7 +43,7 @@ export const PedidosRecibidos: React.FC<PedidosRecibidosProps> = ({ pedidos }) =
                     {new Date(pedido.fecha_recepcion).toLocaleDateString('es-ES')}
                   </td>
                   <td className="px-4 py-3 text-sm font-mono" style={{ color: '#2e4354' }}>
-                    {pedido.folio_pedido}
+                    {cleanFolio(pedido.folio_pedido)}
                   </td>
                   <td className="px-4 py-3 text-sm" style={{ color: '#2e4354' }}>{pedido.cliente_nombre}</td>
                   <td className="px-4 py-3 text-sm" style={{ color: '#2e4354' }}>

@@ -78,6 +78,8 @@ export interface InventoryReport {
   total_entradas: number;
   total_salidas: number;
   piezas_devueltas_total: number;
+  piezas_vendidas_por_nombre?: Record<string, number>;
+  piezas_entregadas_por_nombre?: Record<string, number>;
 }
 
 export interface StockApartado {

@@ -158,7 +158,8 @@ export interface DetailedCorteCajaReport {
   num_solicitudes_apartado: number;
   num_pedidos_hechos: number;
   resumen_piezas: ResumenPiezas[];
-  total_piezas_por_nombre_sin_liquidadas?: Record<string, number>;  // Total de piezas por nombre excluyendo liquidadas
+  piezas_vendidas_por_nombre?: Record<string, number>;
+  piezas_entregadas_por_nombre?: Record<string, number>;
   dashboard?: DashboardMetrics;
   resumen_ventas_activas: Array<{
     tipo_movimiento: string;
@@ -204,7 +205,9 @@ export interface DetailedCorteCajaReport {
     ventas_total_activa: number;
     venta_total_pasiva: number;
     cuentas_por_cobrar: number;
-    productos_liquidados: number;
+    productos_liquidados: number;  // Mantener para compatibilidad
+    productos_liquidados_apartados?: number;  // NUEVO: Suma de abonos que saldan apartados
+    productos_liquidados_pedidos?: number;  // NUEVO: Suma de abonos que saldan pedidos
   }>;
   daily_summaries: Array<{
     fecha: string;

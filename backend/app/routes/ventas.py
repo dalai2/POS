@@ -8,30 +8,20 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.deps import get_current_user, get_tenant, require_admin
+from app.core.folio_service import generate_folio
 from app.models.tenant import Tenant
 from app.models.user import User
 from app.models.product import Product
-from app.models.sale import Sale, SaleItem
 from app.models.payment import Payment
 from app.models.credit_payment import CreditPayment
 from app.routes.status_history import create_status_history
-from app.models.cash_sale import VentasContado, ItemVentaContado
+from app.models.venta_contado import VentasContado, ItemVentaContado
 from app.models.apartado import Apartado, ItemApartado
+from app.services.customer_service import upsert_customer
+from app.core.serialization_helpers import serialize_decimal, serialize_datetime
 
 
 router = APIRouter()
-
-
-def _serialize_decimal(value):
-    if value is None:
-        return None
-    return float(value)
-
-
-def _serialize_datetime(value):
-    if value is None:
-        return None
-    return value.isoformat()
 
 
 def build_product_snapshot(product: Product) -> dict:
@@ -47,18 +37,18 @@ def build_product_snapshot(product: Product) -> dict:
         "tipo_joya": getattr(product, "tipo_joya", None),
         "talla": getattr(product, "talla", None),
         "codigo": product.codigo,
-        "price": _serialize_decimal(product.price),
-        "cost_price": _serialize_decimal(product.cost_price),
+        "price": serialize_decimal(product.price),
+        "cost_price": serialize_decimal(product.cost_price),
         "stock": product.stock,
         "category": product.category,
-        "default_discount_pct": _serialize_decimal(product.default_discount_pct),
+        "default_discount_pct": serialize_decimal(product.default_discount_pct),
         "active": product.active,
-        "peso_gramos": _serialize_decimal(product.peso_gramos),
-        "descuento_porcentaje": _serialize_decimal(getattr(product, "descuento_porcentaje", None)),
-        "precio_manual": _serialize_decimal(getattr(product, "precio_manual", None)),
-        "costo": _serialize_decimal(getattr(product, "costo", None)),
-        "precio_venta": _serialize_decimal(getattr(product, "precio_venta", None)),
-        "created_at": _serialize_datetime(product.created_at),
+        "peso_gramos": serialize_decimal(product.peso_gramos),
+        "descuento_porcentaje": serialize_decimal(getattr(product, "descuento_porcentaje", None)),
+        "precio_manual": serialize_decimal(getattr(product, "precio_manual", None)),
+        "costo": serialize_decimal(getattr(product, "costo", None)),
+        "precio_venta": serialize_decimal(getattr(product, "precio_venta", None)),
+        "created_at": serialize_datetime(product.created_at),
     }
 
 
@@ -90,7 +80,11 @@ def build_description_from_product_data(product_data: dict) -> str:
     return '-'.join(desc_parts) if desc_parts else (name or "")
 
 
-def serialize_sale_items_with_snapshot(db: Session, tenant_id: int, sale_items: List[SaleItem]) -> List[dict]:
+def serialize_sale_items_with_snapshot(
+    db: Session,
+    tenant_id: int,
+    sale_items: List[ItemVentaContado | ItemApartado],
+) -> List[dict]:
     product_cache: dict[int, dict | None] = {}
     serialized_items: List[dict] = []
     for item in sale_items:
@@ -169,7 +163,8 @@ class SaleOut(BaseModel):
     vendedor_id: int | None = None
     utilidad: condecimal(max_digits=10, decimal_places=2) | None = None
     total_cost: condecimal(max_digits=10, decimal_places=2) | None = None
-    folio_apartado: str | None = None  # Folio único para apartados
+    folio_venta: str | None = None  # Folio único para ventas de contado
+    folio_apartado: str | None = None  # Folio único para apartados (legacy)
 
     # Credit sale fields
     customer_name: str | None = None
@@ -250,18 +245,23 @@ async def create_sale(
             paid += amt
 
     # Para contado: validar que el pago cubre total si se envía
-    if (tipo_venta or "contado") == "contado" and payments and paid < total_val:
+    if payments and paid < total_val:
         raise HTTPException(status_code=400, detail=f"Pago insuficiente: {paid} < {total_val}")
-    
-    # Para credito: validar anticipo > 0
-    if (tipo_venta or "contado") == "credito" and paid <= Decimal("0"):
-        raise HTTPException(
-            status_code=400, 
-            detail="El anticipo inicial debe ser mayor a 0 para apartados"
-        )
 
-    # Insertar según tipo_venta
+    # Crear venta de contado (solo contado, apartados se manejan en /apartados)
     if (tipo_venta or "contado") == "contado":
+        try:
+            # Generar folio ANTES de crear la venta (no depende del ID)
+            folio_venta = generate_folio(db, tenant.id, "VENTA")
+        except Exception as e:
+            # Si falla la generación del folio, usar un folio temporal y continuar
+            import traceback
+            print(f"Error generando folio: {e}")
+            print(traceback.format_exc())
+            # Usar un folio temporal basado en timestamp
+            from datetime import datetime
+            folio_venta = f"V-TEMP-{int(datetime.utcnow().timestamp())}"
+        
         venta = VentasContado(
             tenant_id=tenant.id,
             user_id=user.id,
@@ -276,8 +276,10 @@ async def create_sale(
             customer_name=customer_name,
             customer_phone=customer_phone,
             customer_address=customer_address,
+            folio_venta=folio_venta,  # Asignar folio al crear
         )
         db.add(venta)
+        upsert_customer(db, tenant.id, customer_name, customer_phone)
         db.flush()
         for it in items:
             p = product_map[it.product_id]
@@ -325,6 +327,7 @@ async def create_sale(
             vendedor_id=venta.vendedor_id,
             utilidad=venta.utilidad,
             total_cost=venta.total_cost,
+            folio_venta=venta.folio_venta,
             customer_name=venta.customer_name,
             customer_phone=venta.customer_phone,
             customer_address=venta.customer_address,
@@ -332,98 +335,10 @@ async def create_sale(
             payments=payments_list
         )
     else:
-        # credito (apartado)
-        apartado = Apartado(
-            tenant_id=tenant.id,
-            user_id=user.id,
-            subtotal=subtotal_val,
-            discount_amount=discount_val,
-            tax_rate=tax_rate_val,
-            tax_amount=tax_amount_val,
-            total=total_val,
-            vendedor_id=vendedor_id,
-            utilidad=Decimal(str(utilidad)) if utilidad is not None else None,
-            total_cost=Decimal(str(total_cost)) if total_cost is not None else None,
-            customer_name=customer_name,
-            customer_phone=customer_phone,
-            customer_address=customer_address,
-            amount_paid=paid,
-            credit_status="pendiente",
-        )
-        db.add(apartado)
-        db.flush()
-        apartado.folio_apartado = f"APT-{str(apartado.id).zfill(6)}"
-        for it in items:
-            p = product_map[it.product_id]
-            q = max(1, int(it.quantity))
-            unit = Decimal(str(p.price)).quantize(Decimal("0.01"))
-            line_subtotal = (unit * q).quantize(Decimal("0.01"))
-            line_disc_pct = Decimal(str(getattr(it, 'discount_pct', Decimal('0')) or 0)).quantize(Decimal("0.01"))
-            line_disc_amount = (line_subtotal * line_disc_pct / Decimal('100')).quantize(Decimal('0.01'))
-            line_total = (line_subtotal - line_disc_amount).quantize(Decimal('0.01'))
-            db.add(ItemApartado(
-                apartado_id=apartado.id,
-                product_id=p.id,
-                name=p.name,
-                codigo=p.codigo,
-                quantity=q,
-                unit_price=unit,
-                discount_pct=line_disc_pct,
-                discount_amount=line_disc_amount,
-                total_price=line_total,
-                product_snapshot=build_product_snapshot(p)
-            ))
-        # Registrar pago inicial como CreditPayment
-        payments_list = []
-        if payments:
-            for p_in in payments:
-                amt = Decimal(str(p_in.amount)).quantize(Decimal("0.01"))
-                cp = CreditPayment(
-                    tenant_id=tenant.id,
-                    apartado_id=apartado.id,
-                    amount=amt,
-                    payment_method=p_in.method,
-                    user_id=user.id,
-                    notes="Anticipo inicial"
-                )
-                db.add(cp)
-                payments_list.append({"method": p_in.method, "amount": float(amt)})
-        db.commit()
-        db.refresh(apartado)
-        create_status_history(
-            db=db,
-            tenant_id=tenant.id,
-            entity_type="sale",
-            entity_id=apartado.id,
-            old_status=None,
-            new_status=apartado.credit_status,
-            user_id=user.id,
-            user_email=user.email,
-            notes=f"Venta a crédito creada - Monto inicial pagado: ${float(apartado.amount_paid or 0):.2f}"
-        )
-        sale_items = db.query(ItemApartado).filter(ItemApartado.apartado_id == apartado.id).all()
-        items_out = serialize_sale_items_with_snapshot(db, tenant.id, sale_items)
-        return SaleOut(
-            id=apartado.id,
-            user_id=apartado.user_id,
-            subtotal=apartado.subtotal,
-            discount_amount=apartado.discount_amount,
-            tax_rate=apartado.tax_rate,
-            tax_amount=apartado.tax_amount,
-            total=apartado.total,
-            items=items_out,
-            created_at=apartado.created_at,
-            tipo_venta="credito",
-            vendedor_id=apartado.vendedor_id,
-            utilidad=apartado.utilidad,
-            total_cost=apartado.total_cost,
-            folio_apartado=apartado.folio_apartado,
-            customer_name=apartado.customer_name,
-            customer_phone=apartado.customer_phone,
-            customer_address=apartado.customer_address,
-            amount_paid=apartado.amount_paid,
-            credit_status=apartado.credit_status,
-            payments=payments_list
+        # Si tipo_venta es "credito", redirigir a /apartados
+        raise HTTPException(
+            status_code=400,
+            detail="Para crear apartados, use el endpoint /apartados/"
         )
 
 
@@ -434,41 +349,96 @@ def return_sale(
     tenant: Tenant = Depends(get_tenant),
     user: User = Depends(require_admin),
 ):
-    orig = db.query(Sale).filter(Sale.id == sale_id, Sale.tenant_id == tenant.id).first()
-    if not orig:
-        raise HTTPException(status_code=404, detail="Venta no encontrada")
-    # Create a negative sale as return
-    ret = Sale(
-        tenant_id=tenant.id,
-        user_id=user.id,
-        return_of_id=orig.id,
-        subtotal=-orig.subtotal,
-        discount_amount=-orig.discount_amount,
-        tax_rate=orig.tax_rate,
-        tax_amount=-orig.tax_amount,
-        total=-orig.total,
-    )
-    db.add(ret)
-    db.flush()
-    # Add negative items and restock
-    for it in db.query(SaleItem).filter(SaleItem.sale_id == orig.id).all():
-        db.add(SaleItem(
-            sale_id=ret.id,
-            product_id=it.product_id,
-            name=it.name,
-            codigo=it.codigo,
-            quantity=-it.quantity,
-            unit_price=it.unit_price,
-            total_price=-it.total_price,
-            product_snapshot=it.product_snapshot
-        ))
-        if it.product_id:
-            p = db.query(Product).filter(Product.id == it.product_id, Product.tenant_id == tenant.id).first()
-            if p and p.stock is not None:
-                p.stock = int(p.stock) + int(it.quantity)
-    db.commit()
-    db.refresh(ret)
-    return ret
+    """
+    Devolver una venta de contado (VentasContado).
+    Crea una venta negativa que marca la devolución y restaura el stock.
+    """
+    # Buscar venta de contado
+    orig_venta = db.query(VentasContado).filter(
+        VentasContado.id == sale_id, 
+        VentasContado.tenant_id == tenant.id
+    ).first()
+    
+    if orig_venta:
+        if orig_venta.return_of_id:
+            raise HTTPException(status_code=400, detail="Esta venta ya es una devolución")
+        
+        # Crear venta negativa como devolución
+        try:
+            folio_venta = generate_folio(db, tenant.id, "VENTA")
+        except Exception as e:
+            # Si falla la generación del folio, usar un folio temporal
+            from datetime import datetime
+            folio_venta = f"V-TEMP-{int(datetime.utcnow().timestamp())}"
+        
+        ret = VentasContado(
+            tenant_id=tenant.id,
+            user_id=user.id,
+            return_of_id=orig_venta.id,
+            subtotal=-orig_venta.subtotal,
+            discount_amount=-orig_venta.discount_amount,
+            tax_rate=orig_venta.tax_rate,
+            tax_amount=-orig_venta.tax_amount,
+            total=-orig_venta.total,
+            folio_venta=folio_venta,
+            customer_name=orig_venta.customer_name,
+            customer_phone=orig_venta.customer_phone,
+            customer_address=orig_venta.customer_address,
+        )
+        db.add(ret)
+        db.flush()
+        
+        # Agregar items negativos y restock
+        for it in db.query(ItemVentaContado).filter(ItemVentaContado.venta_id == orig_venta.id).all():
+            db.add(ItemVentaContado(
+                venta_id=ret.id,
+                product_id=it.product_id,
+                name=it.name,
+                codigo=it.codigo,
+                quantity=-it.quantity,
+                unit_price=it.unit_price,
+                discount_pct=it.discount_pct,
+                discount_amount=-it.discount_amount,
+                total_price=-it.total_price,
+                product_snapshot=it.product_snapshot
+            ))
+            if it.product_id:
+                p = db.query(Product).filter(
+                    Product.id == it.product_id, 
+                    Product.tenant_id == tenant.id
+                ).first()
+                if p and p.stock is not None:
+                    p.stock = int(p.stock) + int(it.quantity)
+        
+        db.commit()
+        db.refresh(ret)
+        
+        # Convertir a SaleOut para compatibilidad
+        sale_items = db.query(ItemVentaContado).filter(ItemVentaContado.venta_id == ret.id).all()
+        items_out = serialize_sale_items_with_snapshot(db, tenant.id, sale_items)
+        return SaleOut(
+            id=ret.id,
+            user_id=ret.user_id,
+            subtotal=ret.subtotal,
+            discount_amount=ret.discount_amount,
+            tax_rate=ret.tax_rate,
+            tax_amount=ret.tax_amount,
+            total=ret.total,
+            items=items_out,
+            created_at=ret.created_at,
+            tipo_venta="contado",
+            vendedor_id=ret.vendedor_id,
+            utilidad=ret.utilidad,
+            total_cost=ret.total_cost,
+            customer_name=ret.customer_name,
+            customer_phone=ret.customer_phone,
+            customer_address=ret.customer_address,
+            folio_venta=ret.folio_venta,
+            amount_paid=0,
+            payments=[]
+        )
+    
+    raise HTTPException(status_code=404, detail="Venta no encontrada")
 
 
 @router.get("/export")
@@ -565,6 +535,10 @@ def get_sale(
             vendedor_id=cont.vendedor_id,
             utilidad=cont.utilidad,
             total_cost=cont.total_cost,
+            folio_venta=cont.folio_venta,
+            customer_name=cont.customer_name,
+            customer_phone=cont.customer_phone,
+            customer_address=cont.customer_address,
             payments=payments_list
         )
     ap = db.query(Apartado).filter(Apartado.id == sale_id, Apartado.tenant_id == tenant.id).first()
@@ -605,6 +579,8 @@ class SaleSummary(BaseModel):
     user_id: int | None = None
     vendedor_id: int | None = None
     tipo_venta: str | None = None
+    folio_venta: str | None = None
+    folio_apartado: str | None = None
     user: dict | None = None
 
     class Config:
@@ -663,6 +639,7 @@ def list_sales(
             "user_id": s.user_id,
             "vendedor_id": s.vendedor_id,
             "tipo_venta": "contado",
+            "folio_venta": s.folio_venta,
             "user": user_info
         })
     # apartados
@@ -679,6 +656,7 @@ def list_sales(
             "user_id": s.user_id,
             "vendedor_id": s.vendedor_id,
             "tipo_venta": "abono",
+            "folio_apartado": s.folio_apartado,
             "user": user_info
         })
     # Ordenar por fecha desc

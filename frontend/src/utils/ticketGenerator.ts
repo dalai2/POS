@@ -4,6 +4,7 @@
  */
 
 import { api } from './api'
+import { cleanFolio } from './folioHelper'
 
 /**
  * Load company logo as base64
@@ -287,7 +288,7 @@ export const generatePedidoTicketHTML = (params: {
 
       <!-- Header Info -->
       <div class="header-info">
-        <div><strong>FOLIO DE PEDIDO :</strong> ${pedido.folio_pedido || 'PED-' + String(pedido.id).padStart(6, '0')}</div>
+        <div><strong>FOLIO DE PEDIDO :</strong> ${cleanFolio(pedido.folio_pedido) || 'PED-' + String(pedido.id).padStart(6, '0')}</div>
         <div><strong>FECHA PEDIDO :</strong> ${formattedDate}</div>
         <div><strong>MÉTODO DE PAGO :</strong> ${paymentData ? (paymentData.method.toUpperCase() === 'MIXTO' ? 'EFECTIVO / TARJETA' : (paymentData.method.toUpperCase() === 'CASH' || paymentData.method.toUpperCase() === 'EFECTIVO' ? 'EFECTIVO' : (paymentData.method.toUpperCase() === 'CARD' || paymentData.method.toUpperCase() === 'TARJETA' ? 'TARJETA' : 'N/A'))) : 'N/A'}</div>
         <div>HIDALGO #112 ZONA CENTRO, LOCAL 12, 23 Y 24 C.P: 37000. LEÓN, GTO.</div>
@@ -363,14 +364,18 @@ export const generatePedidoTicketHTML = (params: {
  * Save ticket to database
  */
 export const saveTicket = async (params: {
-  saleId?: number
+  saleId?: number  // Legacy
+  ventaContadoId?: number  // Nuevo
+  apartadoId?: number  // Nuevo
   pedidoId?: number
   kind: string
   html: string
 }): Promise<void> => {
   try {
     await api.post('/tickets', {
-      sale_id: params.saleId,
+      sale_id: params.saleId,  // Legacy
+      venta_contado_id: params.ventaContadoId,  // Nuevo
+      apartado_id: params.apartadoId,  // Nuevo
       pedido_id: params.pedidoId,
       kind: params.kind,
       html: params.html
@@ -603,7 +608,7 @@ export const generateApartadoPaymentTicketHTML = (params: {
 
       <!-- Header Info -->
       <div class="header-info">
-        <div><strong>FOLIO DE APARTADO :</strong> ${sale.folio_apartado || 'APT-' + String(sale.id).padStart(6, '0')}</div>
+        <div><strong>FOLIO DE APARTADO :</strong> ${cleanFolio(sale.folio_apartado) || 'AP-' + String(sale.id).padStart(6, '0')}</div>
         <div><strong>FECHA VENTA :</strong> ${formattedDate}</div>
         <div><strong>MÉTODO DE PAGO :</strong> ${paymentData.method.toUpperCase() === 'MIXTO' ? 'EFECTIVO / TARJETA' : (paymentData.method.toUpperCase() === 'CASH' || paymentData.method.toUpperCase() === 'EFECTIVO' ? 'EFECTIVO' : (paymentData.method.toUpperCase() === 'CARD' || paymentData.method.toUpperCase() === 'TARJETA' ? 'TARJETA' : 'N/A'))}</div>
         <div>HIDALGO #112 ZONA CENTRO, LOCAL 12, 23 Y 24 C.P: 37000. LEÓN, GTO.</div>

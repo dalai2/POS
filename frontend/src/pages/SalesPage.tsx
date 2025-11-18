@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Layout from '../components/Layout'
 import { api } from '../utils/api'
+import { cleanFolio } from '../utils/folioHelper'
 
 type Product = { 
   id: number
@@ -41,6 +42,7 @@ export default function SalesPage() {
   const [cash, setCash] = useState('')
   const [card, setCard] = useState('')
   const [discount, setDiscount] = useState('0')
+  const [isProcessing, setIsProcessing] = useState(false)
   
   // Filtros
   const [modeloFilter, setModeloFilter] = useState('')
@@ -504,7 +506,7 @@ export default function SalesPage() {
 
       <!-- Header Info -->
       <div class="header-info">
-        ${saleData.tipo_venta === 'credito' ? `<div><strong>FOLIO DE APARTADO :</strong> ${saleData.folio_apartado || 'APT-' + String(saleData.id).padStart(6, '0')}</div>` : `<div><strong>FOLIO :</strong> ${String(saleData.id).padStart(6, '0')}</div>`}
+        ${saleData.tipo_venta === 'credito' ? `<div><strong>FOLIO DE APARTADO :</strong> ${cleanFolio(saleData.folio_apartado) || 'AP-' + String(saleData.id).padStart(6, '0')}</div>` : `<div><strong>FOLIO :</strong> ${cleanFolio(saleData.folio_venta) || 'V-' + String(saleData.id).padStart(6, '0')}</div>`}
         <div><strong>FECHA VENTA :</strong> ${formattedDate}</div>
         ${saleData.tipo_venta === 'contado' ? `<div><strong>MÉTODO DE PAGO :</strong> ${efectivoPaid > 0 && tarjetaPaid > 0 ? 'EFECTIVO / TARJETA' : (efectivoPaid > 0 ? 'EFECTIVO' : 'TARJETA')}</div>` : ''}
         ${saleData.tipo_venta === 'credito' && (efectivoPaid > 0 || tarjetaPaid > 0) ? `<div><strong>MÉTODO DE PAGO :</strong> ${efectivoPaid > 0 && tarjetaPaid > 0 ? 'EFECTIVO / TARJETA' : (efectivoPaid > 0 ? 'EFECTIVO' : 'TARJETA')}</div>` : ''}
@@ -598,7 +600,11 @@ export default function SalesPage() {
       // Persist ticket HTML on the backend
       try {
         await api.post('/tickets', {
-          sale_id: saleData.id,
+          // Usar el campo correcto según el tipo de venta
+          ...(saleData.tipo_venta === 'credito' 
+            ? { apartado_id: saleData.id }
+            : { venta_contado_id: saleData.id }
+          ),
           kind: saleData.tipo_venta === 'credito' ? 'payment' : 'sale',
           html
         })
@@ -625,20 +631,30 @@ export default function SalesPage() {
   }
 
   const checkout = async () => {
+    // Prevenir doble ejecución
+    if (isProcessing) {
+      return
+    }
+    
     try {
+      setIsProcessing(true)  // Bloquear mientras procesa
+      
       if (cart.length === 0) {
         setMsg('No hay artículos')
+        setIsProcessing(false)
         return
       }
 
       // Validate sale type specific requirements
       if (saleType === 'credito' && !vendedorId) {
         setMsg('Por favor seleccione un vendedor para ventas a crédito')
+        setIsProcessing(false)
         return
       }
 
       if (saleType === 'credito' && !customerName.trim()) {
         setMsg('Por favor ingrese el nombre del cliente para venta a crédito')
+        setIsProcessing(false)
         return
       }
 
@@ -647,6 +663,7 @@ export default function SalesPage() {
         const apartadoTotal = (parseFloat(apartadoCash || '0') + parseFloat(apartadoCard || '0'))
         if (apartadoTotal <= 0) {
           setMsg('El anticipo inicial debe ser mayor a 0 para apartados')
+          setIsProcessing(false)
           return
         }
       }
@@ -655,6 +672,7 @@ export default function SalesPage() {
       const tolerance = 0.001 // 0.1 centavo de tolerancia
       if (saleType === 'contado' && (paid - total) < -tolerance) {
         setMsg(`Pago insuficiente. Total: $${total.toFixed(2)}, Pagado: $${paid.toFixed(2)}`)
+        setIsProcessing(false)
         return
       }
 
@@ -706,7 +724,15 @@ export default function SalesPage() {
         saleData.customer_phone = customerPhone.trim()
       }
 
-      const r = await api.post('/sales/', saleData)
+      // Usar endpoint correcto según el tipo de venta
+      let r
+      if (saleType === 'credito') {
+        // Para apartados, usar el endpoint dedicado
+        r = await api.post('/apartados/', saleData)
+      } else {
+        // Para ventas de contado
+        r = await api.post('/ventas/', saleData)
+      }
       
       // Guardar valores ANTES de limpiar los estados
       const cashAmount = saleType === 'contado' ? parseFloat(cash || '0') : parseFloat(apartadoCash || '0')
@@ -732,14 +758,26 @@ export default function SalesPage() {
       setCustomerName('')
       setCustomerPhone('')
       
-      setMsg(`✅ Venta realizada. Folio ${r.data.id}. Total $${r.data.total}`)
+      // Mostrar folio correcto según el tipo de venta
+      const folio = saleType === 'credito' 
+        ? (cleanFolio(r.data.folio_apartado) || `AP-${r.data.id}`)
+        : (cleanFolio(r.data.folio_venta) || `V-${r.data.id}`)
+      setMsg(`✅ ${saleType === 'credito' ? 'Apartado' : 'Venta'} realizada. Folio ${folio}. Total $${r.data.total}`)
       
       // Generar ticket de venta - usar el valor calculado ANTES de limpiar
       const finalInitialPayment = saleType === 'credito' ? initialPaymentAmount : 0
       console.log('CALLING printSaleTicket with initialPayment:', finalInitialPayment)
-      printSaleTicket(r.data, currentCart, subtotal, discountAmountCalc, total, paid, change, finalInitialPayment)
+      // Asegurar que saleData tenga tipo_venta para que printSaleTicket sepa qué folio usar
+      const saleDataForTicket = {
+        ...r.data,
+        tipo_venta: saleType  // Asegurar que tipo_venta esté presente
+      }
+      printSaleTicket(saleDataForTicket, currentCart, subtotal, discountAmountCalc, total, paid, change, finalInitialPayment)
+      
+      setIsProcessing(false)  // Desbloquear después de completar
     } catch (e: any) {
       setMsg(e?.response?.data?.detail || 'Error al crear venta')
+      setIsProcessing(false)  // Desbloquear en caso de error
     }
   }
 
@@ -1014,10 +1052,13 @@ export default function SalesPage() {
             {/* Checkout Button */}
             <button
               onClick={checkout}
-              disabled={cart.length === 0}
+              disabled={cart.length === 0 || isProcessing}
               className="w-full bg-green-600 text-white py-4 rounded-lg text-xl font-bold hover:bg-green-700 disabled:bg-gray-400"
             >
-              {saleType === 'credito' ? '💳 Vender a Abonos' : '💵 Cobrar'}
+              {isProcessing 
+                ? '⏳ Procesando...' 
+                : (saleType === 'credito' ? '💳 Vender a Abonos' : '💵 Cobrar')
+              }
             </button>
           </div>
 

@@ -3,6 +3,7 @@ import Layout from '../components/Layout';
 import { api } from '../utils/api';
 
 interface Customer {
+  id: number;
   nombre: string;
   telefono: string;
   total_gastado: number;
@@ -18,6 +19,11 @@ export default function ClientsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [orderBy, setOrderBy] = useState<'nombre' | 'telefono' | 'total_gastado' | 'fecha_registro'>('nombre');
   const [orderDir, setOrderDir] = useState<'asc' | 'desc'>('asc');
+  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [msg, setMsg] = useState('');
 
   useEffect(() => {
     fetchCustomers();
@@ -60,8 +66,9 @@ export default function ClientsPage() {
   };
 
   const exportToExcel = () => {
-    const headers = ['Nombre', 'Teléfono', 'Total Gastado', 'Fecha de Registro', 'Ventas Contado', 'Apartados', 'Pedidos'];
+    const headers = ['ID', 'Nombre', 'Teléfono', 'Total Gastado', 'Fecha de Registro', 'Ventas Contado', 'Apartados', 'Pedidos'];
     const rows = customers.map(c => [
+      c.id,
       c.nombre,
       c.telefono,
       `$${c.total_gastado.toFixed(2)}`,
@@ -81,6 +88,37 @@ export default function ClientsPage() {
     link.href = URL.createObjectURL(blob);
     link.download = `clientes_${new Date().toISOString().split('T')[0]}.csv`;
     link.click();
+  };
+
+  const handleUpdateCustomer = async () => {
+    if (!editingCustomer) return;
+    
+    try {
+      setMsg('');
+      await api.put(`/customers/${editingCustomer.id}`, {
+        name: editName.trim() || undefined,
+        phone: editPhone.trim() || undefined,
+      });
+      setMsg('✅ Cliente actualizado exitosamente');
+      setTimeout(() => {
+        setShowEditModal(false);
+        setEditingCustomer(null);
+        setEditName('');
+        setEditPhone('');
+        setMsg('');
+        fetchCustomers();
+      }, 1000);
+    } catch (error: any) {
+      setMsg(error?.response?.data?.detail || 'Error al actualizar cliente');
+    }
+  };
+
+  const openEditModal = (customer: Customer) => {
+    setEditingCustomer(customer);
+    setEditName(customer.nombre);
+    setEditPhone(customer.telefono || '');
+    setMsg('');
+    setShowEditModal(true);
   };
 
   return (
@@ -150,6 +188,9 @@ export default function ClientsPage() {
               <table className="min-w-full">
                 <thead style={{ backgroundColor: '#2e4354' }}>
                   <tr>
+                    <th className="px-6 py-4 text-center text-xs font-bold uppercase tracking-wider" style={{ color: '#ffffff' }}>
+                      🆔 ID
+                    </th>
                     <th
                       onClick={() => handleSort('nombre')}
                       className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider cursor-pointer transition-all"
@@ -207,6 +248,9 @@ export default function ClientsPage() {
                     <th className="px-6 py-4 text-center text-xs font-bold uppercase tracking-wider" style={{ color: '#ffffff' }}>
                       📦 Pedidos
                     </th>
+                    <th className="px-6 py-4 text-center text-xs font-bold uppercase tracking-wider" style={{ color: '#ffffff' }}>
+                      ⚙️ Acciones
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -221,6 +265,9 @@ export default function ClientsPage() {
                       onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 233, 142, 0.15)'}
                       onMouseLeave={(e) => e.currentTarget.style.backgroundColor = index % 2 === 0 ? '#ffffff' : '#f0f7f7'}
                     >
+                      <td className="px-6 py-4 whitespace-nowrap text-center font-mono text-sm font-bold" style={{ color: '#2e4354' }}>
+                        #{customer.id}
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-3">
                           <div className="flex-shrink-0 h-10 w-10 rounded-full flex items-center justify-center text-white font-bold shadow-md" style={{ backgroundColor: '#2e4354' }}>
@@ -261,6 +308,15 @@ export default function ClientsPage() {
                           {customer.num_pedidos}
                         </span>
                       </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-center">
+                        <button
+                          onClick={() => openEditModal(customer)}
+                          className="px-4 py-2 rounded-lg font-medium transition-all hover:shadow-lg"
+                          style={{ backgroundColor: '#2e4354', color: '#ffffff' }}
+                        >
+                          ✏️ Editar
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -268,6 +324,79 @@ export default function ClientsPage() {
             </div>
           )}
         </div>
+
+        {/* Modal de Edición */}
+        {showEditModal && editingCustomer && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => setShowEditModal(false)}>
+            <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+              <h2 className="text-2xl font-bold mb-4" style={{ color: '#2e4354' }}>
+                Editar Cliente #{editingCustomer.id}
+              </h2>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2" style={{ color: '#2e4354' }}>
+                    Nombre
+                  </label>
+                  <input
+                    type="text"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    className="w-full px-4 py-2 rounded-lg border-2 transition-all"
+                    style={{ borderColor: 'rgba(46, 67, 84, 0.2)', outline: 'none' }}
+                    onFocus={(e) => e.target.style.borderColor = '#2e4354'}
+                    onBlur={(e) => e.target.style.borderColor = 'rgba(46, 67, 84, 0.2)'}
+                    placeholder="Nombre del cliente"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2" style={{ color: '#2e4354' }}>
+                    Teléfono
+                  </label>
+                  <input
+                    type="text"
+                    value={editPhone}
+                    onChange={(e) => setEditPhone(e.target.value)}
+                    className="w-full px-4 py-2 rounded-lg border-2 transition-all"
+                    style={{ borderColor: 'rgba(46, 67, 84, 0.2)', outline: 'none' }}
+                    onFocus={(e) => e.target.style.borderColor = '#2e4354'}
+                    onBlur={(e) => e.target.style.borderColor = 'rgba(46, 67, 84, 0.2)'}
+                    placeholder="Teléfono del cliente"
+                  />
+                  <p className="text-xs mt-1" style={{ color: '#666' }}>
+                    Mismo teléfono = mismo cliente (agrupación automática)
+                  </p>
+                </div>
+                {msg && (
+                  <div className={`p-3 rounded-lg text-sm ${msg.includes('Error') || msg.includes('Ya existe') ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                    {msg}
+                  </div>
+                )}
+                <div className="flex gap-3 justify-end pt-4">
+                  <button
+                    onClick={() => {
+                      setShowEditModal(false);
+                      setEditingCustomer(null);
+                      setEditName('');
+                      setEditPhone('');
+                      setMsg('');
+                    }}
+                    className="px-4 py-2 rounded-lg font-medium transition-all hover:shadow-lg"
+                    style={{ backgroundColor: '#ccc', color: '#000' }}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleUpdateCustomer}
+                    className="px-4 py-2 rounded-lg font-medium transition-all hover:shadow-lg"
+                    style={{ backgroundColor: '#2e4354', color: '#ffffff' }}
+                  >
+                    💾 Guardar
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
       </div>
     </Layout>

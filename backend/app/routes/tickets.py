@@ -15,7 +15,9 @@ router = APIRouter()
 
 
 class TicketCreate(BaseModel):
-    sale_id: Optional[int] = None
+    sale_id: Optional[int] = None  # Legacy
+    venta_contado_id: Optional[int] = None  # Nuevo
+    apartado_id: Optional[int] = None  # Nuevo
     pedido_id: Optional[int] = None
     kind: str = "sale"
     html: str
@@ -24,6 +26,8 @@ class TicketCreate(BaseModel):
 class TicketOut(BaseModel):
     id: int
     sale_id: Optional[int]
+    venta_contado_id: Optional[int]  # Nuevo
+    apartado_id: Optional[int]  # Nuevo
     pedido_id: Optional[int]
     kind: str
     html: str
@@ -56,8 +60,30 @@ def create_ticket(
     # Upsert logic: replace if already exists
     existing = None
     
-    # Check for existing ticket by sale_id
-    if payload.sale_id is not None:
+    # Check for existing ticket by venta_contado_id
+    if payload.venta_contado_id is not None:
+        existing = (
+            db.query(Ticket)
+            .filter(
+                Ticket.tenant_id == tenant.id, 
+                Ticket.venta_contado_id == payload.venta_contado_id, 
+                Ticket.kind == payload.kind
+            )
+            .first()
+        )
+    # Check for existing ticket by apartado_id
+    elif payload.apartado_id is not None:
+        existing = (
+            db.query(Ticket)
+            .filter(
+                Ticket.tenant_id == tenant.id, 
+                Ticket.apartado_id == payload.apartado_id, 
+                Ticket.kind == payload.kind
+            )
+            .first()
+        )
+    # Check for existing ticket by sale_id (legacy)
+    elif payload.sale_id is not None:
         existing = (
             db.query(Ticket)
             .filter(
@@ -81,13 +107,20 @@ def create_ticket(
     
     if existing:
         existing.html = payload.html
+        # Actualizar también los nuevos campos si se proporcionan
+        if payload.venta_contado_id is not None:
+            existing.venta_contado_id = payload.venta_contado_id
+        if payload.apartado_id is not None:
+            existing.apartado_id = payload.apartado_id
         db.commit()
         db.refresh(existing)
         return existing
 
     ticket = Ticket(
         tenant_id=tenant.id, 
-        sale_id=payload.sale_id, 
+        sale_id=payload.sale_id,  # Legacy
+        venta_contado_id=payload.venta_contado_id,  # Nuevo
+        apartado_id=payload.apartado_id,  # Nuevo
         pedido_id=payload.pedido_id,
         kind=payload.kind, 
         html=payload.html
@@ -123,24 +156,36 @@ def get_tickets_by_sale(
     Get tickets for a sale or apartado (credit sale).
     
     This endpoint searches for:
-    1. Legacy tickets where sale_id matches (old schema)
-    2. Apartado tickets linked through credit_payments (new schema)
+    1. Tickets where venta_contado_id matches (new schema)
+    2. Tickets where apartado_id matches (new schema)
+    3. Legacy tickets where sale_id matches (old schema)
+    4. Apartado tickets linked through credit_payments (new schema)
     """
     _ensure_ticket_table(db)
     
-    # First, get direct tickets (legacy sales)
-    direct_tickets = (
+    # Get tickets by venta_contado_id (new schema)
+    venta_tickets = (
+        db.query(Ticket)
+        .filter(Ticket.tenant_id == tenant.id, Ticket.venta_contado_id == sale_id)
+        .all()
+    )
+    
+    # Get tickets by apartado_id (new schema)
+    apartado_tickets = (
+        db.query(Ticket)
+        .filter(Ticket.tenant_id == tenant.id, Ticket.apartado_id == sale_id)
+        .all()
+    )
+    
+    # Get legacy tickets by sale_id (old schema)
+    legacy_tickets = (
         db.query(Ticket)
         .filter(Ticket.tenant_id == tenant.id, Ticket.sale_id == sale_id)
         .all()
     )
     
-    # Then, get tickets for apartados (new schema)
-    # The relationship is: Apartado -> CreditPayment -> Ticket (via kind='payment-{id}')
-    apartado_tickets = []
-    
+    # Get tickets for apartados via credit_payments (new schema)
     # Find all credit_payments where apartado_id matches the sale_id
-    # (in the new schema, apartado IDs are used instead of sale_id)
     credit_payments = (
         db.query(CreditPayment)
         .filter(CreditPayment.apartado_id == sale_id)
@@ -148,8 +193,9 @@ def get_tickets_by_sale(
     )
     
     # For each payment, find tickets with kind='payment-{payment_id}'
+    payment_tickets = []
     for payment in credit_payments:
-        payment_tickets = (
+        payment_tickets_list = (
             db.query(Ticket)
             .filter(
                 Ticket.tenant_id == tenant.id,
@@ -157,13 +203,20 @@ def get_tickets_by_sale(
             )
             .all()
         )
-        apartado_tickets.extend(payment_tickets)
+        payment_tickets.extend(payment_tickets_list)
     
     # Combine and sort by created_at
-    all_tickets = direct_tickets + apartado_tickets
-    all_tickets.sort(key=lambda t: t.created_at)
+    all_tickets = venta_tickets + apartado_tickets + legacy_tickets + payment_tickets
+    # Remove duplicates based on id
+    seen_ids = set()
+    unique_tickets = []
+    for ticket in all_tickets:
+        if ticket.id not in seen_ids:
+            seen_ids.add(ticket.id)
+            unique_tickets.append(ticket)
+    unique_tickets.sort(key=lambda t: t.created_at)
     
-    return all_tickets
+    return unique_tickets
 
 
 @router.get("/tickets/by-pedido/{pedido_id}", response_model=List[TicketOut])

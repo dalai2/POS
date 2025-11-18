@@ -19,6 +19,8 @@ from app.services.inventory_service import (
     get_stock_eliminado,
     get_stock_devuelto,
     get_stock_apartado,
+    get_productos_pedido_apartado,
+    get_pedidos_recibidos_apartados,
 )
 
 router = APIRouter()
@@ -367,12 +369,88 @@ def get_stock_pedidos(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Get stock from pedidos recibidos.
+    Get stock from pedidos recibidos (pedidos a proveedores).
+    Returns products that came from received or paid pedidos.
     """
     from app.services.inventory_service import get_stock_pedidos as service_get_stock_pedidos
     
     stock = service_get_stock_pedidos(db=db, tenant=tenant)
     return stock
+
+
+@router.get("/pedidos-recibidos")
+def get_pedidos_recibidos(
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_tenant),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Get list of pedidos with estado='recibido'.
+    Returns pedidos that have been received but not yet delivered.
+    """
+    from app.services.inventory_service import get_pedidos_recibidos as service_get_pedidos_recibidos
+    
+    pedidos = service_get_pedidos_recibidos(db=db, tenant=tenant)
+    return pedidos
+
+
+@router.get("/pedidos-entregados")
+def get_pedidos_entregados(
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_tenant),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Get list of pedidos with estado='entregado'.
+    Returns pedidos that have been delivered to customers.
+    """
+    from app.services.inventory_service import get_pedidos_entregados as service_get_pedidos_entregados
+    
+    pedidos = service_get_pedidos_entregados(db=db, tenant=tenant)
+    return pedidos
+
+
+@router.get("/productos-pedido")
+def get_productos_pedido(
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_tenant),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Get list of products (piezas) from pedidos apartados with estado='pedido'.
+    Returns all items from pedidos apartados that are in 'pedido' state (waiting to be ordered from suppliers).
+    Shows only: modelo, nombre, quilataje.
+    """
+    productos = get_productos_pedido_apartado(db=db, tenant=tenant)
+    return productos
+
+
+@router.get("/stock-pedidos-estado-pedido")
+def get_stock_pedidos_estado_pedido(
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_tenant),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Get list of products (piezas) from pedidos apartados with estado='pedido'.
+    Shows only: modelo, nombre, quilataje.
+    """
+    productos = get_productos_pedido_apartado(db=db, tenant=tenant)
+    return productos
+
+
+@router.get("/pedidos-recibidos-apartados")
+def get_pedidos_recibidos_apartados_endpoint(
+    db: Session = Depends(get_db),
+    tenant: Tenant = Depends(get_tenant),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Get list of pedidos apartados with estado='recibido'.
+    Returns only pedidos apartados that have been received.
+    """
+    pedidos = get_pedidos_recibidos_apartados(db=db, tenant=tenant)
+    return pedidos
 
 
 @router.get("/stock-eliminado")

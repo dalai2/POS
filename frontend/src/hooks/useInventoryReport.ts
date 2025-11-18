@@ -17,6 +17,8 @@ export interface UseInventoryReport {
   stockEliminado: StockGrouped[] | null;
   stockDevuelto: StockGrouped[] | null;
   stockApartado: StockApartado[] | null;
+  stockPedidosEstadoPedido: any[] | null;
+  pedidosRecibidosApartados: any[] | null;
   closeMsg: string | null;
   closing: boolean;
   isDayClosed: boolean | null;
@@ -32,6 +34,8 @@ export interface UseInventoryReport {
   getStockEliminado: () => Promise<void>;
   getStockDevuelto: () => Promise<void>;
   getStockApartado: () => Promise<void>;
+  getStockPedidosEstadoPedido: () => Promise<void>;
+  getPedidosRecibidosApartados: () => Promise<void>;
   resetCloseMessage: () => void;
   setReport: (report: InventoryReport | null) => void;
 }
@@ -60,6 +64,8 @@ export const useInventoryReport = (
   const [stockEliminado, setStockEliminado] = useState<StockGrouped[] | null>(null);
   const [stockDevuelto, setStockDevuelto] = useState<StockGrouped[] | null>(null);
   const [stockApartado, setStockApartado] = useState<StockApartado[] | null>(null);
+  const [stockPedidosEstadoPedido, setStockPedidosEstadoPedido] = useState<any[] | null>(null);
+  const [pedidosRecibidosApartados, setPedidosRecibidosApartados] = useState<any[] | null>(null);
   const [startDate, setStartDate] = useState(initialStartDate);
   const [endDate, setEndDate] = useState(initialEndDate);
   const [closing, setClosing] = useState(false);
@@ -225,6 +231,32 @@ export const useInventoryReport = (
     }
   }, []);
 
+  const getStockPedidosEstadoPedido = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await api.get('/inventory/stock-pedidos-estado-pedido');
+      setStockPedidosEstadoPedido(response.data);
+    } catch (error) {
+      console.error('Error getting stock pedidos estado pedido:', error);
+      alert('Error al obtener stock de pedidos (estado pedido)');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const getPedidosRecibidosApartados = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await api.get('/inventory/pedidos-recibidos-apartados');
+      setPedidosRecibidosApartados(response.data);
+    } catch (error) {
+      console.error('Error getting pedidos recibidos apartados:', error);
+      alert('Error al obtener pedidos recibidos apartados');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   return {
     startDate,
     endDate,
@@ -235,6 +267,8 @@ export const useInventoryReport = (
     stockEliminado,
     stockDevuelto,
     stockApartado,
+    stockPedidosEstadoPedido,
+    pedidosRecibidosApartados,
     closeMsg,
     closing,
     isDayClosed,
@@ -250,6 +284,8 @@ export const useInventoryReport = (
     getStockEliminado,
     getStockDevuelto,
     getStockApartado,
+    getStockPedidosEstadoPedido,
+    getPedidosRecibidosApartados,
     resetCloseMessage,
     setReport,
   };

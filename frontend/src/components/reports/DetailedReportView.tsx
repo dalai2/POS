@@ -1,7 +1,6 @@
 import React from 'react';
 import { SummaryCards } from './SummaryCards';
 import { CostsAndProfits } from './CostsAndProfits';
-import { PiecesTotalCards } from './PiecesTotalCards';
 import { PiecesSummary } from './PiecesSummary';
 import { VendorsTable } from './VendorsTable';
 import { SalesDetailsTable } from './SalesDetailsTable';
@@ -87,13 +86,6 @@ export const DetailedReportView: React.FC<DetailedReportViewProps> = ({
       <div className="p-6">
         <CostsAndProfits detailedReport={detailedReport} />
       </div>
-
-      {/* Total de Piezas por Nombre (sin liquidadas) */}
-      {detailedReport.total_piezas_por_nombre_sin_liquidadas && (
-        <div className="p-6">
-          <PiecesTotalCards totalPiezasPorNombre={detailedReport.total_piezas_por_nombre_sin_liquidadas} />
-        </div>
-      )}
 
       {/* Resumen Detallado */}
       <div className="p-6" style={{ borderTop: '2px solid rgba(46, 67, 84, 0.1)' }}>
