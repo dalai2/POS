@@ -361,10 +361,11 @@ def _get_pedidos_by_payment_date(
     )
     
     # Get pedidos de contado: filtrar por fecha de CREACIÓN del pedido
+    # Incluir también pedidos cancelados para sumarlos en ventas activas
     pedidos_contado = db.query(Pedido).filter(
         Pedido.tenant_id == tenant.id,
         Pedido.tipo_pedido == 'contado',
-        Pedido.estado == 'pagado',
+        Pedido.estado.in_(['pagado', 'cancelado']),
         Pedido.created_at >= start_datetime,
         Pedido.created_at <= end_datetime
     ).all()
@@ -517,13 +518,40 @@ def _process_new_schema_stats(
             total = float(venta.total or 0)
             
             # Si es una devolución (return_of_id no es None), contar como cancelación
+            # PERO también incluirla en ventas activas
             if venta.return_of_id is not None:
                 # Las devoluciones tienen total negativo, usar valor absoluto
-                counters['cancelaciones_ventas_contado_monto'] += abs(total)
+                total_abs = abs(total)
+                counters['cancelaciones_ventas_contado_monto'] += total_abs
                 counters['cancelaciones_ventas_contado_count'] += 1
-                # Las devoluciones NO se suman a contado_count ni total_contado
-                # pero sí se restan del total_vendido (ya que total es negativo)
+                
+                # INCLUIR en ventas activas (sumar con valor absoluto)
+                counters['contado_count'] += 1
+                counters['total_contado'] += total_abs
                 counters['total_vendido'] += total  # total es negativo, así que se resta
+                
+                # Calcular pagos de la devolución (si los hay)
+                venta_payments = payments_by_venta.get(venta.id, [])
+                efectivo_venta = sum(float(p.amount) for p in venta_payments if p.method in ['efectivo', 'cash', 'transferencia'])
+                tarjeta_venta = sum(float(p.amount) for p in venta_payments if p.method in ['tarjeta', 'card'])
+                counters['total_efectivo_contado'] += abs(efectivo_venta)  # Valor absoluto
+                counters['total_tarjeta_contado'] += abs(tarjeta_venta)  # Valor absoluto
+                
+                # Costos y piezas (usar valor absoluto para cantidad)
+                venta_items = items_by_venta.get(venta.id, [])
+                costo_venta = 0.0
+                for it in venta_items:
+                    qty = abs(int(it.quantity or 0))  # Valor absoluto
+                    counters['num_piezas_vendidas'] += qty
+                    if it.product_id and it.product_id in products:
+                        prod = products[it.product_id]
+                        if getattr(prod, 'cost_price', None) is not None:
+                            costo_venta += float(prod.cost_price) * qty
+                counters['costo_ventas_contado'] += costo_venta
+                counters['costo_total'] += costo_venta
+                # Utilidad: total_abs - costo
+                counters['utilidad_total'] += total_abs - costo_venta
+                
                 continue
             
             # Procesar como venta normal
@@ -630,6 +658,8 @@ def _process_pedidos_contado(
         counters['costo_pedidos_contado'] = 0.0
     
     for pedido in pedidos_contado:
+        es_cancelado = pedido.estado == 'cancelado'
+        
         pagos_pedido_contado = db.query(PagoPedido).filter(
             PagoPedido.pedido_id == pedido.id
         ).all()
@@ -638,7 +668,14 @@ def _process_pedidos_contado(
         tarjeta_pedido = sum(float(p.monto) for p in pagos_pedido_contado if p.metodo_pago == 'tarjeta')
         tarjeta_pedido_neto = tarjeta_pedido * TARJETA_DISCOUNT_RATE
         
-        # Acumular para ventas activas
+        # Si está cancelado, registrar en contadores de cancelación
+        if es_cancelado:
+            total_pagado_neto = efectivo_pedido + tarjeta_pedido_neto
+            counters['cancelaciones_pedidos_contado_monto'] += total_pagado_neto
+            counters['cancelaciones_pedidos_contado_count'] += 1
+            counters['piezas_canceladas_pedidos_contado'] += pedido.cantidad
+        
+        # Acumular para ventas activas (incluyendo cancelados)
         counters['pedidos_contado_efectivo'] += efectivo_pedido
         counters['pedidos_contado_tarjeta_neto'] += tarjeta_pedido_neto
         
@@ -1157,7 +1194,7 @@ def _build_vendor_stats(
         
         if vendedor_id not in vendor_stats:
             vendor = db.query(User).filter(User.id == vendedor_id).first()
-                vendedor = vendor.email if vendor else "Unknown"
+            vendedor = vendor.email if vendor else "Unknown"
             vendor_stats[vendedor_id] = _init_vendor_stat(vendedor_id, vendedor)
             
             # Buscar anticipos iniciales en CreditPayment con notes="Anticipo inicial"
@@ -1227,7 +1264,7 @@ def _build_vendor_stats(
         
         if vendedor_id not in vendor_stats:
             vendor = db.query(User).filter(User.id == vendedor_id).first()
-                vendedor = vendor.email if vendor else "Unknown"
+            vendedor = vendor.email if vendor else "Unknown"
             vendor_stats[vendedor_id] = _init_vendor_stat(vendedor_id, vendedor)
             
             # Solo contar abonos en el periodo (no anticipos)
