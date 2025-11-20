@@ -838,19 +838,28 @@ export default function GestionPedidosPage() {
     return diferencia
   }
 
-  const getAlertaVencimiento = (dias: number, saldoPendiente: number, estado: string) => {
+  const formatearFecha = (fechaISO: string) => {
+    const fecha = new Date(fechaISO)
+    const dia = String(fecha.getDate()).padStart(2, '0')
+    const mes = String(fecha.getMonth() + 1).padStart(2, '0')
+    const año = fecha.getFullYear()
+    return `${dia}/${mes}/${año}`
+  }
+
+  const getAlertaVencimiento = (dias: number, saldoPendiente: number, estado: string, fechaCreacion: string) => {
     if (estado === 'entregado' || estado === 'cancelado' || saldoPendiente <= 0) return null
     
     const DIAS_VENCIMIENTO = 75 // 2 meses + 15 días
+    const fechaFormateada = formatearFecha(fechaCreacion)
     
     if (dias >= DIAS_VENCIMIENTO) {
-      return { texto: '¡VENCIDO!', color: 'text-red-700 font-bold' }
+      return { texto: `¡VENCIDO! (${fechaFormateada})`, color: 'text-red-700 font-bold' }
     } else if (dias >= DIAS_VENCIMIENTO - 7) {
-      return { texto: `Vence en ${DIAS_VENCIMIENTO - dias} días`, color: 'text-orange-600 font-semibold' }
+      return { texto: `Vence en ${DIAS_VENCIMIENTO - dias} días (${fechaFormateada})`, color: 'text-orange-600 font-semibold' }
     } else if (dias >= DIAS_VENCIMIENTO - 15) {
-      return { texto: `${dias} días`, color: 'text-yellow-600' }
+      return { texto: `${dias} días (${fechaFormateada})`, color: 'text-yellow-600' }
     }
-    return { texto: `${dias} días`, color: 'text-gray-500' }
+    return { texto: `${dias} días (${fechaFormateada})`, color: 'text-gray-500' }
   }
 
   useEffect(() => {
@@ -1024,11 +1033,12 @@ export default function GestionPedidosPage() {
                       <td className="px-4 py-3 text-sm">
                         {(() => {
                           const dias = getDiasDesdeCreacion(p.created_at)
-                          const alerta = getAlertaVencimiento(dias, p.saldo_pendiente, p.estado)
+                          const fechaFormateada = formatearFecha(p.created_at)
+                          const alerta = getAlertaVencimiento(dias, p.saldo_pendiente, p.estado, p.created_at)
                           return alerta ? (
                             <span className={alerta.color}>{alerta.texto}</span>
                           ) : (
-                            <span className="text-gray-500">{dias} días</span>
+                            <span className="text-gray-500">{dias} días ({fechaFormateada})</span>
                           )
                         })()}
                       </td>
