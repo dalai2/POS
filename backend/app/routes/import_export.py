@@ -75,11 +75,12 @@ async def import_products(
                 detail=f"Columnas requeridas faltantes: {', '.join(missing_cols)}"
             )
         
-        # Get metal rates for price calculation
-        metal_rates = {
-            rate.metal_type: rate.rate_per_gram 
-            for rate in db.query(MetalRate).filter(MetalRate.tenant_id == tenant.id).all()
-        }
+        # Get metal rates for price calculation (case-insensitive lookup)
+        metal_rates = {}
+        metal_rates_lower = {}  # For case-insensitive lookup
+        for rate in db.query(MetalRate).filter(MetalRate.tenant_id == tenant.id).all():
+            metal_rates[rate.metal_type] = rate.rate_per_gram
+            metal_rates_lower[rate.metal_type.lower()] = rate.rate_per_gram
         
         added = 0
         updated = 0
@@ -142,10 +143,24 @@ async def import_products(
                 # Auto-calculate price if no manual price
                 if precio_manual:
                     precio_venta = precio_manual
-                elif quilataje and peso_gramos and quilataje in metal_rates:
-                    # Convert Decimal to float to avoid type mismatch
-                    base_price = float(metal_rates[quilataje]) * peso_gramos
-                    precio_venta = base_price - (base_price * descuento_pct / 100)
+                elif quilataje and peso_gramos:
+                    # Case-insensitive lookup for quilataje
+                    quilataje_lower = quilataje.lower()
+                    if quilataje in metal_rates:
+                        rate_per_gram = metal_rates[quilataje]
+                    elif quilataje_lower in metal_rates_lower:
+                        rate_per_gram = metal_rates_lower[quilataje_lower]
+                    else:
+                        rate_per_gram = None
+                    
+                    if rate_per_gram:
+                        # Convert Decimal to float to avoid type mismatch
+                        base_price = float(rate_per_gram) * peso_gramos
+                        precio_venta = base_price - (base_price * descuento_pct / 100)
+                    else:
+                        # Use costo with markup if available
+                        costo = float(row.get('costo', 0)) if pd.notna(row.get('costo')) else 0
+                        precio_venta = costo * 1.5 if costo > 0 else 0
                 else:
                     # Use costo with markup if available
                     costo = float(row.get('costo', 0)) if pd.notna(row.get('costo')) else 0
