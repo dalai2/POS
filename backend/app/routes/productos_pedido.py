@@ -405,6 +405,7 @@ def import_productos_pedido(
             'categoria': 'category',
             'category': 'category',
             'descuento': 'default_discount_pct',
+            'descuento_porcentaje': 'default_discount_pct',
             'default_discount_pct': 'default_discount_pct',
             'anticipo_sugerido': 'anticipo_sugerido',
             'disponible': 'disponible'
@@ -450,7 +451,7 @@ def import_productos_pedido(
                 'codigo': str(row['codigo']).strip(),
                 'marca': str(row['marca']).strip() if 'marca' in df.columns and not pd.isna(row.get('marca')) else None,
                 'color': str(row['color']).strip() if 'color' in df.columns and not pd.isna(row.get('color')) else None,
-                'quilataje': str(row['quilataje']).strip() if 'quilataje' in df.columns and not pd.isna(row.get('quilataje')) else None,
+                'quilataje': str(row['quilataje']).strip() if 'quilataje' in df.columns and pd.notna(row.get('quilataje')) and str(row.get('quilataje')).strip() != '' else None,
                 'base': str(row['base']).strip() if 'base' in df.columns and not pd.isna(row.get('base')) else None,
                 'talla': str(row['talla']).strip() if 'talla' in df.columns and not pd.isna(row.get('talla')) else None,
                 'peso': str(row['peso']).strip() if 'peso' in df.columns and not pd.isna(row.get('peso')) else None,
