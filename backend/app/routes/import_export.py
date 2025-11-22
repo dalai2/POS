@@ -48,9 +48,23 @@ async def import_products(
         contents = await file.read()
         df = pd.read_excel(BytesIO(contents))
         
+        # Normalize column names to lowercase and strip spaces
+        df.columns = df.columns.str.lower().str.strip()
+        
         # Normalize column names (accept both 'name' and 'nombre')
         if 'nombre' in df.columns and 'name' not in df.columns:
             df['name'] = df['nombre']
+        
+        # Debug: verificar columnas después de normalizar
+        import sys
+        print(f"DEBUG IMPORT PRODUCTS: Columnas después de normalizar: {list(df.columns)}", file=sys.stderr)
+        print(f"DEBUG IMPORT PRODUCTS: Columnas después de normalizar: {list(df.columns)}")
+        if 'quilataje' in df.columns:
+            print(f"DEBUG IMPORT PRODUCTS: Columna 'quilataje' encontrada", file=sys.stderr)
+            sample_values = df['quilataje'].head(3).tolist()
+            print(f"DEBUG IMPORT PRODUCTS: Primeros 3 valores de quilataje: {sample_values}", file=sys.stderr)
+        else:
+            print("DEBUG IMPORT PRODUCTS: ERROR - Columna 'quilataje' NO encontrada", file=sys.stderr)
         
         # Validate required columns (only codigo is required)
         required_cols = ['codigo']
@@ -102,8 +116,25 @@ async def import_products(
                 
                 print(f"DEBUG: Fila {idx+2} - codigo={codigo}, existing={existing is not None}, mode={mode}")
                 
+                # Process quilataje with improved validation
+                quilataje = None
+                if 'quilataje' in df.columns:
+                    try:
+                        raw_quilataje = row['quilataje']  # Direct access to pandas Series
+                        if pd.notna(raw_quilataje):
+                            quilataje_str = str(raw_quilataje).strip()
+                            if quilataje_str and quilataje_str.lower() != 'nan':
+                                quilataje = quilataje_str
+                            else:
+                                print(f"DEBUG IMPORT PRODUCTS: Quilataje vacío o 'nan' para código {codigo}: '{quilataje_str}'", file=sys.stderr)
+                        else:
+                            print(f"DEBUG IMPORT PRODUCTS: Quilataje es NaN para código {codigo}", file=sys.stderr)
+                    except (KeyError, IndexError) as e:
+                        print(f"DEBUG IMPORT PRODUCTS: Error accediendo quilataje para código {codigo}: {e}", file=sys.stderr)
+                else:
+                    print(f"DEBUG IMPORT PRODUCTS: Columna 'quilataje' no está en df.columns para código {codigo}", file=sys.stderr)
+                
                 # Calculate price
-                quilataje = str(row.get('quilataje', '')).strip() if pd.notna(row.get('quilataje')) else None
                 peso_gramos = float(row.get('peso_gramos', 0)) if pd.notna(row.get('peso_gramos')) else None
                 descuento_pct = float(row.get('descuento_porcentaje', 0)) if pd.notna(row.get('descuento_porcentaje')) else 0
                 precio_manual = float(row.get('precio_manual')) if pd.notna(row.get('precio_manual')) else None

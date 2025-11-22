@@ -414,6 +414,18 @@ def import_productos_pedido(
         # Renombrar columnas
         df = df.rename(columns=column_mapping)
         
+        # Debug: verificar columnas después del mapeo
+        import sys
+        print(f"DEBUG IMPORT: Columnas después del mapeo: {list(df.columns)}", file=sys.stderr)
+        print(f"DEBUG IMPORT: Columnas después del mapeo: {list(df.columns)}")
+        if 'quilataje' in df.columns:
+            print(f"DEBUG IMPORT: Columna 'quilataje' encontrada", file=sys.stderr)
+            sample_values = df['quilataje'].head(3).tolist()
+            print(f"DEBUG IMPORT: Primeros 3 valores de quilataje: {sample_values}", file=sys.stderr)
+            print(f"DEBUG IMPORT: Tipo de datos: {df['quilataje'].dtype}", file=sys.stderr)
+        else:
+            print("DEBUG IMPORT: ERROR - Columna 'quilataje' NO encontrada después del mapeo", file=sys.stderr)
+        
         # Validar columnas requeridas
         required_cols = ['codigo']
         missing_cols = [col for col in required_cols if col not in df.columns]
@@ -442,6 +454,26 @@ def import_productos_pedido(
                 ProductoPedido.codigo == str(row['codigo']).strip()
             ).first()
             
+            # Procesar quilataje con validación mejorada
+            quilataje_value = None
+            if 'quilataje' in df.columns:
+                try:
+                    raw_quilataje = row['quilataje']  # Acceso directo a la Serie de pandas
+                    if pd.notna(raw_quilataje):
+                        quilataje_str = str(raw_quilataje).strip()
+                        if quilataje_str and quilataje_str.lower() != 'nan':
+                            quilataje_value = quilataje_str
+                        else:
+                            print(f"DEBUG IMPORT: Quilataje vacío o 'nan' para código {row['codigo']}: '{quilataje_str}'", file=sys.stderr)
+                    else:
+                        print(f"DEBUG IMPORT: Quilataje es NaN para código {row['codigo']}", file=sys.stderr)
+                except (KeyError, IndexError) as e:
+                    # Si no existe la columna, dejar como None
+                    print(f"DEBUG IMPORT: Error accediendo quilataje para código {row['codigo']}: {e}", file=sys.stderr)
+                    pass
+            else:
+                print(f"DEBUG IMPORT: Columna 'quilataje' no está en df.columns para código {row['codigo']}", file=sys.stderr)
+            
             # Preparar datos del producto
             producto_data = {
                 'tenant_id': tenant.id,
@@ -451,7 +483,7 @@ def import_productos_pedido(
                 'codigo': str(row['codigo']).strip(),
                 'marca': str(row['marca']).strip() if 'marca' in df.columns and not pd.isna(row.get('marca')) else None,
                 'color': str(row['color']).strip() if 'color' in df.columns and not pd.isna(row.get('color')) else None,
-                'quilataje': str(row['quilataje']).strip() if 'quilataje' in df.columns and pd.notna(row.get('quilataje')) and str(row.get('quilataje')).strip() != '' else None,
+                'quilataje': quilataje_value,
                 'base': str(row['base']).strip() if 'base' in df.columns and not pd.isna(row.get('base')) else None,
                 'talla': str(row['talla']).strip() if 'talla' in df.columns and not pd.isna(row.get('talla')) else None,
                 'peso': str(row['peso']).strip() if 'peso' in df.columns and not pd.isna(row.get('peso')) else None,
