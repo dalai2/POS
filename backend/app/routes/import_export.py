@@ -143,22 +143,19 @@ async def import_products(
                     'tenant_id': tenant.id
                 }
                 
-                if existing and mode == 'replace':
-                    # Update existing product
+                if existing:
+                    # Update existing product (both 'add' and 'replace' modes update)
                     print(f"DEBUG: Updating existing product {codigo}")
                     for key, value in product_data.items():
                         if key != 'tenant_id':  # Don't update tenant_id
                             setattr(existing, key, value)
                     updated += 1
-                elif not existing:
+                else:
                     # Add new product
                     print(f"DEBUG: Adding new product {codigo}")
                     new_product = Product(**product_data)
                     db.add(new_product)
                     added += 1
-                else:
-                    print(f"DEBUG: Skipping product {codigo} (exists and mode is add)")
-                # If mode is 'add' and product exists, skip it
                 
             except Exception as e:
                 errors.append(f"Fila {idx+2}: {str(e)}")
