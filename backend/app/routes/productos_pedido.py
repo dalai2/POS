@@ -419,12 +419,13 @@ def import_productos_pedido(
         print(f"DEBUG IMPORT: Columnas después del mapeo: {list(df.columns)}", file=sys.stderr)
         print(f"DEBUG IMPORT: Columnas después del mapeo: {list(df.columns)}")
         if 'quilataje' in df.columns:
-            print(f"DEBUG IMPORT: Columna 'quilataje' encontrada", file=sys.stderr)
-            sample_values = df['quilataje'].head(3).tolist()
-            print(f"DEBUG IMPORT: Primeros 3 valores de quilataje: {sample_values}", file=sys.stderr)
-            print(f"DEBUG IMPORT: Tipo de datos: {df['quilataje'].dtype}", file=sys.stderr)
-        else:
-            print("DEBUG IMPORT: ERROR - Columna 'quilataje' NO encontrada después del mapeo", file=sys.stderr)
+            print(f"DEBUG IMPORT: Columna 'quilataje' encontrada. Primeros valores: {df['quilataje'].head(3).tolist()}", file=sys.stderr)
+        if 'nombre' in df.columns:
+            print(f"DEBUG IMPORT: Columna 'nombre' encontrada. Primeros valores: {df['nombre'].head(3).tolist()}", file=sys.stderr)
+        if 'modelo' in df.columns:
+            print(f"DEBUG IMPORT: Columna 'modelo' encontrada. Primeros valores: {df['modelo'].head(3).tolist()}", file=sys.stderr)
+        if 'peso' in df.columns:
+            print(f"DEBUG IMPORT: Columna 'peso' encontrada. Primeros valores: {df['peso'].head(3).tolist()}", file=sys.stderr)
         
         # Validar columnas requeridas
         required_cols = ['codigo']
@@ -474,19 +475,55 @@ def import_productos_pedido(
             else:
                 print(f"DEBUG IMPORT: Columna 'quilataje' no está en df.columns para código {row['codigo']}", file=sys.stderr)
             
+            # Procesar nombre con validación mejorada
+            nombre_value = None
+            if 'nombre' in df.columns:
+                try:
+                    raw_nombre = row['nombre']  # Acceso directo a la Serie de pandas
+                    if pd.notna(raw_nombre):
+                        nombre_str = str(raw_nombre).strip()
+                        if nombre_str and nombre_str.lower() != 'nan':
+                            nombre_value = nombre_str
+                except (KeyError, IndexError) as e:
+                    print(f"DEBUG IMPORT: Error accediendo nombre para código {row['codigo']}: {e}", file=sys.stderr)
+            
+            # Procesar peso con validación mejorada
+            peso_value = None
+            if 'peso' in df.columns:
+                try:
+                    raw_peso = row['peso']  # Acceso directo a la Serie de pandas
+                    if pd.notna(raw_peso):
+                        peso_str = str(raw_peso).strip()
+                        if peso_str and peso_str.lower() != 'nan':
+                            peso_value = peso_str
+                except (KeyError, IndexError) as e:
+                    print(f"DEBUG IMPORT: Error accediendo peso para código {row['codigo']}: {e}", file=sys.stderr)
+            
+            # Procesar modelo con validación mejorada
+            modelo_value = None
+            if 'modelo' in df.columns:
+                try:
+                    raw_modelo = row['modelo']  # Acceso directo a la Serie de pandas
+                    if pd.notna(raw_modelo):
+                        modelo_str = str(raw_modelo).strip()
+                        if modelo_str and modelo_str.lower() != 'nan':
+                            modelo_value = modelo_str
+                except (KeyError, IndexError) as e:
+                    print(f"DEBUG IMPORT: Error accediendo modelo para código {row['codigo']}: {e}", file=sys.stderr)
+            
             # Preparar datos del producto
             producto_data = {
                 'tenant_id': tenant.id,
-                'modelo': str(row['modelo']).strip() if 'modelo' in df.columns and not pd.isna(row.get('modelo')) else None,
+                'modelo': modelo_value,
                 'precio': float(row['precio']) if 'precio' in df.columns and not pd.isna(row.get('precio')) else 0.0,
-                'nombre': str(row['nombre']).strip() if 'nombre' in df.columns and not pd.isna(row.get('nombre')) else None,
+                'nombre': nombre_value,
                 'codigo': str(row['codigo']).strip(),
                 'marca': str(row['marca']).strip() if 'marca' in df.columns and not pd.isna(row.get('marca')) else None,
                 'color': str(row['color']).strip() if 'color' in df.columns and not pd.isna(row.get('color')) else None,
                 'quilataje': quilataje_value,
                 'base': str(row['base']).strip() if 'base' in df.columns and not pd.isna(row.get('base')) else None,
                 'talla': str(row['talla']).strip() if 'talla' in df.columns and not pd.isna(row.get('talla')) else None,
-                'peso': str(row['peso']).strip() if 'peso' in df.columns and not pd.isna(row.get('peso')) else None,
+                'peso': peso_value,
                 'peso_gramos': float(row['peso_gramos']) if 'peso_gramos' in df.columns and not pd.isna(row.get('peso_gramos')) else None,
                 'cost_price': float(row['cost_price']) if 'cost_price' in df.columns and not pd.isna(row.get('cost_price')) else 0.0,
                 'precio_manual': float(row['precio_manual']) if 'precio_manual' in df.columns and not pd.isna(row.get('precio_manual')) else None,
