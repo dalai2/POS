@@ -543,7 +543,7 @@ export default function SalesPage() {
         <div><strong>FECHA VENTA :</strong> ${formattedDate}</div>
         ${saleData.tipo_venta === 'contado' ? `<div><strong>MÉTODO DE PAGO :</strong> ${efectivoPaid > 0 && tarjetaPaid > 0 ? 'EFECTIVO / TARJETA' : (efectivoPaid > 0 ? 'EFECTIVO' : 'TARJETA')}</div>` : ''}
         ${saleData.tipo_venta === 'credito' && (efectivoPaid > 0 || tarjetaPaid > 0) ? `<div><strong>MÉTODO DE PAGO :</strong> ${efectivoPaid > 0 && tarjetaPaid > 0 ? 'EFECTIVO / TARJETA' : (efectivoPaid > 0 ? 'EFECTIVO' : 'TARJETA')}</div>` : ''}
-        <div>HIDALGO #112 ZONA CENTRO, LOCAL 12, 23 Y 24 C.P: 37000. LEÓN, GTO.</div>
+        <div>HIDALGO #207 ZONA CENTRO C.P: 37000. LEÓN, GTO.</div>
         <div>WhatsApp: 4776621788</div>
       </div>
     </div>
