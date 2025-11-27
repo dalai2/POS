@@ -283,7 +283,7 @@ export const generatePedidoTicketHTML = (params: {
     <div class="header-section">
       <!-- Company Logo -->
       <div class="logo-container">
-        <img src="${logoBase64}" alt="Logo" style="max-width: 350px; max-height: 180px; display: block;" onerror="this.style.display='none'" />
+        <img src="${logoBase64}" alt="Logo" style="max-width: 315px; max-height: 162px; display: block;" onerror="this.style.display='none'" />
       </div>
 
       <!-- Header Info -->
@@ -603,7 +603,7 @@ export const generateApartadoPaymentTicketHTML = (params: {
     <div class="header-section">
       <!-- Company Logo -->
       <div class="logo-container">
-        <img src="${logoBase64}" alt="Logo" style="max-width: 350px; max-height: 180px; display: block;" onerror="this.style.display='none'" />
+        <img src="${logoBase64}" alt="Logo" style="max-width: 315px; max-height: 162px; display: block;" onerror="this.style.display='none'" />
       </div>
 
       <!-- Header Info -->
