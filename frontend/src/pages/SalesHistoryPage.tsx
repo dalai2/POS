@@ -284,7 +284,7 @@ export default function SalesHistoryPage() {
       <div class="header-info">
         ${saleData.tipo_venta === 'credito' || saleData.tipo_venta === 'abono' ? `<div><strong>FOLIO DE APARTADO :</strong> ${cleanFolio(saleData.folio_apartado) || 'AP-' + String(saleData.id).padStart(6, '0')}</div>` : `<div><strong>FOLIO :</strong> ${cleanFolio(saleData.folio_venta) || 'V-' + String(saleData.id).padStart(6, '0')}</div>`}
         <div><strong>FECHA VENTA :</strong> ${formattedDate}</div>
-        <div>HIDALGO #112 ZONA CENTRO, LOCAL 12, 23 Y 24 C.P: 37000. LEÓN, GTO.</div>
+        <div>HIDALGO #207 ZONA CENTRO C.P: 37000. LEÓN, GTO.</div>
         <div>WhatsApp: 4776621788</div>
       </div>
     </div>
