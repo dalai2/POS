@@ -48,8 +48,40 @@ async def import_products(
         contents = await file.read()
         df = pd.read_excel(BytesIO(contents))
         
-        # Normalize column names to lowercase and strip spaces
+        # First, normalize column names to lowercase and strip spaces
         df.columns = df.columns.str.lower().str.strip()
+        
+        # Then map column name variations to standard names (all keys are lowercase since we normalized above)
+        column_mapping = {
+            # Weight variations
+            'peso': 'peso_gramos',
+            'peso en gramos': 'peso_gramos',
+            'peso_gramos': 'peso_gramos',
+            # Discount variations
+            'descuento': 'descuento_porcentaje',
+            'descuento_porcentaje': 'descuento_porcentaje',
+            'descuento %': 'descuento_porcentaje',
+            # Price variations
+            'precio manual': 'precio_manual',
+            'precio_manual': 'precio_manual',
+            'precio': 'precio_manual',  # Only if precio_manual doesn't exist
+            # Stock variations
+            'piezas': 'stock',
+            'stock': 'stock',
+            'cantidad': 'stock',
+            # Name variations
+            'name': 'nombre',
+            'nombre': 'nombre',
+        }
+        
+        # Apply mapping, but don't overwrite if target already exists
+        rename_dict = {}
+        for old_name, new_name in column_mapping.items():
+            if old_name in df.columns and new_name not in df.columns:
+                rename_dict[old_name] = new_name
+        
+        if rename_dict:
+            df = df.rename(columns=rename_dict)
         
         # Normalize column names (accept both 'name' and 'nombre')
         if 'nombre' in df.columns and 'name' not in df.columns:
@@ -97,10 +129,15 @@ async def import_products(
                     continue
                 
                 codigo = str(codigo_raw).strip()
-                name_raw = row.get('name')
+                # Check both 'name' and 'nombre' columns
+                name_raw = None
+                if 'name' in df.columns:
+                    name_raw = row['name']
+                elif 'nombre' in df.columns:
+                    name_raw = row['nombre']
                 
                 # Name is optional - if empty, leave it blank
-                if pd.isna(name_raw):
+                if pd.isna(name_raw) or name_raw == '':
                     name = ""
                 else:
                     name = str(name_raw).strip()
@@ -117,28 +154,56 @@ async def import_products(
                 
                 print(f"DEBUG: Fila {idx+2} - codigo={codigo}, existing={existing is not None}, mode={mode}")
                 
-                # Process quilataje with improved validation
+                # Process quilataje with improved validation (quilataje is optional)
                 quilataje = None
                 if 'quilataje' in df.columns:
                     try:
                         raw_quilataje = row['quilataje']  # Direct access to pandas Series
                         if pd.notna(raw_quilataje):
                             quilataje_str = str(raw_quilataje).strip()
-                            if quilataje_str and quilataje_str.lower() != 'nan':
+                            if quilataje_str and quilataje_str.lower() != 'nan' and quilataje_str.lower() != 'none':
                                 quilataje = quilataje_str
-                            else:
-                                print(f"DEBUG IMPORT PRODUCTS: Quilataje vacío o 'nan' para código {codigo}: '{quilataje_str}'", file=sys.stderr)
-                        else:
-                            print(f"DEBUG IMPORT PRODUCTS: Quilataje es NaN para código {codigo}", file=sys.stderr)
-                    except (KeyError, IndexError) as e:
-                        print(f"DEBUG IMPORT PRODUCTS: Error accediendo quilataje para código {codigo}: {e}", file=sys.stderr)
-                else:
-                    print(f"DEBUG IMPORT PRODUCTS: Columna 'quilataje' no está en df.columns para código {codigo}", file=sys.stderr)
+                    except (KeyError, IndexError):
+                        # Silently skip - quilataje is optional
+                        pass
                 
-                # Calculate price
-                peso_gramos = float(row.get('peso_gramos', 0)) if pd.notna(row.get('peso_gramos')) else None
-                descuento_pct = float(row.get('descuento_porcentaje', 0)) if pd.notna(row.get('descuento_porcentaje')) else 0
-                precio_manual = float(row.get('precio_manual')) if pd.notna(row.get('precio_manual')) else None
+                # Calculate price - use direct access for pandas Series
+                peso_gramos = None
+                if 'peso_gramos' in df.columns:
+                    try:
+                        peso_val = row['peso_gramos']
+                        if pd.notna(peso_val) and str(peso_val).strip() != '':
+                            peso_gramos = float(peso_val)
+                    except (ValueError, TypeError, KeyError):
+                        pass
+                
+                descuento_pct = 0
+                if 'descuento_porcentaje' in df.columns:
+                    try:
+                        desc_val = row['descuento_porcentaje']
+                        if pd.notna(desc_val) and str(desc_val).strip() != '':
+                            descuento_pct = float(desc_val)
+                    except (ValueError, TypeError, KeyError):
+                        pass
+                
+                precio_manual = None
+                if 'precio_manual' in df.columns:
+                    try:
+                        precio_val = row['precio_manual']
+                        if pd.notna(precio_val) and str(precio_val).strip() != '':
+                            precio_manual = float(precio_val)
+                    except (ValueError, TypeError, KeyError):
+                        pass
+                
+                # Calculate costo (needed for price calculation)
+                costo_value = 0
+                if 'costo' in df.columns:
+                    try:
+                        costo_val = row['costo']
+                        if pd.notna(costo_val) and str(costo_val).strip() != '':
+                            costo_value = float(costo_val)
+                    except (ValueError, TypeError, KeyError):
+                        pass
                 
                 # Auto-calculate price if no manual price
                 if precio_manual:
@@ -155,32 +220,103 @@ async def import_products(
                     
                     if rate_per_gram:
                         # Convert Decimal to float to avoid type mismatch
-                        base_price = round(float(rate_per_gram) * peso_gramos)
-                        precio_venta = round(base_price - (base_price * descuento_pct / 100))
+                        base_price = float(rate_per_gram) * peso_gramos
+                        precio_venta = base_price - (base_price * descuento_pct / 100)
+                    else:
+                        # Use costo with markup if available
+                        if costo_value > 0:
+                            precio_venta = costo_value * 1.5
+                        else:
+                            precio_venta = 0
                 else:
                     # Use costo with markup if available
-                    costo = float(row.get('costo', 0)) if pd.notna(row.get('costo')) else 0
-                    precio_venta = round(costo * 1.5) if costo > 0 else 0
+                    if costo_value > 0:
+                        precio_venta = costo_value * 1.5
+                    else:
+                        precio_venta = 0
+
+                # Process other fields with direct access
+                marca_value = None
+                if 'marca' in df.columns:
+                    try:
+                        marca_val = row['marca']
+                        if pd.notna(marca_val) and str(marca_val).strip() != '':
+                            marca_value = str(marca_val).strip()
+                    except (KeyError, IndexError):
+                        pass
+
+                modelo_value = None
+                if 'modelo' in df.columns:
+                    try:
+                        modelo_val = row['modelo']
+                        if pd.notna(modelo_val) and str(modelo_val).strip() != '':
+                            modelo_value = str(modelo_val).strip()
+                    except (KeyError, IndexError):
+                        pass
+
+                color_value = None
+                if 'color' in df.columns:
+                    try:
+                        color_val = row['color']
+                        if pd.notna(color_val) and str(color_val).strip() != '':
+                            color_value = str(color_val).strip()
+                    except (KeyError, IndexError):
+                        pass
+
+                base_value = None
+                if 'base' in df.columns:
+                    try:
+                        base_val = row['base']
+                        if pd.notna(base_val) and str(base_val).strip() != '':
+                            base_value = str(base_val).strip()
+                    except (KeyError, IndexError):
+                        pass
+
+                tipo_joya_value = None
+                if 'tipo_joya' in df.columns:
+                    try:
+                        tipo_val = row['tipo_joya']
+                        if pd.notna(tipo_val) and str(tipo_val).strip() != '':
+                            tipo_joya_value = str(tipo_val).strip()
+                    except (KeyError, IndexError):
+                        pass
+
+                talla_value = None
+                if 'talla' in df.columns:
+                    try:
+                        talla_val = row['talla']
+                        if pd.notna(talla_val) and str(talla_val).strip() != '':
+                            talla_value = str(talla_val).strip()
+                    except (KeyError, IndexError):
+                        pass
+
+                stock_value = 0
+                if 'stock' in df.columns:
+                    try:
+                        stock_val = row['stock']
+                        if pd.notna(stock_val) and str(stock_val).strip() != '':
+                            stock_value = int(float(stock_val))  # Convert to float first in case it's a decimal
+                    except (ValueError, TypeError, KeyError):
+                        pass
                 
                 product_data = {
                     'name': name,
                     'codigo': codigo,
-                    'marca': str(row.get('marca', '')).strip() if pd.notna(row.get('marca')) else None,
-                    'modelo': str(row.get('modelo', '')).strip() if pd.notna(row.get('modelo')) else None,
-                    'color': str(row.get('color', '')).strip() if pd.notna(row.get('color')) else None,
+                    'marca': marca_value,
+                    'modelo': modelo_value,
+                    'color': color_value,
                     'quilataje': quilataje,
-                    'base': str(row.get('base', '')).strip() if pd.notna(row.get('base')) else None,
-                    'tipo_joya': str(row.get('tipo_joya', '')).strip() if pd.notna(row.get('tipo_joya')) else None,
-                    'talla': str(row.get('talla', '')).strip() if pd.notna(row.get('talla')) else None,
+                    'base': base_value,
+                    'tipo_joya': tipo_joya_value,
+                    'talla': talla_value,
                     'peso_gramos': peso_gramos,
                     'descuento_porcentaje': descuento_pct,
                     'precio_manual': precio_manual,
-                    'costo': float(row.get('costo', 0)) if pd.notna(row.get('costo')) else 0,
-                    'cost_price': float(row.get('costo', 0)) if pd.notna(row.get('costo')) else 0,
+                    'costo': costo_value,
+                    'cost_price': costo_value,
                     'precio_venta': precio_venta,
                     'price': precio_venta,
-                    'stock': int(row.get('stock', 0)) if pd.notna(row.get('stock')) else 0,
-                    'codigo': str(row.get('codigo', '')).strip() if pd.notna(row.get('codigo')) else None,
+                    'stock': stock_value,
                     'active': True,
                     'tenant_id': tenant.id
                 }
