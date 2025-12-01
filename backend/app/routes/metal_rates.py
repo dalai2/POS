@@ -119,14 +119,14 @@ def update_metal_rate(
         ).all()
         
         for product in products:
-            # Calculate: (metal_rate × weight_grams) - discount%
-            base_price = float(rate.rate_per_gram) * float(product.peso_gramos)
+            # Calculate: (metal_rate × weight_grams) - discount% (redondeado a entero)
+            base_price = round(float(rate.rate_per_gram) * float(product.peso_gramos))
             if product.descuento_porcentaje:
                 discount = base_price * (float(product.descuento_porcentaje) / 100)
-                final_price = base_price - discount
+                final_price = round(base_price - discount)
             else:
                 final_price = base_price
-            
+
             product.price = final_price
             product.precio_venta = final_price
     

@@ -376,7 +376,39 @@ def import_productos_pedido(
     try:
         # Leer el archivo Excel
         contents = file.file.read()
-        df = pd.read_excel(io.BytesIO(contents))
+
+        # Leer inicialmente con keep_default_na=False para evitar NaN en celdas vacías
+        df = pd.read_excel(io.BytesIO(contents), keep_default_na=False, na_values=[''])
+
+        # Procesar cada columna para convertir datetime objects y otros tipos problemáticos a strings
+        for col in df.columns:
+            # Verificar si la columna contiene datetime objects
+            has_datetime = df[col].apply(lambda x: isinstance(x, pd.Timestamp) if pd.notna(x) else False).any()
+
+            if has_datetime:
+                print(f"DEBUG IMPORT: Convirtiendo columna '{col}' de datetime a string", file=sys.stderr)
+                # Convertir datetime objects a strings
+                df[col] = df[col].apply(lambda x: str(x) if isinstance(x, pd.Timestamp) else x)
+
+            # También convertir cualquier otro objeto datetime.datetime
+            def convert_datetime_to_talla(x):
+                if hasattr(x, 'hour') and hasattr(x, 'minute'):
+                    # Si es un datetime que parece representar un número de talla
+                    # (ej: 2025-05-04 00:00:00 representa talla 4)
+                    if x.year == 2025 and x.month == 5 and x.day <= 31:
+                        return str(x.day)
+                    else:
+                        # Para otros datetime, convertir a string completo
+                        return str(x)
+                return x
+
+            df[col] = df[col].apply(convert_datetime_to_talla)
+
+        # Forzar tipos string para columnas que deben ser texto
+        text_columns = ['nombre', 'modelo', 'marca', 'color', 'quilataje', 'base', 'talla', 'peso', 'codigo', 'categoria', 'category']
+        for col in text_columns:
+            if col in df.columns:
+                df[col] = df[col].astype(str)
         
         # Normalizar nombres de columnas
         df.columns = df.columns.str.lower().str.strip()
@@ -394,7 +426,7 @@ def import_productos_pedido(
             'quilataje': 'quilataje',
             'base': 'base',
             'talla': 'talla',
-            'peso': 'peso',
+            'peso': 'peso_gramos',
             'peso en gramos': 'peso_gramos',
             'peso_gramos': 'peso_gramos',
             'precio': 'precio',
@@ -439,6 +471,24 @@ def import_productos_pedido(
         # Si es modo replace, eliminar productos existentes
         if mode == "replace":
             db.query(ProductoPedido).filter(ProductoPedido.tenant_id == tenant.id).delete()
+        
+        # Cargar tasas de metal de pedidos para cálculo automático de precios
+        from ..models.tasa_metal_pedido import TasaMetalPedido
+        
+        # Obtener tasas de metal de pedidos para cálculo de precios
+        tasas_pedido = db.query(TasaMetalPedido).filter(
+            TasaMetalPedido.tenant_id == tenant.id,
+            TasaMetalPedido.tipo == 'precio'  # Solo tasas de precio
+        ).all()
+        
+        # Crear diccionario para búsqueda rápida (case-insensitive)
+        tasas_precio = {}
+        tasas_precio_lower = {}
+        for tasa in tasas_pedido:
+            tasas_precio[tasa.metal_type] = tasa.rate_per_gram
+            tasas_precio_lower[tasa.metal_type.lower()] = tasa.rate_per_gram
+        
+        print(f"DEBUG IMPORT: Tasas de precio cargadas: {list(tasas_precio.keys())}", file=sys.stderr)
         
         # Procesar cada fila
         productos_creados = 0
@@ -489,13 +539,25 @@ def import_productos_pedido(
             
             # Procesar peso con validación mejorada
             peso_value = None
-            if 'peso' in df.columns:
+            if 'peso_gramos' in df.columns:
                 try:
-                    raw_peso = row['peso']  # Acceso directo a la Serie de pandas
+                    raw_peso = row['peso_gramos']  # Usar la columna mapeada peso_gramos
                     if pd.notna(raw_peso):
                         peso_str = str(raw_peso).strip()
                         if peso_str and peso_str.lower() != 'nan':
                             peso_value = peso_str
+                            print(f"DEBUG IMPORT: peso_value asignado para código {row['codigo']}: '{peso_value}'", file=sys.stderr)
+                except (KeyError, IndexError) as e:
+                    print(f"DEBUG IMPORT: Error accediendo peso_gramos para código {row['codigo']}: {e}", file=sys.stderr)
+            # Fallback: si no hay peso_gramos, intentar con la columna peso original (antes del mapeo)
+            elif 'peso' in df.columns:
+                try:
+                    raw_peso = row['peso']
+                    if pd.notna(raw_peso):
+                        peso_str = str(raw_peso).strip()
+                        if peso_str and peso_str.lower() != 'nan':
+                            peso_value = peso_str
+                            print(f"DEBUG IMPORT: peso_value (fallback) asignado para código {row['codigo']}: '{peso_value}'", file=sys.stderr)
                 except (KeyError, IndexError) as e:
                     print(f"DEBUG IMPORT: Error accediendo peso para código {row['codigo']}: {e}", file=sys.stderr)
             
@@ -511,11 +573,94 @@ def import_productos_pedido(
                 except (KeyError, IndexError) as e:
                     print(f"DEBUG IMPORT: Error accediendo modelo para código {row['codigo']}: {e}", file=sys.stderr)
             
+            # Procesar peso_gramos para cálculo de precio
+            peso_gramos_value = None
+            if 'peso_gramos' in df.columns:
+                try:
+                    raw_peso_gramos = row['peso_gramos']
+                    if pd.notna(raw_peso_gramos):
+                        try:
+                            peso_gramos_value = float(raw_peso_gramos)
+                            print(f"DEBUG IMPORT: peso_gramos encontrado para código {row['codigo']}: {peso_gramos_value}g", file=sys.stderr)
+                        except (ValueError, TypeError):
+                            print(f"DEBUG IMPORT: peso_gramos no es numérico para código {row['codigo']}: {raw_peso_gramos}", file=sys.stderr)
+                except (KeyError, IndexError) as e:
+                    print(f"DEBUG IMPORT: Error accediendo peso_gramos para código {row['codigo']}: {e}", file=sys.stderr)
+            # Si no hay peso_gramos, intentar usar 'peso' si es numérico
+            elif 'peso' in df.columns and peso_gramos_value is None:
+                try:
+                    raw_peso = row['peso']
+                    if pd.notna(raw_peso):
+                        try:
+                            # Intentar convertir a float si es numérico
+                            peso_gramos_value = float(raw_peso)
+                            print(f"DEBUG IMPORT: peso usado como peso_gramos para código {row['codigo']}: {peso_gramos_value}g", file=sys.stderr)
+                        except (ValueError, TypeError):
+                            print(f"DEBUG IMPORT: peso no es numérico para código {row['codigo']}: {raw_peso} (tipo: {type(raw_peso)})", file=sys.stderr)
+                except (KeyError, IndexError) as e:
+                    print(f"DEBUG IMPORT: Error accediendo peso para código {row['codigo']}: {e}", file=sys.stderr)
+            
+            # Debug: mostrar qué valores tenemos para el cálculo
+            print(f"DEBUG IMPORT: Para código {row['codigo']}: quilataje_value={quilataje_value}, peso_gramos_value={peso_gramos_value}", file=sys.stderr)
+            
+            # Calcular precio automáticamente usando tasas de metal de pedidos
+            # Si hay quilataje y peso_gramos, calcular precio automáticamente
+            precio_calculado = None
+            
+            if quilataje_value and peso_gramos_value:
+                # Buscar tasa de precio para el quilataje (case-insensitive)
+                quilataje_lower = quilataje_value.lower().strip()
+                tasa_encontrada = None
+                
+                # Buscar en múltiples formas para asegurar coincidencia case-insensitive bidireccional
+                # 1. Coincidencia exacta en tasas_precio
+                if quilataje_value in tasas_precio:
+                    tasa_encontrada = tasas_precio[quilataje_value]
+                    print(f"DEBUG IMPORT: Tasa encontrada (exacta) para quilataje '{quilataje_value}': ${tasa_encontrada}/g", file=sys.stderr)
+                # 2. Buscar quilataje en minúsculas en tasas_precio_lower (funciona si tasa está en mayúsculas)
+                elif quilataje_lower in tasas_precio_lower:
+                    tasa_encontrada = tasas_precio_lower[quilataje_lower]
+                    print(f"DEBUG IMPORT: Tasa encontrada (case-insensitive, quilataje lower) para quilataje '{quilataje_value}': ${tasa_encontrada}/g", file=sys.stderr)
+                # 3. Buscar quilataje en minúsculas directamente en tasas_precio (por si la tasa está guardada en minúsculas)
+                elif quilataje_lower in tasas_precio:
+                    tasa_encontrada = tasas_precio[quilataje_lower]
+                    print(f"DEBUG IMPORT: Tasa encontrada (quilataje lower en tasas_precio) para quilataje '{quilataje_value}': ${tasa_encontrada}/g", file=sys.stderr)
+                # 4. Buscar quilataje original en tasas_precio_lower (por si la tasa está guardada en minúsculas pero el quilataje viene en mayúsculas)
+                elif quilataje_value in tasas_precio_lower:
+                    tasa_encontrada = tasas_precio_lower[quilataje_value]
+                    print(f"DEBUG IMPORT: Tasa encontrada (quilataje original en tasas_precio_lower) para quilataje '{quilataje_value}': ${tasa_encontrada}/g", file=sys.stderr)
+                
+                if tasa_encontrada:
+                    # Calcular: peso_gramos × tasa_precio (redondeado a entero)
+                    precio_calculado = round(float(peso_gramos_value) * float(tasa_encontrada))
+                    print(f"DEBUG IMPORT: ✅ Precio calculado para código {row['codigo']}: {peso_gramos_value}g × ${tasa_encontrada}/g = ${precio_calculado}", file=sys.stderr)
+                else:
+                    print(f"DEBUG IMPORT: ⚠️ No se encontró tasa de precio para quilataje '{quilataje_value}' (código {row['codigo']}). Quilataje lower: '{quilataje_lower}'. Tasas disponibles: {list(tasas_precio.keys())}, Tasas lower keys: {list(tasas_precio_lower.keys())}", file=sys.stderr)
+            
+            # Si no se calculó precio, usar el precio del Excel o 0.0
+            if precio_calculado is None:
+                if 'precio' in df.columns and not pd.isna(row.get('precio')):
+                    try:
+                        precio_excel = float(row['precio'])
+                        # Solo usar precio del Excel si no es 0 (ya que todos vienen en 0 según el usuario)
+                        if precio_excel > 0:
+                            precio_calculado = round(precio_excel)
+                            print(f"DEBUG IMPORT: Usando precio del Excel para código {row['codigo']}: {precio_calculado}", file=sys.stderr)
+                        else:
+                            precio_calculado = 0.0
+                            print(f"DEBUG IMPORT: Precio del Excel es 0 para código {row['codigo']}, usando 0.0", file=sys.stderr)
+                    except (ValueError, TypeError):
+                        precio_calculado = 0.0
+                        print(f"DEBUG IMPORT: ⚠️ Precio del Excel no es numérico para código {row['codigo']}, usando 0.0", file=sys.stderr)
+                else:
+                    precio_calculado = 0.0
+                    print(f"DEBUG IMPORT: ⚠️ No hay precio para código {row['codigo']}, usando 0.0", file=sys.stderr)
+            
             # Preparar datos del producto
             producto_data = {
                 'tenant_id': tenant.id,
                 'modelo': modelo_value,
-                'precio': float(row['precio']) if 'precio' in df.columns and not pd.isna(row.get('precio')) else 0.0,
+                'precio': precio_calculado,
                 'nombre': nombre_value,
                 'codigo': str(row['codigo']).strip(),
                 'marca': str(row['marca']).strip() if 'marca' in df.columns and not pd.isna(row.get('marca')) else None,

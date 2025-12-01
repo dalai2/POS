@@ -155,16 +155,12 @@ async def import_products(
                     
                     if rate_per_gram:
                         # Convert Decimal to float to avoid type mismatch
-                        base_price = float(rate_per_gram) * peso_gramos
-                        precio_venta = base_price - (base_price * descuento_pct / 100)
-                    else:
-                        # Use costo with markup if available
-                        costo = float(row.get('costo', 0)) if pd.notna(row.get('costo')) else 0
-                        precio_venta = costo * 1.5 if costo > 0 else 0
+                        base_price = round(float(rate_per_gram) * peso_gramos)
+                        precio_venta = round(base_price - (base_price * descuento_pct / 100))
                 else:
                     # Use costo with markup if available
                     costo = float(row.get('costo', 0)) if pd.notna(row.get('costo')) else 0
-                    precio_venta = costo * 1.5 if costo > 0 else 0
+                    precio_venta = round(costo * 1.5) if costo > 0 else 0
                 
                 product_data = {
                     'name': name,
