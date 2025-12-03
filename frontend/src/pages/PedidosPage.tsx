@@ -298,7 +298,7 @@ export default function PedidosPage() {
   }
 
   const getTotal = () => {
-    return cart.reduce((sum, ci) => sum + (parseFloat(ci.producto.precio.toString()) * ci.cantidad), 0)
+    return Math.ceil(cart.reduce((sum, ci) => sum + (parseFloat(ci.producto.precio.toString()) * ci.cantidad), 0))
   }
 
   const createProduct = async () => {
@@ -722,19 +722,19 @@ export default function PedidosPage() {
               <div className={`col-span-2 p-3 rounded-lg ${tipoPedido === 'contado' ? 'bg-green-100' : 'bg-orange-100'}`}>
                 <div className="flex justify-between text-sm">
                   <span className="font-medium">Total del pedido:</span>
-                  <span className="font-bold">${getTotal().toFixed(2)}</span>
+                  <span className="font-bold">${getTotal()}</span>
                 </div>
                 <div className="flex justify-between text-sm mt-1">
                   <span className="font-medium">{tipoPedido === 'contado' ? 'Total pagado:' : 'Anticipo:'}</span>
                   <span className={`font-bold ${tipoPedido === 'contado' ? 'text-green-700' : 'text-orange-700'}`}>
-                    ${((parseFloat(metodoPagoEfectivo) || 0) + (parseFloat(metodoPagoTarjeta) || 0)).toFixed(2)}
+                    ${Math.ceil((parseFloat(metodoPagoEfectivo) || 0) + (parseFloat(metodoPagoTarjeta) || 0))}
                   </span>
                 </div>
                 {tipoPedido === 'apartado' && (
                   <div className="flex justify-between text-sm mt-1">
                     <span className="font-medium">Saldo pendiente:</span>
                     <span className="font-bold text-red-700">
-                      ${(getTotal() - ((parseFloat(metodoPagoEfectivo) || 0) + (parseFloat(metodoPagoTarjeta) || 0))).toFixed(2)}
+                      ${Math.ceil(getTotal() - ((parseFloat(metodoPagoEfectivo) || 0) + (parseFloat(metodoPagoTarjeta) || 0)))}
                     </span>
                   </div>
                 )}
@@ -1079,11 +1079,11 @@ export default function PedidosPage() {
                 <strong>Productos:</strong> {cart.length} {cart.length === 1 ? 'producto' : 'productos'}
               </p>
               <p className="text-gray-700">
-                <strong>Total:</strong> ${cart.reduce((sum, item) => sum + (item.producto.precio * item.cantidad), 0).toFixed(2)}
+                <strong>Total:</strong> ${Math.ceil(cart.reduce((sum, item) => sum + (item.producto.precio * item.cantidad), 0))}
               </p>
               {(parseFloat(metodoPagoEfectivo) > 0 || parseFloat(metodoPagoTarjeta) > 0) && (
                 <p className="text-gray-700">
-                  <strong>Anticipo:</strong> ${((parseFloat(metodoPagoEfectivo) || 0) + (parseFloat(metodoPagoTarjeta) || 0)).toFixed(2)}
+                  <strong>Anticipo:</strong> ${Math.ceil((parseFloat(metodoPagoEfectivo) || 0) + (parseFloat(metodoPagoTarjeta) || 0))}
                 </p>
               )}
             </div>
@@ -1112,13 +1112,16 @@ export default function PedidosPage() {
       )}
       {/* Modal para crear producto */}
       {showCreateProductModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h3 className="text-lg font-semibold mb-4">
-              {editingProduct ? 'Editar Producto' : 'Crear Nuevo Producto'}
-            </h3>
-            
-            <div className="space-y-3">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-sm sm:max-w-md md:max-w-lg lg:max-w-xl w-full h-[95vh] sm:h-[90vh] flex flex-col">
+            <div className="flex-shrink-0 p-3 sm:p-6 border-b">
+              <h3 className="text-lg sm:text-xl font-semibold">
+                {editingProduct ? 'Editar Producto' : 'Crear Nuevo Producto'}
+              </h3>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-3 sm:p-6 min-h-0">
+              <div className="space-y-3">
               <input
                 className="w-full border border-gray-300 rounded-lg px-3 py-2"
                 placeholder="Modelo"
@@ -1242,7 +1245,6 @@ export default function PedidosPage() {
                 />
                 <label htmlFor="disponible" className="text-sm">Disponible para pedidos</label>
               </div>
-            </div>
 
             {/* Tasas de Metal de Pedidos */}
             {metalRatesPedido.length > 0 && (
@@ -1280,20 +1282,22 @@ export default function PedidosPage() {
                 )}
               </div>
             )}
-            
-            <div className="flex justify-end space-x-3 mt-6">
-              <button
-                onClick={() => setShowCreateProductModal(false)}
-                className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={createProduct}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-              >
-                {editingProduct ? 'Actualizar Producto' : 'Crear Producto'}
-              </button>
+            </div>
+
+            <div className="flex-shrink-0 border-t p-3 sm:p-6 bg-gray-50 flex flex-col sm:flex-row gap-2 sm:justify-end">
+                <button
+                  onClick={() => setShowCreateProductModal(false)}
+                  className="bg-gray-300 text-gray-700 px-4 sm:px-6 py-2 rounded-lg hover:bg-gray-400 order-2 sm:order-1"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={createProduct}
+                  className="bg-green-600 text-white px-4 sm:px-6 py-2 rounded-lg hover:bg-green-700 font-semibold order-1 sm:order-2"
+                >
+                  {editingProduct ? 'Actualizar Producto' : 'Crear Producto'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

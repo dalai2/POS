@@ -714,8 +714,10 @@ export default function ProductsPage() {
                     className="w-full border border-gray-300 rounded-lg px-3 py-1.5"
                   >
                     <option value="">-- No modificar --</option>
-                    {metalTypes.map(mt => (
-                      <option key={mt.value} value={mt.value}>{mt.label}</option>
+                    {metalRates.map(mr => (
+                      <option key={mr.id} value={mr.metal_type}>
+                        {mr.metal_type} - ${mr.rate_per_gram.toFixed(2)}/g
+                      </option>
                     ))}
                   </select>
                   <p className="text-xs text-gray-500 mt-1">
@@ -745,14 +747,18 @@ export default function ProductsPage() {
           </div>
         )}
 
-        {/* Add/Edit Form */}
+        {/* Add/Edit Form Modal */}
         {showAddForm && (userRole === 'owner' || userRole === 'admin') && (
-          <div className="bg-white rounded-lg shadow-lg p-4">
-            <h2 className="text-lg font-semibold mb-3">
-              {editingId ? 'Editar Producto' : 'Nuevo Producto'}
-            </h2>
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
+            <div className="bg-white rounded-lg shadow-xl max-w-sm sm:max-w-md md:max-w-2xl lg:max-w-4xl w-full h-[95vh] sm:h-[90vh] flex flex-col">
+              <div className="flex-shrink-0 p-3 sm:p-6 border-b">
+                <h2 className="text-lg sm:text-xl font-semibold">
+                  {editingId ? 'Editar Producto' : 'Nuevo Producto'}
+                </h2>
+              </div>
 
-            <div className="grid grid-cols-3 gap-3">
+              <div className="flex-1 overflow-y-auto p-3 sm:p-6 min-h-0">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               <div className="col-span-3">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Nombre *</label>
                 <input
@@ -837,8 +843,8 @@ export default function ProductsPage() {
                 />
               </div>
 
-              <div className="col-span-3 bg-blue-50 p-3 rounded-lg">
-                <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-1 sm:col-span-2 lg:col-span-3 bg-blue-50 p-3 rounded-lg">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       💰 Precio Calculado
@@ -906,23 +912,25 @@ export default function ProductsPage() {
                 />
               </div>
 
-            </div>
+                </div>
+              </div>
 
-            <div className="mt-4 flex gap-2">
-              <button
-                onClick={() => editingId ? updateProduct(editingId) : add()}
-                className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 font-semibold"
-              >
-                {editingId ? 'Actualizar' : 'Crear Producto'}
-              </button>
-              <button
-                onClick={() => { setShowAddForm(false); resetForm(); setEditingId(null); }}
-                className="bg-gray-300 text-gray-700 px-6 py-2 rounded-lg hover:bg-gray-400"
-              >
-                Cancelar
-              </button>
+              <div className="flex-shrink-0 border-t p-3 sm:p-6 bg-gray-50 flex flex-col sm:flex-row gap-2 sm:justify-end">
+                <button
+                  onClick={() => { setShowAddForm(false); resetForm(); setEditingId(null); }}
+                  className="bg-gray-300 text-gray-700 px-4 sm:px-6 py-2 rounded-lg hover:bg-gray-400 order-2 sm:order-1"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => editingId ? updateProduct(editingId) : add()}
+                  className="bg-green-600 text-white px-4 sm:px-6 py-2 rounded-lg hover:bg-green-700 font-semibold order-1 sm:order-2"
+                >
+                  {editingId ? 'Actualizar' : 'Crear Producto'}
+                </button>
+              </div>
             </div>
-      </div>
+          </div>
         )}
 
         {/* Products Table */}
