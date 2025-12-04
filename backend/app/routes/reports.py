@@ -400,7 +400,7 @@ class DailySummaryReport(BaseModel):
 
 
 class SaleDetailReport(BaseModel):
-    id: int
+    id: str  # Puede ser int o string (formato "venta_id-item_id" cuando hay múltiples productos)
     fecha: str
     cliente: str
     piezas: int
@@ -410,6 +410,10 @@ class SaleDetailReport(BaseModel):
     vendedor: str
     efectivo: float = 0.0
     tarjeta: float = 0.0
+    codigo_producto: Optional[str] = None
+    costo: Optional[float] = None
+    ganancia: Optional[float] = None
+    is_parent: Optional[bool] = False
 
 
 class PedidoDetailReport(BaseModel):
@@ -425,7 +429,7 @@ class PedidoDetailReport(BaseModel):
     vendedor: str
 
 class ApartadoHistorialReport(BaseModel):
-    id: int
+    id: str  # Puede ser int o string (formato "apartado_id-item_id" cuando hay múltiples productos)
     fecha: str
     cliente: str
     total: float
@@ -433,9 +437,13 @@ class ApartadoHistorialReport(BaseModel):
     saldo: float
     estado: str
     vendedor: str
+    codigo_producto: Optional[str] = None
+    costo: Optional[float] = None
+    ganancia: Optional[float] = None
+    is_parent: Optional[bool] = False
 
 class PedidoHistorialReport(BaseModel):
-    id: int
+    id: str  # Cambiado a string para soportar IDs compuestos
     fecha: str
     cliente: str
     producto: str
@@ -445,6 +453,10 @@ class PedidoHistorialReport(BaseModel):
     saldo: float
     estado: str
     vendedor: str
+    codigo_producto: Optional[str] = None
+    costo: Optional[float] = None
+    ganancia: Optional[float] = None
+    is_parent: Optional[bool] = False
 
 class AbonoApartadoReport(BaseModel):
     id: int
@@ -453,6 +465,7 @@ class AbonoApartadoReport(BaseModel):
     monto: float
     metodo_pago: str
     vendedor: str
+    codigo_producto: Optional[str] = None
 
 class AbonoPedidoReport(BaseModel):
     id: int
@@ -462,9 +475,10 @@ class AbonoPedidoReport(BaseModel):
     monto: float
     metodo_pago: str
     vendedor: str
+    codigo_producto: Optional[str] = None
 
 class ApartadoCanceladoVencidoReport(BaseModel):
-    id: int
+    id: str  # Puede ser int o string (formato "apartado_id-item_id" cuando hay múltiples productos)
     fecha: str
     cliente: str
     total: float
@@ -473,9 +487,13 @@ class ApartadoCanceladoVencidoReport(BaseModel):
     estado: str
     vendedor: str
     motivo: str
+    codigo_producto: Optional[str] = None
+    costo: Optional[float] = None
+    ganancia: Optional[float] = None
+    is_parent: Optional[bool] = False
 
 class PedidoCanceladoVencidoReport(BaseModel):
-    id: int
+    id: str  # Cambiado a string para soportar IDs compuestos
     fecha: str
     cliente: str
     producto: str
@@ -486,6 +504,10 @@ class PedidoCanceladoVencidoReport(BaseModel):
     estado: str
     vendedor: str
     motivo: str
+    codigo_producto: Optional[str] = None
+    costo: Optional[float] = None
+    ganancia: Optional[float] = None
+    is_parent: Optional[bool] = False
 
 class ResumenPagosReport(BaseModel):
     tipo_movimiento: str

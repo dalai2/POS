@@ -2012,21 +2012,119 @@ def _build_historiales(
             vendor = db.query(User).filter(User.id == pedido.user_id).first()
             vendedor = vendor.email if vendor else "Unknown"
         
-        producto = db.query(ProductoPedido).filter(ProductoPedido.id == pedido.producto_pedido_id).first()
-        producto_name = producto.modelo if producto else "Producto desconocido"
+        total_pedido = float(pedido.total or 0)
+        anticipo_pedido = float(pedido.anticipo_pagado)
+        saldo_pedido = float(pedido.saldo_pendiente)
         
-        historial_pedidos.append({
-            "id": pedido.id,
-            "fecha": pedido.created_at.strftime("%Y-%m-%d %H:%M"),
-            "cliente": pedido.cliente_nombre,
-            "producto": producto_name,
-            "cantidad": pedido.cantidad,
-            "total": float(pedido.total),
-            "anticipo": float(pedido.anticipo_pagado),
-            "saldo": float(pedido.saldo_pendiente),
-            "estado": pedido.estado,
-            "vendedor": vendedor
-        })
+        # Obtener items del pedido
+        pedido_items = db.query(PedidoItem).filter(PedidoItem.pedido_id == pedido.id).all()
+        
+        if pedido_items:
+            # Calcular costo y ganancia totales
+            costo_total = 0.0
+            ganancia_total = 0.0
+            cantidad_total = 0
+            for item in pedido_items:
+                if item.producto_pedido_id:
+                    producto = db.query(ProductoPedido).filter(ProductoPedido.id == item.producto_pedido_id).first()
+                    if producto:
+                        costo_unitario = float(producto.cost_price or 0)
+                        cantidad = int(item.cantidad or 1)
+                        cantidad_total += cantidad
+                        costo_total += costo_unitario * cantidad
+                        precio_venta = float(item.total or 0)
+                        ganancia_total += precio_venta - (costo_unitario * cantidad)
+            
+            # Primero agregar fila principal con total del pedido
+            historial_pedidos.append({
+                "id": str(pedido.id),
+                "fecha": pedido.created_at.strftime("%Y-%m-%d %H:%M"),
+                "cliente": pedido.cliente_nombre,
+                "producto": "Pedido",  # Indicador de fila principal
+                "cantidad": cantidad_total,
+                "total": total_pedido,
+                "anticipo": anticipo_pedido,
+                "saldo": saldo_pedido,
+                "estado": pedido.estado,
+                "vendedor": vendedor,
+                "codigo_producto": "Pedido",
+                "costo": costo_total,
+                "ganancia": ganancia_total,
+                "is_parent": True
+            })
+            
+            # Luego agregar filas para cada producto/item (sin anticipo ni saldo)
+            for item in pedido_items:
+                codigo = 'N/A'
+                costo_item = 0.0
+                ganancia_item = 0.0
+                producto_name = item.nombre or item.modelo or "Sin nombre"
+                
+                if item.producto_pedido_id:
+                    producto = db.query(ProductoPedido).filter(ProductoPedido.id == item.producto_pedido_id).first()
+                    if producto:
+                        codigo = producto.codigo if producto.codigo else (item.codigo if item.codigo else 'N/A')
+                        producto_name = producto.modelo if producto.modelo else producto_name
+                        costo_unitario = float(producto.cost_price or 0)
+                        cantidad = int(item.cantidad or 1)
+                        costo_item = costo_unitario * cantidad
+                        precio_venta = float(item.total or 0)
+                        ganancia_item = precio_venta - costo_item
+                    else:
+                        codigo = item.codigo if item.codigo else 'N/A'
+                        precio_venta = float(item.total or 0)
+                        ganancia_item = precio_venta
+                else:
+                    codigo = item.codigo if item.codigo else 'N/A'
+                    precio_venta = float(item.total or 0)
+                    ganancia_item = precio_venta
+                
+                historial_pedidos.append({
+                    "id": str(f"{pedido.id}-{item.id}"),
+                    "fecha": pedido.created_at.strftime("%Y-%m-%d %H:%M"),
+                    "cliente": pedido.cliente_nombre,
+                    "producto": producto_name,
+                    "cantidad": item.cantidad,
+                    "total": float(item.total or 0),
+                    "anticipo": 0.0,  # No mostrar anticipo en filas de productos
+                    "saldo": 0.0,  # No mostrar saldo en filas de productos
+                    "estado": pedido.estado,
+                    "vendedor": vendedor,
+                    "codigo_producto": codigo,
+                    "costo": costo_item,
+                    "ganancia": ganancia_item,
+                    "is_parent": False
+                })
+        else:
+            # Si no tiene items, usar producto_pedido_id (comportamiento anterior)
+            producto = db.query(ProductoPedido).filter(ProductoPedido.id == pedido.producto_pedido_id).first()
+            producto_name = producto.modelo if producto else "Producto desconocido"
+            codigo_producto = producto.codigo if producto else "N/A"
+            
+            costo_pedido = 0.0
+            precio_venta = float(pedido.total or 0)
+            if producto and producto.cost_price:
+                costo_unitario = float(producto.cost_price)
+                cantidad = int(pedido.cantidad or 1)
+                costo_pedido = costo_unitario * cantidad
+            ganancia_pedido = precio_venta - costo_pedido
+            
+            historial_pedidos.append({
+                "id": str(pedido.id),
+                "fecha": pedido.created_at.strftime("%Y-%m-%d %H:%M"),
+                "cliente": pedido.cliente_nombre,
+                "producto": producto_name,
+                "cantidad": pedido.cantidad,
+                "total": precio_venta,
+                "anticipo": anticipo_pedido,
+                "saldo": saldo_pedido,
+                "estado": pedido.estado,
+                "vendedor": vendedor,
+                "codigo_producto": codigo_producto,
+                "costo": costo_pedido,
+                "ganancia": ganancia_pedido,
+                "is_parent": True
+            })
     
     # Historial de pedidos pendientes
     for pedido in pedidos_pendientes:
@@ -2035,21 +2133,119 @@ def _build_historiales(
             vendor = db.query(User).filter(User.id == pedido.user_id).first()
             vendedor = vendor.email if vendor else "Unknown"
         
-        producto = db.query(ProductoPedido).filter(ProductoPedido.id == pedido.producto_pedido_id).first()
-        producto_name = producto.modelo if producto else "Producto desconocido"
+        total_pedido = float(pedido.total or 0)
+        anticipo_pedido = float(pedido.anticipo_pagado)
+        saldo_pedido = float(pedido.saldo_pendiente)
         
-        historial_pedidos.append({
-            "id": pedido.id,
-            "fecha": pedido.created_at.strftime("%Y-%m-%d %H:%M"),
-            "cliente": pedido.cliente_nombre,
-            "producto": producto_name,
-            "cantidad": pedido.cantidad,
-            "total": float(pedido.total),
-            "anticipo": float(pedido.anticipo_pagado),
-            "saldo": float(pedido.saldo_pendiente),
-            "estado": pedido.estado,
-            "vendedor": vendedor
-        })
+        # Obtener items del pedido
+        pedido_items = db.query(PedidoItem).filter(PedidoItem.pedido_id == pedido.id).all()
+        
+        if pedido_items:
+            # Calcular costo y ganancia totales
+            costo_total = 0.0
+            ganancia_total = 0.0
+            cantidad_total = 0
+            for item in pedido_items:
+                if item.producto_pedido_id:
+                    producto = db.query(ProductoPedido).filter(ProductoPedido.id == item.producto_pedido_id).first()
+                    if producto:
+                        costo_unitario = float(producto.cost_price or 0)
+                        cantidad = int(item.cantidad or 1)
+                        cantidad_total += cantidad
+                        costo_total += costo_unitario * cantidad
+                        precio_venta = float(item.total or 0)
+                        ganancia_total += precio_venta - (costo_unitario * cantidad)
+            
+            # Primero agregar fila principal con total del pedido
+            historial_pedidos.append({
+                "id": str(pedido.id),
+                "fecha": pedido.created_at.strftime("%Y-%m-%d %H:%M"),
+                "cliente": pedido.cliente_nombre,
+                "producto": "Pedido",  # Indicador de fila principal
+                "cantidad": cantidad_total,
+                "total": total_pedido,
+                "anticipo": anticipo_pedido,
+                "saldo": saldo_pedido,
+                "estado": pedido.estado,
+                "vendedor": vendedor,
+                "codigo_producto": "Pedido",
+                "costo": costo_total,
+                "ganancia": ganancia_total,
+                "is_parent": True
+            })
+            
+            # Luego agregar filas para cada producto/item (sin anticipo ni saldo)
+            for item in pedido_items:
+                codigo = 'N/A'
+                costo_item = 0.0
+                ganancia_item = 0.0
+                producto_name = item.nombre or item.modelo or "Sin nombre"
+                
+                if item.producto_pedido_id:
+                    producto = db.query(ProductoPedido).filter(ProductoPedido.id == item.producto_pedido_id).first()
+                    if producto:
+                        codigo = producto.codigo if producto.codigo else (item.codigo if item.codigo else 'N/A')
+                        producto_name = producto.modelo if producto.modelo else producto_name
+                        costo_unitario = float(producto.cost_price or 0)
+                        cantidad = int(item.cantidad or 1)
+                        costo_item = costo_unitario * cantidad
+                        precio_venta = float(item.total or 0)
+                        ganancia_item = precio_venta - costo_item
+                    else:
+                        codigo = item.codigo if item.codigo else 'N/A'
+                        precio_venta = float(item.total or 0)
+                        ganancia_item = precio_venta
+                else:
+                    codigo = item.codigo if item.codigo else 'N/A'
+                    precio_venta = float(item.total or 0)
+                    ganancia_item = precio_venta
+                
+                historial_pedidos.append({
+                    "id": str(f"{pedido.id}-{item.id}"),
+                    "fecha": pedido.created_at.strftime("%Y-%m-%d %H:%M"),
+                    "cliente": pedido.cliente_nombre,
+                    "producto": producto_name,
+                    "cantidad": item.cantidad,
+                    "total": float(item.total or 0),
+                    "anticipo": 0.0,  # No mostrar anticipo en filas de productos
+                    "saldo": 0.0,  # No mostrar saldo en filas de productos
+                    "estado": pedido.estado,
+                    "vendedor": vendedor,
+                    "codigo_producto": codigo,
+                    "costo": costo_item,
+                    "ganancia": ganancia_item,
+                    "is_parent": False
+                })
+        else:
+            # Si no tiene items, usar producto_pedido_id (comportamiento anterior)
+            producto = db.query(ProductoPedido).filter(ProductoPedido.id == pedido.producto_pedido_id).first()
+            producto_name = producto.modelo if producto else "Producto desconocido"
+            codigo_producto = producto.codigo if producto else "N/A"
+            
+            costo_pedido = 0.0
+            precio_venta = float(pedido.total or 0)
+            if producto and producto.cost_price:
+                costo_unitario = float(producto.cost_price)
+                cantidad = int(pedido.cantidad or 1)
+                costo_pedido = costo_unitario * cantidad
+            ganancia_pedido = precio_venta - costo_pedido
+            
+            historial_pedidos.append({
+                "id": str(pedido.id),
+                "fecha": pedido.created_at.strftime("%Y-%m-%d %H:%M"),
+                "cliente": pedido.cliente_nombre,
+                "producto": producto_name,
+                "cantidad": pedido.cantidad,
+                "total": precio_venta,
+                "anticipo": anticipo_pedido,
+                "saldo": saldo_pedido,
+                "estado": pedido.estado,
+                "vendedor": vendedor,
+                "codigo_producto": codigo_producto,
+                "costo": costo_pedido,
+                "ganancia": ganancia_pedido,
+                "is_parent": True
+            })
     
     # Historial de apartados activos (nuevo esquema)
     apartados_activos = db.query(Apartado).filter(
@@ -2065,18 +2261,101 @@ def _build_historiales(
             vendor = db.query(User).filter(User.id == apartado.vendedor_id).first()
             vendedor = vendor.email if vendor else "Unknown"
         
-        saldo = float(apartado.total or 0) - float(apartado.amount_paid or 0)
+        total_apartado = float(apartado.total or 0)
+        anticipo_apartado = float(apartado.amount_paid or 0)
+        saldo_apartado = total_apartado - anticipo_apartado
         
-        historial_apartados.append({
-            "id": apartado.id,
-            "fecha": apartado.created_at.strftime("%Y-%m-%d %H:%M"),
-            "cliente": apartado.customer_name or "Sin nombre",
-            "total": float(apartado.total or 0),
-            "anticipo": float(apartado.amount_paid or 0),
-            "saldo": saldo,
-            "estado": apartado.credit_status or "pendiente",
-            "vendedor": vendedor
-        })
+        # Obtener items del apartado
+        items = db.query(ItemApartado).filter(ItemApartado.apartado_id == apartado.id).all()
+        
+        # Si no hay items, crear una entrada con total del apartado
+        if not items:
+            historial_apartados.append({
+                "id": str(apartado.id),  # Convertir a string
+                "fecha": apartado.created_at.strftime("%Y-%m-%d %H:%M"),
+                "cliente": apartado.customer_name or "Sin nombre",
+                "total": total_apartado,
+                "anticipo": anticipo_apartado,
+                "saldo": saldo_apartado,
+                "estado": apartado.credit_status or "pendiente",
+                "vendedor": vendedor,
+                "codigo_producto": 'N/A',
+                "costo": 0.0,
+                "ganancia": total_apartado,
+                "is_parent": True
+            })
+        else:
+            # Calcular costo y ganancia totales
+            costo_total = 0.0
+            ganancia_total = 0.0
+            for item in items:
+                if item.product_id:
+                    product = db.query(Product).filter(Product.id == item.product_id).first()
+                    if product:
+                        costo_unitario = float(product.cost_price or 0)
+                        cantidad = int(item.quantity or 0)
+                        costo_total += costo_unitario * cantidad
+                        precio_venta = float(item.total_price or 0)
+                        ganancia_total += precio_venta - (costo_unitario * cantidad)
+            
+            # Primero agregar fila principal con total del apartado
+            historial_apartados.append({
+                "id": str(apartado.id),
+                "fecha": apartado.created_at.strftime("%Y-%m-%d %H:%M"),
+                "cliente": apartado.customer_name or "Sin nombre",
+                "total": total_apartado,
+                "anticipo": anticipo_apartado,
+                "saldo": saldo_apartado,
+                "estado": apartado.credit_status or "pendiente",
+                "vendedor": vendedor,
+                "codigo_producto": "Apartado",  # Indicador de fila principal
+                "costo": costo_total,
+                "ganancia": ganancia_total,
+                "is_parent": True
+            })
+            
+            # Luego agregar filas para cada producto/item (sin anticipo ni saldo)
+            for item in items:
+                codigo = 'N/A'
+                costo_item = 0.0
+                ganancia_item = 0.0
+                
+                if item.product_id:
+                    product = db.query(Product).filter(Product.id == item.product_id).first()
+                    if product:
+                        # Priorizar código del producto, luego del item
+                        codigo = product.codigo if product.codigo else (item.codigo if item.codigo else 'N/A')
+                        costo_unitario = float(product.cost_price or 0)
+                        cantidad = int(item.quantity or 0)
+                        costo_item = costo_unitario * cantidad
+                        # Ganancia = precio de venta - costo
+                        precio_venta = float(item.total_price or 0)
+                        ganancia_item = precio_venta - costo_item
+                    else:
+                        # Si no hay producto, usar código del item
+                        codigo = item.codigo if item.codigo else 'N/A'
+                        precio_venta = float(item.total_price or 0)
+                        ganancia_item = precio_venta  # Sin costo conocido
+                else:
+                    # Si no hay product_id, usar código del item
+                    codigo = item.codigo if item.codigo else 'N/A'
+                    precio_venta = float(item.total_price or 0)
+                    ganancia_item = precio_venta  # Sin costo conocido
+                
+                historial_apartados.append({
+                    "id": str(f"{apartado.id}-{item.id}"),  # ID único por item (string)
+                    "fecha": apartado.created_at.strftime("%Y-%m-%d %H:%M"),
+                    "cliente": apartado.customer_name or "Sin nombre",
+                    "total": float(item.total_price or 0),  # Precio individual del producto
+                    "anticipo": 0.0,  # No mostrar anticipo en filas de productos
+                    "saldo": 0.0,  # No mostrar saldo en filas de productos
+                    "estado": apartado.credit_status or "pendiente",
+                    "vendedor": vendedor,
+                    "codigo_producto": codigo,
+                    "costo": costo_item,
+                    "ganancia": ganancia_item,
+                    "is_parent": False
+                })
     
     # Apartados cancelados y vencidos (nuevo esquema Apartado)
     apartados_nuevos_cancelados_vencidos = db.query(Apartado).filter(
@@ -2092,8 +2371,13 @@ def _build_historiales(
             vendor = db.query(User).filter(User.id == ap.vendedor_id).first()
             vendedor = vendor.email if vendor else "Unknown"
 
-        saldo = float(ap.total or 0) - float(ap.amount_paid or 0)
+        total_apartado = float(ap.total or 0)
+        anticipo_apartado = float(ap.amount_paid or 0)
+        saldo_apartado = total_apartado - anticipo_apartado
         motivo = "Vencido" if ap.credit_status == "vencido" else "Cancelado"
+
+        # Obtener items del apartado
+        items = db.query(ItemApartado).filter(ItemApartado.apartado_id == ap.id).all()
 
         # Para el nuevo esquema, todos los pagos (anticipos+abonos) viven en credit_payments.apartado_id
         abonos_apartado = db.query(CreditPayment).filter(CreditPayment.apartado_id == ap.id).all()
@@ -2107,8 +2391,8 @@ def _build_historiales(
         )
         total_pagado_neto = abonos_efectivo + (abonos_tarjeta * TARJETA_DISCOUNT_RATE)
 
-        # No tenemos SaleItem para Apartado nuevo; las piezas se pueden aproximar a 0 aquí
-        piezas_apartado = 0
+        # Calcular piezas desde items
+        piezas_apartado = sum(int(item.quantity or 0) for item in items) if items else 0
 
         if ap.credit_status == "cancelado":
             counters['reembolso_apartados_cancelados'] += total_pagado_neto
@@ -2122,17 +2406,97 @@ def _build_historiales(
             counters['piezas_vencidas_apartados'] += piezas_apartado
             counters['apartados_vencidos_count'] += 1
 
-        apartados_cancelados_vencidos.append({
-            "id": ap.id,
-            "fecha": ap.created_at.strftime("%Y-%m-%d %H:%M"),
-            "cliente": ap.customer_name or "Sin nombre",
-            "total": float(ap.total or 0),
-            "anticipo": float(ap.amount_paid or 0),
-            "saldo": saldo,
-            "estado": ap.credit_status,
-            "vendedor": vendedor,
-            "motivo": motivo,
-        })
+        # Si no hay items, crear una entrada con total del apartado
+        if not items:
+            apartados_cancelados_vencidos.append({
+                "id": str(ap.id),  # Convertir a string
+                "fecha": ap.created_at.strftime("%Y-%m-%d %H:%M"),
+                "cliente": ap.customer_name or "Sin nombre",
+                "total": total_apartado,
+                "anticipo": anticipo_apartado,
+                "saldo": saldo_apartado,
+                "estado": ap.credit_status,
+                "vendedor": vendedor,
+                "motivo": motivo,
+                "codigo_producto": 'N/A',
+                "costo": 0.0,
+                "ganancia": total_apartado,
+                "is_parent": True
+            })
+        else:
+            # Calcular costo y ganancia totales
+            costo_total = 0.0
+            ganancia_total = 0.0
+            for item in items:
+                if item.product_id:
+                    product = db.query(Product).filter(Product.id == item.product_id).first()
+                    if product:
+                        costo_unitario = float(product.cost_price or 0)
+                        cantidad = int(item.quantity or 0)
+                        costo_total += costo_unitario * cantidad
+                        precio_venta = float(item.total_price or 0)
+                        ganancia_total += precio_venta - (costo_unitario * cantidad)
+            
+            # Primero agregar fila principal con total del apartado
+            apartados_cancelados_vencidos.append({
+                "id": str(ap.id),
+                "fecha": ap.created_at.strftime("%Y-%m-%d %H:%M"),
+                "cliente": ap.customer_name or "Sin nombre",
+                "total": total_apartado,
+                "anticipo": anticipo_apartado,
+                "saldo": saldo_apartado,
+                "estado": ap.credit_status,
+                "vendedor": vendedor,
+                "motivo": motivo,
+                "codigo_producto": "Apartado",  # Indicador de fila principal
+                "costo": costo_total,
+                "ganancia": ganancia_total,
+                "is_parent": True
+            })
+            
+            # Luego agregar filas para cada producto/item (sin anticipo ni saldo)
+            for item in items:
+                codigo = 'N/A'
+                costo_item = 0.0
+                ganancia_item = 0.0
+                
+                if item.product_id:
+                    product = db.query(Product).filter(Product.id == item.product_id).first()
+                    if product:
+                        # Priorizar código del producto, luego del item
+                        codigo = product.codigo if product.codigo else (item.codigo if item.codigo else 'N/A')
+                        costo_unitario = float(product.cost_price or 0)
+                        cantidad = int(item.quantity or 0)
+                        costo_item = costo_unitario * cantidad
+                        # Ganancia = precio de venta - costo
+                        precio_venta = float(item.total_price or 0)
+                        ganancia_item = precio_venta - costo_item
+                    else:
+                        # Si no hay producto, usar código del item
+                        codigo = item.codigo if item.codigo else 'N/A'
+                        precio_venta = float(item.total_price or 0)
+                        ganancia_item = precio_venta  # Sin costo conocido
+                else:
+                    # Si no hay product_id, usar código del item
+                    codigo = item.codigo if item.codigo else 'N/A'
+                    precio_venta = float(item.total_price or 0)
+                    ganancia_item = precio_venta  # Sin costo conocido
+                
+                apartados_cancelados_vencidos.append({
+                    "id": str(f"{ap.id}-{item.id}"),  # ID único por item (string)
+                    "fecha": ap.created_at.strftime("%Y-%m-%d %H:%M"),
+                    "cliente": ap.customer_name or "Sin nombre",
+                    "total": float(item.total_price or 0),  # Precio individual del producto
+                    "anticipo": 0.0,  # No mostrar anticipo en filas de productos
+                    "saldo": 0.0,  # No mostrar saldo en filas de productos
+                    "estado": ap.credit_status,
+                    "vendedor": vendedor,
+                    "motivo": motivo,
+                    "codigo_producto": codigo,
+                    "costo": costo_item,
+                    "ganancia": ganancia_item,
+                    "is_parent": False
+                })
     
     # Historial de abonos de apartados: filtrar por fecha de creación del abono
     todos_abonos_apartados = db.query(CreditPayment).filter(
@@ -2149,13 +2513,34 @@ def _build_historiales(
             vendor = db.query(User).filter(User.id == abono.user_id).first()
             vendedor = vendor.email if vendor else "Unknown"
         
+        # Obtener códigos de productos del apartado
+        codigo_producto = "N/A"
+        if apartado:
+            items = db.query(ItemApartado).filter(ItemApartado.apartado_id == apartado.id).all()
+            codigos = []
+            for item in items:
+                if item.product_id:
+                    product = db.query(Product).filter(Product.id == item.product_id).first()
+                    if product:
+                        # Priorizar código del producto, luego del item
+                        codigo = product.codigo if product.codigo else (item.codigo if item.codigo else 'N/A')
+                        codigos.append(codigo)
+                    else:
+                        codigo = item.codigo if item.codigo else 'N/A'
+                        codigos.append(codigo)
+                else:
+                    codigo = item.codigo if item.codigo else 'N/A'
+                    codigos.append(codigo)
+            codigo_producto = ', '.join(codigos) if codigos else 'N/A'
+        
         historial_abonos_apartados.append({
             "id": abono.id,
             "fecha": abono.created_at.strftime("%Y-%m-%d %H:%M"),
             "cliente": apartado.customer_name if apartado else "Desconocido",
             "monto": float(abono.amount),
             "metodo_pago": abono.payment_method,
-            "vendedor": vendedor
+            "vendedor": vendedor,
+            "codigo_producto": codigo_producto
         })
     
     # Historial de abonos de pedidos: solo pedidos CREADOS en el periodo
@@ -2170,6 +2555,7 @@ def _build_historiales(
         pedido = db.query(Pedido).filter(Pedido.id == abono.pedido_id).first()
         vendedor = "Unknown"
         producto_name = "Desconocido"
+        codigo_producto = "N/A"
         
         if pedido:
             if pedido.user_id:
@@ -2178,6 +2564,7 @@ def _build_historiales(
             
             producto = db.query(ProductoPedido).filter(ProductoPedido.id == pedido.producto_pedido_id).first()
             producto_name = producto.modelo if producto else "Producto desconocido"
+            codigo_producto = producto.codigo if producto else "N/A"
         
         historial_abonos_pedidos.append({
             "id": abono.id,
@@ -2187,6 +2574,7 @@ def _build_historiales(
             "monto": float(abono.monto),
             "metodo_pago": abono.metodo_pago,
             "vendedor": vendedor,
+            "codigo_producto": codigo_producto
         })
     
     # Pedidos cancelados y vencidos
@@ -2209,11 +2597,12 @@ def _build_historiales(
             vendor = db.query(User).filter(User.id == pedido.user_id).first()
             vendedor = vendor.email if vendor else "Unknown"
         
-        producto = db.query(ProductoPedido).filter(ProductoPedido.id == pedido.producto_pedido_id).first()
-        producto_name = producto.modelo if producto else "Producto desconocido"
-        
+        total_pedido = float(pedido.total or 0)
+        anticipo_pedido = float(pedido.anticipo_pagado)
+        saldo_pedido = float(pedido.saldo_pendiente)
         motivo = "Vencido" if pedido.estado == "vencido" else "Cancelado"
         
+        # IMPORTANTE: Calcular métricas ANTES de desglosar items (no modificar estas métricas)
         pagos_pedido_all = db.query(PagoPedido).filter(PagoPedido.pedido_id == pedido.id).all()
         pagos_totals = _calculate_payment_totals(pagos_pedido_all)
         pagos_efectivo = pagos_totals['efectivo']
@@ -2238,19 +2627,118 @@ def _build_historiales(
             if pedido.tipo_pedido == "apartado":
                 counters['piezas_vencidas_pedidos_apartados'] += pedido.cantidad or 0
         
-        pedidos_cancelados_vencidos.append({
-            "id": pedido.id,
-            "fecha": pedido.created_at.strftime("%Y-%m-%d %H:%M"),
-            "cliente": pedido.cliente_nombre,
-            "producto": producto_name,
-            "cantidad": pedido.cantidad,
-            "total": float(pedido.total),
-            "anticipo": float(pedido.anticipo_pagado),
-            "saldo": float(pedido.saldo_pendiente),
-            "estado": pedido.estado,
-            "vendedor": vendedor,
-            "motivo": motivo
-        })
+        # Obtener items del pedido
+        pedido_items = db.query(PedidoItem).filter(PedidoItem.pedido_id == pedido.id).all()
+        
+        if pedido_items:
+            # Calcular costo y ganancia totales
+            costo_total = 0.0
+            ganancia_total = 0.0
+            cantidad_total = 0
+            for item in pedido_items:
+                if item.producto_pedido_id:
+                    producto = db.query(ProductoPedido).filter(ProductoPedido.id == item.producto_pedido_id).first()
+                    if producto:
+                        costo_unitario = float(producto.cost_price or 0)
+                        cantidad = int(item.cantidad or 1)
+                        cantidad_total += cantidad
+                        costo_total += costo_unitario * cantidad
+                        precio_venta = float(item.total or 0)
+                        ganancia_total += precio_venta - (costo_unitario * cantidad)
+            
+            # Primero agregar fila principal con total del pedido
+            pedidos_cancelados_vencidos.append({
+                "id": str(pedido.id),
+                "fecha": pedido.created_at.strftime("%Y-%m-%d %H:%M"),
+                "cliente": pedido.cliente_nombre,
+                "producto": "Pedido",  # Indicador de fila principal
+                "cantidad": cantidad_total,
+                "total": total_pedido,
+                "anticipo": anticipo_pedido,
+                "saldo": saldo_pedido,
+                "estado": pedido.estado,
+                "vendedor": vendedor,
+                "motivo": motivo,
+                "codigo_producto": "Pedido",
+                "costo": costo_total,
+                "ganancia": ganancia_total,
+                "is_parent": True
+            })
+            
+            # Luego agregar filas para cada producto/item (sin anticipo ni saldo)
+            for item in pedido_items:
+                codigo = 'N/A'
+                costo_item = 0.0
+                ganancia_item = 0.0
+                producto_name = item.nombre or item.modelo or "Sin nombre"
+                
+                if item.producto_pedido_id:
+                    producto = db.query(ProductoPedido).filter(ProductoPedido.id == item.producto_pedido_id).first()
+                    if producto:
+                        codigo = producto.codigo if producto.codigo else (item.codigo if item.codigo else 'N/A')
+                        producto_name = producto.modelo if producto.modelo else producto_name
+                        costo_unitario = float(producto.cost_price or 0)
+                        cantidad = int(item.cantidad or 1)
+                        costo_item = costo_unitario * cantidad
+                        precio_venta = float(item.total or 0)
+                        ganancia_item = precio_venta - costo_item
+                    else:
+                        codigo = item.codigo if item.codigo else 'N/A'
+                        precio_venta = float(item.total or 0)
+                        ganancia_item = precio_venta
+                else:
+                    codigo = item.codigo if item.codigo else 'N/A'
+                    precio_venta = float(item.total or 0)
+                    ganancia_item = precio_venta
+                
+                pedidos_cancelados_vencidos.append({
+                    "id": str(f"{pedido.id}-{item.id}"),
+                    "fecha": pedido.created_at.strftime("%Y-%m-%d %H:%M"),
+                    "cliente": pedido.cliente_nombre,
+                    "producto": producto_name,
+                    "cantidad": item.cantidad,
+                    "total": float(item.total or 0),
+                    "anticipo": 0.0,  # No mostrar anticipo en filas de productos
+                    "saldo": 0.0,  # No mostrar saldo en filas de productos
+                    "estado": pedido.estado,
+                    "vendedor": vendedor,
+                    "motivo": motivo,
+                    "codigo_producto": codigo,
+                    "costo": costo_item,
+                    "ganancia": ganancia_item,
+                    "is_parent": False
+                })
+        else:
+            # Si no tiene items, usar producto_pedido_id (comportamiento anterior)
+            producto = db.query(ProductoPedido).filter(ProductoPedido.id == pedido.producto_pedido_id).first()
+            producto_name = producto.modelo if producto else "Producto desconocido"
+            codigo_producto = producto.codigo if producto else "N/A"
+            
+            costo_pedido = 0.0
+            precio_venta = float(pedido.total or 0)
+            if producto and producto.cost_price:
+                costo_unitario = float(producto.cost_price)
+                cantidad = int(pedido.cantidad or 1)
+                costo_pedido = costo_unitario * cantidad
+            ganancia_pedido = precio_venta - costo_pedido
+            
+            pedidos_cancelados_vencidos.append({
+                "id": str(pedido.id),
+                "fecha": pedido.created_at.strftime("%Y-%m-%d %H:%M"),
+                "cliente": pedido.cliente_nombre,
+                "producto": producto_name,
+                "cantidad": pedido.cantidad,
+                "total": precio_venta,
+                "anticipo": anticipo_pedido,
+                "saldo": saldo_pedido,
+                "estado": pedido.estado,
+                "vendedor": vendedor,
+                "motivo": motivo,
+                "codigo_producto": codigo_producto,
+                "costo": costo_pedido,
+                "ganancia": ganancia_pedido,
+                "is_parent": True
+            })
     
     return {
         'apartados': historial_apartados,
@@ -2284,22 +2772,114 @@ def _build_sales_details(
         efectivo_amount = sum(float(p.amount) for p in payments if p.method in ['efectivo', 'cash', 'transferencia'])
         tarjeta_amount = sum(float(p.amount) for p in payments if p.method in ['tarjeta', 'card'])
         
-        # Calcular piezas desde items
+        # Obtener items de la venta
         items = db.query(ItemVentaContado).filter(ItemVentaContado.venta_id == venta.id).all()
-        piezas = sum(int(item.quantity or 0) for item in items)
         
-        sales_details.append({
-            "id": venta.id,
-            "fecha": venta.created_at.strftime("%Y-%m-%d %H:%M"),
-            "cliente": venta.customer_name or "Mostrador",
-            "piezas": piezas,
-            "total": float(venta.total or 0),
-            "estado": "Pagada",
-            "tipo": "contado",
-            "vendedor": vendedor,
-            "efectivo": efectivo_amount,
-            "tarjeta": tarjeta_amount
-        })
+        # Si no hay items, crear una entrada con total de la venta
+        if not items:
+            sales_details.append({
+                "id": str(venta.id),  # Convertir a string
+                "fecha": venta.created_at.strftime("%Y-%m-%d %H:%M"),
+                "cliente": venta.customer_name or "Mostrador",
+                "piezas": 0,
+                "total": float(venta.total or 0),
+                "estado": "Pagada",
+                "tipo": "contado",
+                "vendedor": vendedor,
+                "efectivo": efectivo_amount,
+                "tarjeta": tarjeta_amount,
+                "codigo_producto": 'N/A',
+                "costo": 0.0,
+                "ganancia": float(venta.total or 0),
+                "is_parent": True
+            })
+        else:
+            # Calcular costo y ganancia totales
+            costo_total = 0.0
+            ganancia_total = 0.0
+            piezas_total = sum(int(item.quantity or 0) for item in items)
+            for item in items:
+                if item.product_id:
+                    product = db.query(Product).filter(Product.id == item.product_id).first()
+                    if product:
+                        costo_unitario = float(product.cost_price or 0)
+                        cantidad = int(item.quantity or 0)
+                        costo_total += costo_unitario * cantidad
+                        precio_venta = float(item.total_price or 0)
+                        ganancia_total += precio_venta - (costo_unitario * cantidad)
+            
+            # Primero agregar fila principal con total de la venta
+            sales_details.append({
+                "id": str(venta.id),
+                "fecha": venta.created_at.strftime("%Y-%m-%d %H:%M"),
+                "cliente": venta.customer_name or "Mostrador",
+                "piezas": piezas_total,
+                "total": float(venta.total or 0),
+                "estado": "Pagada",
+                "tipo": "contado",
+                "vendedor": vendedor,
+                "efectivo": efectivo_amount,
+                "tarjeta": tarjeta_amount,
+                "codigo_producto": "Venta",  # Indicador de fila principal
+                "costo": costo_total,
+                "ganancia": ganancia_total,
+                "is_parent": True
+            })
+            
+            # Luego agregar filas para cada producto/item
+            for item in items:
+                codigo = 'N/A'
+                costo_item = 0.0
+                ganancia_item = 0.0
+                cantidad = int(item.quantity or 0)
+                
+                if item.product_id:
+                    product = db.query(Product).filter(Product.id == item.product_id).first()
+                    if product:
+                        # Priorizar código del producto, luego del item
+                        codigo = product.codigo if product.codigo else (item.codigo if item.codigo else 'N/A')
+                        costo_unitario = float(product.cost_price or 0)
+                        costo_item = costo_unitario * cantidad
+                        # Ganancia = precio de venta - costo
+                        precio_venta = float(item.total_price or 0)
+                        ganancia_item = precio_venta - costo_item
+                    else:
+                        # Si no hay producto, usar código del item
+                        codigo = item.codigo if item.codigo else 'N/A'
+                        precio_venta = float(item.total_price or 0)
+                        ganancia_item = precio_venta  # Sin costo conocido
+                else:
+                    # Si no hay product_id, usar código del item
+                    codigo = item.codigo if item.codigo else 'N/A'
+                    precio_venta = float(item.total_price or 0)
+                    ganancia_item = precio_venta  # Sin costo conocido
+                
+                # Calcular proporción de efectivo y tarjeta para este item
+                total_venta = float(venta.total or 0)
+                if total_venta > 0:
+                    proporcion = float(item.total_price or 0) / total_venta
+                    efectivo_item = efectivo_amount * proporcion
+                    tarjeta_item = tarjeta_amount * proporcion
+                else:
+                    efectivo_item = 0.0
+                    tarjeta_item = 0.0
+                
+                sales_details.append({
+                    "id": str(f"{venta.id}-{item.id}"),  # ID único por item (string)
+                    "fecha": venta.created_at.strftime("%Y-%m-%d %H:%M"),
+                    "cliente": venta.customer_name or "Mostrador",
+                    "piezas": cantidad,
+                    "total": float(item.total_price or 0),
+                    "estado": "Pagada",
+                    "tipo": "contado",
+                    "vendedor": vendedor,
+                    "efectivo": efectivo_item,
+                    "tarjeta": tarjeta_item,
+                    "codigo_producto": codigo,
+                    "costo": costo_item,
+                    "ganancia": ganancia_item,
+                    "is_parent": False
+                })
     
     for pedido in pedidos_contado:
         pagos_pedido_contado = db.query(PagoPedido).filter(
@@ -2314,23 +2894,132 @@ def _build_sales_details(
             vendor = db.query(User).filter(User.id == pedido.user_id).first()
             vendedor = vendor.email if vendor else "Unknown"
         
-        producto = db.query(ProductoPedido).filter(ProductoPedido.id == pedido.producto_pedido_id).first()
-        producto_name = producto.modelo if producto else "Producto desconocido"
+        total_pedido = float(pedido.total or 0)
         
-        sales_details.append({
-            "id": pedido.id,
-            "tipo": "Pedido Contado",
-            "fecha": pedido.created_at.strftime("%Y-%m-%d %H:%M"),
-            "cliente": pedido.cliente_nombre,
-            "producto": producto_name,
-            "cantidad": pedido.cantidad,
-            "piezas": pedido.cantidad,
-            "total": float(pedido.total),
-            "estado": "Pagada",
-            "vendedor": vendedor,
-            "efectivo": efectivo_pedido,
-            "tarjeta": tarjeta_pedido
-        })
+        # Obtener items del pedido
+        pedido_items = db.query(PedidoItem).filter(PedidoItem.pedido_id == pedido.id).all()
+        
+        if pedido_items:
+            # Calcular costo y ganancia totales
+            costo_total = 0.0
+            ganancia_total = 0.0
+            piezas_total = 0
+            for item in pedido_items:
+                if item.producto_pedido_id:
+                    producto = db.query(ProductoPedido).filter(ProductoPedido.id == item.producto_pedido_id).first()
+                    if producto:
+                        costo_unitario = float(producto.cost_price or 0)
+                        cantidad = int(item.cantidad or 1)
+                        piezas_total += cantidad
+                        costo_total += costo_unitario * cantidad
+                        precio_venta = float(item.total or 0)
+                        ganancia_total += precio_venta - (costo_unitario * cantidad)
+            
+            # Primero agregar fila principal con total del pedido
+            sales_details.append({
+                "id": str(pedido.id),
+                "tipo": "Pedido Contado",
+                "fecha": pedido.created_at.strftime("%Y-%m-%d %H:%M"),
+                "cliente": pedido.cliente_nombre,
+                "producto": "Pedido Contado",  # Indicador de fila principal
+                "cantidad": piezas_total,
+                "piezas": piezas_total,
+                "total": total_pedido,
+                "estado": "Pagada",
+                "vendedor": vendedor,
+                "efectivo": efectivo_pedido,
+                "tarjeta": tarjeta_pedido,
+                "codigo_producto": "Pedido Contado",
+                "costo": costo_total,
+                "ganancia": ganancia_total,
+                "is_parent": True
+            })
+            
+            # Luego agregar filas para cada producto/item
+            for item in pedido_items:
+                codigo = 'N/A'
+                costo_item = 0.0
+                ganancia_item = 0.0
+                producto_name = item.nombre or item.modelo or "Sin nombre"
+                cantidad = int(item.cantidad or 1)
+                
+                if item.producto_pedido_id:
+                    producto = db.query(ProductoPedido).filter(ProductoPedido.id == item.producto_pedido_id).first()
+                    if producto:
+                        codigo = producto.codigo if producto.codigo else (item.codigo if item.codigo else 'N/A')
+                        producto_name = producto.modelo if producto.modelo else producto_name
+                        costo_unitario = float(producto.cost_price or 0)
+                        costo_item = costo_unitario * cantidad
+                        precio_venta = float(item.total or 0)
+                        ganancia_item = precio_venta - costo_item
+                    else:
+                        codigo = item.codigo if item.codigo else 'N/A'
+                        precio_venta = float(item.total or 0)
+                        ganancia_item = precio_venta
+                else:
+                    codigo = item.codigo if item.codigo else 'N/A'
+                    precio_venta = float(item.total or 0)
+                    ganancia_item = precio_venta
+                
+                # Calcular proporción de efectivo y tarjeta para este item
+                if total_pedido > 0:
+                    proporcion = float(item.total or 0) / total_pedido
+                    efectivo_item = efectivo_pedido * proporcion
+                    tarjeta_item = tarjeta_pedido * proporcion
+                else:
+                    efectivo_item = 0.0
+                    tarjeta_item = 0.0
+                
+                sales_details.append({
+                    "id": str(f"{pedido.id}-{item.id}"),
+                    "tipo": "Pedido Contado",
+                    "fecha": pedido.created_at.strftime("%Y-%m-%d %H:%M"),
+                    "cliente": pedido.cliente_nombre,
+                    "producto": producto_name,
+                    "cantidad": cantidad,
+                    "piezas": cantidad,
+                    "total": float(item.total or 0),
+                    "estado": "Pagada",
+                    "vendedor": vendedor,
+                    "efectivo": efectivo_item,
+                    "tarjeta": tarjeta_item,
+                    "codigo_producto": codigo,
+                    "costo": costo_item,
+                    "ganancia": ganancia_item,
+                    "is_parent": False
+                })
+        else:
+            # Si no tiene items, usar producto_pedido_id (comportamiento anterior)
+            producto = db.query(ProductoPedido).filter(ProductoPedido.id == pedido.producto_pedido_id).first()
+            producto_name = producto.modelo if producto else "Producto desconocido"
+            codigo_producto = producto.codigo if producto else "N/A"
+            
+            costo_pedido = 0.0
+            precio_venta = float(pedido.total or 0)
+            if producto and producto.cost_price:
+                costo_unitario = float(producto.cost_price)
+                cantidad = int(pedido.cantidad or 1)
+                costo_pedido = costo_unitario * cantidad
+            ganancia_pedido = precio_venta - costo_pedido
+            
+            sales_details.append({
+                "id": str(pedido.id),
+                "tipo": "Pedido Contado",
+                "fecha": pedido.created_at.strftime("%Y-%m-%d %H:%M"),
+                "cliente": pedido.cliente_nombre,
+                "producto": producto_name,
+                "cantidad": pedido.cantidad,
+                "piezas": pedido.cantidad,
+                "total": precio_venta,
+                "estado": "Pagada",
+                "vendedor": vendedor,
+                "efectivo": efectivo_pedido,
+                "tarjeta": tarjeta_pedido,
+                "codigo_producto": codigo_producto,
+                "costo": costo_pedido,
+                "ganancia": ganancia_pedido,
+                "is_parent": True
+            })
     
     return sales_details
 

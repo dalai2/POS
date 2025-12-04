@@ -216,7 +216,7 @@ export interface DetailedCorteCajaReport {
     utilidad: number;
   }>;
   sales_details: Array<{
-    id: number;
+    id: string;
     fecha: string;
     cliente: string;
     piezas: number;
@@ -228,9 +228,13 @@ export interface DetailedCorteCajaReport {
     tarjeta: number;
     producto?: string;
     cantidad?: number;
+    codigo_producto?: string;
+    costo?: number;
+    ganancia?: number;
+    is_parent?: boolean;
   }>;
   historial_apartados: Array<{
-    id: number;
+    id: string;
     fecha: string;
     cliente: string;
     total: number;
@@ -238,9 +242,13 @@ export interface DetailedCorteCajaReport {
     saldo: number;
     estado: string;
     vendedor: string;
+    codigo_producto?: string;
+    costo?: number;
+    ganancia?: number;
+    is_parent?: boolean;
   }>;
   historial_pedidos: Array<{
-    id: number;
+    id: string;
     fecha: string;
     cliente: string;
     producto: string;
@@ -250,6 +258,10 @@ export interface DetailedCorteCajaReport {
     saldo: number;
     estado: string;
     vendedor: string;
+    codigo_producto?: string;
+    costo?: number;
+    ganancia?: number;
+    is_parent?: boolean;
   }>;
   historial_abonos_apartados: Array<{
     id: number;
@@ -258,6 +270,7 @@ export interface DetailedCorteCajaReport {
     monto: number;
     metodo_pago: string;
     vendedor: string;
+    codigo_producto?: string;
   }>;
   historial_abonos_pedidos: Array<{
     id: number;
@@ -267,9 +280,10 @@ export interface DetailedCorteCajaReport {
     monto: number;
     metodo_pago: string;
     vendedor: string;
+    codigo_producto?: string;
   }>;
   apartados_cancelados_vencidos: Array<{
-    id: number;
+    id: string;
     fecha: string;
     cliente: string;
     total: number;
@@ -278,9 +292,13 @@ export interface DetailedCorteCajaReport {
     estado: string;
     vendedor: string;
     motivo: string;
+    codigo_producto?: string;
+    costo?: number;
+    ganancia?: number;
+    is_parent?: boolean;
   }>;
   pedidos_cancelados_vencidos: Array<{
-    id: number;
+    id: string;
     fecha: string;
     cliente: string;
     producto: string;
@@ -291,6 +309,10 @@ export interface DetailedCorteCajaReport {
     estado: string;
     vendedor: string;
     motivo: string;
+    codigo_producto?: string;
+    costo?: number;
+    ganancia?: number;
+    is_parent?: boolean;
   }>;
 }
 

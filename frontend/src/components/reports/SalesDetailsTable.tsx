@@ -1,7 +1,7 @@
 import React from 'react';
 
 interface SaleDetail {
-  id: number;
+  id: string;
   fecha: string;
   cliente: string;
   piezas: number;
@@ -11,6 +11,10 @@ interface SaleDetail {
   estado: string;
   tipo: string;
   vendedor: string;
+  codigo_producto?: string;
+  costo?: number;
+  ganancia?: number;
+  is_parent?: boolean;
 }
 
 interface SalesDetailsTableProps {
@@ -31,8 +35,11 @@ export const SalesDetailsTable: React.FC<SalesDetailsTableProps> = ({ salesDetai
             <tr>
               <th className="px-2 py-2 text-left text-xs font-medium text-gray-500">Fecha</th>
               <th className="px-2 py-2 text-left text-xs font-medium text-gray-500">Cliente</th>
+              <th className="px-2 py-2 text-left text-xs font-medium text-gray-500">Código</th>
               <th className="px-2 py-2 text-center text-xs font-medium text-gray-500">Piezas</th>
               <th className="px-2 py-2 text-right text-xs font-medium text-gray-500">Total</th>
+              <th className="px-2 py-2 text-right text-xs font-medium text-gray-500">Costo</th>
+              <th className="px-2 py-2 text-right text-xs font-medium text-gray-500">Ganancia</th>
               <th className="px-2 py-2 text-right text-xs font-medium text-gray-500">Efectivo</th>
               <th className="px-2 py-2 text-right text-xs font-medium text-gray-500">Tarjeta</th>
               <th className="px-2 py-2 text-center text-xs font-medium text-gray-500">Estado</th>
@@ -42,13 +49,36 @@ export const SalesDetailsTable: React.FC<SalesDetailsTableProps> = ({ salesDetai
           </thead>
           <tbody className="bg-white">
             {salesDetails.map((sale) => (
-              <tr key={sale.id} className="border-t">
+              <tr 
+                key={sale.id} 
+                className={`border-t ${sale.is_parent ? 'bg-gray-50 font-semibold' : 'bg-white'}`}
+              >
                 <td className="px-2 py-2 text-xs">{new Date(sale.fecha).toLocaleString()}</td>
                 <td className="px-2 py-2 text-xs">{sale.cliente}</td>
+                <td className="px-2 py-2 text-xs">
+                  {sale.is_parent ? (
+                    <span className="font-semibold">{sale.codigo_producto || sale.tipo || 'Venta'}</span>
+                  ) : (
+                    <span className="pl-4 text-gray-600">{sale.codigo_producto || 'N/A'}</span>
+                  )}
+                </td>
                 <td className="px-2 py-2 text-center text-xs">{sale.piezas}</td>
                 <td className="px-2 py-2 text-right text-xs font-bold">${sale.total.toFixed(2)}</td>
-                <td className="px-2 py-2 text-right text-xs">${sale.efectivo.toFixed(2)}</td>
-                <td className="px-2 py-2 text-right text-xs">${sale.tarjeta.toFixed(2)}</td>
+                <td className="px-2 py-2 text-right text-xs">${(sale.costo || 0).toFixed(2)}</td>
+                <td className="px-2 py-2 text-right text-xs font-semibold" style={{ color: (sale.ganancia || 0) >= 0 ? '#059669' : '#dc2626' }}>
+                  ${(sale.ganancia || 0).toFixed(2)}
+                </td>
+                {sale.is_parent ? (
+                  <>
+                    <td className="px-2 py-2 text-right text-xs font-semibold">${sale.efectivo.toFixed(2)}</td>
+                    <td className="px-2 py-2 text-right text-xs font-semibold">${sale.tarjeta.toFixed(2)}</td>
+                  </>
+                ) : (
+                  <>
+                    <td className="px-2 py-2 text-right text-xs">${sale.efectivo.toFixed(2)}</td>
+                    <td className="px-2 py-2 text-right text-xs">${sale.tarjeta.toFixed(2)}</td>
+                  </>
+                )}
                 <td className="px-2 py-2 text-center text-xs">{sale.estado}</td>
                 <td className="px-2 py-2 text-center text-xs">{sale.tipo}</td>
                 <td className="px-2 py-2 text-xs">{sale.vendedor}</td>
