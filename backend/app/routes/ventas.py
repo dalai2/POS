@@ -221,25 +221,25 @@ async def create_sale(
         q = max(1, int(it.quantity))
         if p.stock is not None and p.stock < q:
             raise HTTPException(status_code=400, detail=f"Stock insuficiente para {p.name}")
-        unit = Decimal(str(p.price)).quantize(Decimal("0.01"))
-        line_subtotal = (unit * q).quantize(Decimal("0.01"))
+        unit = Decimal(str(round(float(p.price))))
+        line_subtotal = Decimal(str(round(float(unit * q))))
         line_disc_pct = Decimal(str(getattr(it, 'discount_pct', Decimal('0')) or 0)).quantize(Decimal("0.01"))
-        line_disc_amount = (line_subtotal * line_disc_pct / Decimal('100')).quantize(Decimal('0.01'))
-        line_total = (line_subtotal - line_disc_amount).quantize(Decimal('0.01'))
+        line_disc_amount = Decimal(str(round(float(line_subtotal * line_disc_pct / Decimal('100')))))
+        line_total = Decimal(str(round(float(line_subtotal - line_disc_amount))))
         subtotal += line_total
         # decrement stock
         if p.stock is not None:
             p.stock = int(p.stock) - q
 
-    subtotal_val = subtotal.quantize(Decimal("0.01"))
-    discount_val = Decimal(str(discount_amount or 0)).quantize(Decimal("0.01"))
+    subtotal_val = Decimal(str(round(float(subtotal))))
+    discount_val = Decimal(str(round(float(discount_amount or 0))))
     tax_rate_val = Decimal(str(tax_rate or 0)).quantize(Decimal("0.01"))
-    taxable = max(Decimal("0"), subtotal_val - discount_val).quantize(Decimal("0.01"))
-    tax_amount_val = (taxable * tax_rate_val / Decimal("100")).quantize(Decimal("0.01"))
-    calculated_total = (taxable + tax_amount_val).quantize(Decimal("0.01"))
+    taxable = Decimal(str(round(max(0, float(subtotal_val - discount_val)))))
+    tax_amount_val = Decimal(str(round(float(taxable * tax_rate_val / Decimal("100")))))
+    calculated_total = Decimal(str(round(float(taxable + tax_amount_val))))
 
     # Usar el total proporcionado o el calculado
-    total_val = Decimal(str(total_override)).quantize(Decimal("0.01")) if total_override is not None else calculated_total
+    total_val = Decimal(str(round(float(total_override)))) if total_override is not None else calculated_total
 
     # Save payments (optional)
     paid = Decimal("0")
@@ -288,11 +288,11 @@ async def create_sale(
         for it in items:
             p = product_map[it.product_id]
             q = max(1, int(it.quantity))
-            unit = Decimal(str(p.price)).quantize(Decimal("0.01"))
-            line_subtotal = (unit * q).quantize(Decimal("0.01"))
+            unit = Decimal(str(round(float(p.price))))
+            line_subtotal = Decimal(str(round(float(unit * q))))
             line_disc_pct = Decimal(str(getattr(it, 'discount_pct', Decimal('0')) or 0)).quantize(Decimal("0.01"))
-            line_disc_amount = (line_subtotal * line_disc_pct / Decimal('100')).quantize(Decimal('0.01'))
-            line_total = (line_subtotal - line_disc_amount).quantize(Decimal('0.01'))
+            line_disc_amount = Decimal(str(round(float(line_subtotal * line_disc_pct / Decimal('100')))))
+            line_total = Decimal(str(round(float(line_subtotal - line_disc_amount))))
             db.add(ItemVentaContado(
                 venta_id=venta.id,
                 product_id=p.id,

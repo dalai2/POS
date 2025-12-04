@@ -747,8 +747,8 @@ export default function SalesPage() {
         discount_amount: parseFloat(discountAmountCalc.toFixed(2)),
         tax_rate: 0,  // IVA siempre 0
         tipo_venta: saleType,  // Ya es 'credito' directamente
-        // El total ya incluye el descuento VIP aplicado
-        total: Math.round(totalWithVipDiscount * 100) / 100
+        // Enviar subtotal sin descuento, el backend calculará el total final
+        total: Math.round(subtotalValue * 100) / 100
       }
 
       // Add vendedor_id if selected
@@ -759,6 +759,11 @@ export default function SalesPage() {
       // Add payments only if there are any
       if (payments && payments.length > 0) {
         saleData.payments = payments
+      }
+
+      // Add VIP discount for apartados
+      if (saleType === 'credito') {
+        saleData.vip_discount_pct = vipDiscount ? parseFloat(vipDiscount) : 0
       }
 
       // Add customer info
@@ -1088,7 +1093,7 @@ export default function SalesPage() {
                   <div className="flex justify-between text-sm mt-1">
                     <span className="font-medium">Saldo pendiente:</span>
                     <span className="font-bold text-red-700">
-                      ${(total - ((parseFloat(apartadoCash || '0') || 0) + (parseFloat(apartadoCard || '0') || 0))).toFixed(2)}
+                      ${(getTotalWithVipDiscount() - ((parseFloat(apartadoCash || '0') || 0) + (parseFloat(apartadoCard || '0') || 0))).toFixed(2)}
                     </span>
                   </div>
                 </div>

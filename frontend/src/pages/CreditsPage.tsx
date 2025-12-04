@@ -41,6 +41,7 @@ interface CreditSale {
   vendedor_id: number | null;
   vendedor_email: string | null;
   created_at: string;
+  vip_discount_pct?: number;
   payments: CreditPayment[];
 }
 
@@ -100,6 +101,8 @@ export default function CreditsPage() {
     try {
       const params = statusFilter ? `?status=${statusFilter}` : '';
       const response = await api.get(`/credits/sales${params}`);
+
+
       setCredits(response.data);
     } catch (error: any) {
       if (error.response?.status === 403) {
@@ -118,6 +121,13 @@ export default function CreditsPage() {
 
     try {
       const amount = parseFloat(paymentData.amount);
+
+      // Validar que no exceda el saldo pendiente
+      if (amount > selectedCredit.balance) {
+        alert(`El monto no puede exceder el saldo pendiente de $${selectedCredit.balance.toFixed(2)}`);
+        return;
+      }
+
       const response = await api.post('/credits/payments', {
         sale_id: selectedCredit.id,
         amount,
@@ -125,27 +135,41 @@ export default function CreditsPage() {
         notes: paymentData.notes || null,
       });
 
+      // Update local state
+      const newPaid = selectedCredit.amount_paid + amount;
+      const newBalance = selectedCredit.total - newPaid;
+
+      setSelectedCredit({
+        ...selectedCredit,
+        amount_paid: newPaid,
+        balance: newBalance,
+      });
+
       // Generate and save ticket
       try {
         // Get sale items
         const saleResponse = await api.get(`/apartados/${selectedCredit.id}`);
         const saleItems = saleResponse.data.items || [];
-        
+
         // Generate ticket HTML
         const logoBase64 = await getLogoAsBase64();
         const previousPaid = selectedCredit.amount_paid;
-        const newPaid = previousPaid + amount;
-        const newBalance = selectedCredit.total - newPaid;
+        const newPaidTicket = previousPaid + amount;
+        const newBalanceTicket = selectedCredit.total - newPaidTicket;
         
         const ticketHTML = generateApartadoPaymentTicketHTML({
-          sale: selectedCredit,
+          sale: {
+            ...selectedCredit,
+            total: totalWithVip, // Usar total con descuento VIP aplicado
+            vip_discount_pct: selectedCredit.vip_discount_pct || 0
+          },
           saleItems,
           paymentData: {
             amount,
             method: paymentData.payment_method,
             previousPaid,
-            newPaid,
-            newBalance
+            newPaid: newPaidTicket,
+            newBalance: newBalanceTicket
           },
           vendedorEmail: selectedCredit.vendedor_email || undefined,
           logoBase64
@@ -276,7 +300,7 @@ export default function CreditsPage() {
 
   const abrirHistorial = async (credit: CreditSale) => {
     setCreditHistorial(credit);
-    
+
     // Cargar historial de estados
     try {
       const response = await api.get(`/status-history/sale/${credit.id}`);
@@ -441,6 +465,9 @@ export default function CreditsPage() {
               <div className="mb-4 p-3 bg-gray-50 rounded-lg">
                 <p><strong>Cliente:</strong> {selectedCredit.customer_name || 'Sin nombre'}</p>
                 <p><strong>Total:</strong> ${selectedCredit.total.toFixed(2)}</p>
+                {selectedCredit.vip_discount_pct && selectedCredit.vip_discount_pct > 0 && (
+                  <p><strong>Descuento VIP aplicado:</strong> {selectedCredit.vip_discount_pct}%</p>
+                )}
                 <p><strong>Abonado:</strong> ${selectedCredit.amount_paid.toFixed(2)}</p>
                 <p className="text-lg font-bold text-red-600">
                   <strong>Saldo:</strong> ${selectedCredit.balance.toFixed(2)}
@@ -746,6 +773,11 @@ export default function CreditsPage() {
                 <p className="text-gray-700">
                   <strong>Total:</strong> ${creditHistorial.total.toFixed(2)}
                 </p>
+                {creditHistorial.vip_discount_pct && creditHistorial.vip_discount_pct > 0 && (
+                  <p className="text-gray-700">
+                    <strong>Descuento VIP aplicado:</strong> {creditHistorial.vip_discount_pct}%
+                  </p>
+                )}
                 <p className="text-gray-700">
                   <strong>Total abonos:</strong> ${creditHistorial.amount_paid.toFixed(2)}
                 </p>

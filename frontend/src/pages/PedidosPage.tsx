@@ -551,8 +551,9 @@ export default function PedidosPage() {
         metodo_pago_tarjeta: parseFloat(metodoPagoTarjeta) || 0,
         notas_cliente: notasCliente || null,
         user_id: vendedorId ? parseInt(vendedorId) : undefined,
-        // El total ya incluye el descuento VIP aplicado
-        total: Math.ceil(totalConDescuento)
+        vip_discount_pct: vipDiscount ? parseFloat(vipDiscount) : 0,
+        // Enviar subtotal sin descuento, el backend calculará el total final
+        total: Math.ceil(subtotal)
       }
       
       console.log('Sending pedido data:', pedidoData)

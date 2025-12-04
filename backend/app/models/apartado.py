@@ -31,6 +31,7 @@ class Apartado(Base):
 
     amount_paid = Column(Numeric(10, 2), nullable=True, default=0)
     credit_status = Column(String(20), nullable=True, default="pendiente")
+    vip_discount_pct = Column(Numeric(5, 2), nullable=False, default=0)
 
     items = relationship("ItemApartado", back_populates="apartado", cascade="all, delete-orphan")
 

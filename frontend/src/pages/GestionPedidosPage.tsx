@@ -36,6 +36,7 @@ type Pedido = {
   saldo_pendiente: number
   estado: string
   tipo_pedido: string
+  vip_discount_pct?: number
   fecha_entrega_estimada?: string
   fecha_entrega_real?: string
   notas_cliente?: string
@@ -1114,6 +1115,14 @@ export default function GestionPedidosPage() {
                 }
               </p>
               <p className="text-gray-700">
+                <strong>Total:</strong> ${pedidoSeleccionado.total.toFixed(2)}
+              </p>
+              {pedidoSeleccionado.vip_discount_pct && pedidoSeleccionado.vip_discount_pct > 0 && (
+                <p className="text-gray-700">
+                  <strong>Descuento VIP:</strong> {pedidoSeleccionado.vip_discount_pct}%
+                </p>
+              )}
+              <p className="text-gray-700">
                 <strong>Saldo pendiente:</strong> ${pedidoSeleccionado.saldo_pendiente.toFixed(2)}
               </p>
               {pedidoSeleccionado.notas_cliente && (
@@ -1193,6 +1202,11 @@ export default function GestionPedidosPage() {
               <p className="text-gray-700">
                 <strong>Total:</strong> ${pedidoHistorial.total.toFixed(2)}
               </p>
+              {pedidoHistorial.vip_discount_pct && pedidoHistorial.vip_discount_pct > 0 && (
+                <p className="text-gray-700">
+                  <strong>Descuento VIP:</strong> {pedidoHistorial.vip_discount_pct}%
+                </p>
+              )}
               <p className="text-gray-700">
                 <strong>Total de abonos:</strong> ${pedidoHistorial.anticipo_pagado.toFixed(2)}
               </p>

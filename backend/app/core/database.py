@@ -22,6 +22,26 @@ try:
                 connection.execute(text("ALTER TABLE apartados ADD COLUMN IF NOT EXISTS notas_cliente TEXT"))
                 connection.commit()
 
+    # Migración para vip_discount_pct en apartados
+    if 'apartados' in inspector.get_table_names():
+        columns = [col['name'] for col in inspector.get_columns('apartados')]
+        if 'vip_discount_pct' not in columns:
+            with engine.connect() as connection:
+                connection.execute(text("ALTER TABLE apartados ADD COLUMN vip_discount_pct NUMERIC(5,2) NOT NULL DEFAULT 0"))
+                connection.commit()
+
+    # Migración para agregar vip_discount_pct en pedidos
+    if 'pedidos' in inspector.get_table_names():
+        columns = [col['name'] for col in inspector.get_columns('pedidos')]
+        if 'vip_discount_pct' not in columns:
+            try:
+                with engine.connect() as connection:
+                    connection.execute(text("ALTER TABLE pedidos ADD COLUMN vip_discount_pct NUMERIC(5,2) NOT NULL DEFAULT 0"))
+                    connection.commit()
+                    print("✅ Migración completada: columna vip_discount_pct agregada a pedidos")
+            except Exception as e:
+                print(f"⚠️ No se pudo agregar columna vip_discount_pct a pedidos: {e}")
+
     # Migración para quitar descuento_vip_pct en pedidos (si existe)
     if 'pedidos' in inspector.get_table_names():
         columns = [col['name'] for col in inspector.get_columns('pedidos')]
@@ -67,6 +87,42 @@ def _run_migration_notas_cliente() -> None:
         pass
 
 
+def _run_migration_vip_discount() -> None:
+    """Ejecuta migración para agregar columna vip_discount_pct a apartados si no existe"""
+    try:
+        inspector = inspect(engine)
+        columns = [col['name'] for col in inspector.get_columns('apartados')]
+
+        if 'vip_discount_pct' not in columns:
+            print("Ejecutando migración: Agregar columna vip_discount_pct a apartados...")
+            with engine.connect() as connection:
+                connection.execute(text("ALTER TABLE apartados ADD COLUMN vip_discount_pct NUMERIC(5,2) NOT NULL DEFAULT 0"))
+                connection.commit()
+            print("✅ Migración completada: columna vip_discount_pct agregada a apartados")
+    except Exception as e:
+        # Si la tabla no existe aún, se creará con create_all
+        # Si hay otro error, lo ignoramos silenciosamente
+        pass
+
+
+def _run_migration_vip_discount_pedidos() -> None:
+    """Ejecuta migración para agregar columna vip_discount_pct a pedidos si no existe"""
+    try:
+        inspector = inspect(engine)
+        columns = [col['name'] for col in inspector.get_columns('pedidos')]
+
+        if 'vip_discount_pct' not in columns:
+            print("Ejecutando migración: Agregar columna vip_discount_pct a pedidos...")
+            with engine.connect() as connection:
+                connection.execute(text("ALTER TABLE pedidos ADD COLUMN vip_discount_pct NUMERIC(5,2) NOT NULL DEFAULT 0"))
+                connection.commit()
+            print("✅ Migración completada: columna vip_discount_pct agregada a pedidos")
+    except Exception as e:
+        # Si la tabla no existe aún, se creará con create_all
+        # Si hay otro error, lo ignoramos silenciosamente
+        pass
+
+
 
 
 def init_db() -> None:
@@ -76,5 +132,7 @@ def init_db() -> None:
 
     # Ejecutar migraciones si es necesario
     _run_migration_notas_cliente()
+    _run_migration_vip_discount()
+    _run_migration_vip_discount_pedidos()
 
 

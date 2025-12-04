@@ -187,6 +187,7 @@ class PedidoBase(BaseModel):
     metodo_pago_efectivo: Optional[float] = 0  # Para pedidos de contado
     metodo_pago_tarjeta: Optional[float] = 0  # Para pedidos de contado
     notas_cliente: Optional[str] = None
+    vip_discount_pct: float = 0  # Descuento VIP
     total: Optional[float] = None  # Total opcional para sobrescribir cálculo automático
     items: Optional[List[PedidoItemCreate]] = None  # Lista de items para múltiples productos
 
@@ -215,6 +216,7 @@ class PedidoOut(BaseModel):
     saldo_pendiente: float
     estado: str
     tipo_pedido: str
+    vip_discount_pct: float = 0  # Descuento VIP
     folio_pedido: Optional[str] = None  # Folio único para pedidos
     fecha_entrega_estimada: Optional[datetime] = None
     fecha_entrega_real: Optional[datetime] = None

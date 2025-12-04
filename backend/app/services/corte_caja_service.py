@@ -23,6 +23,21 @@ EFECTIVO_METHODS = ['efectivo', 'transferencia']
 TARJETA_METHOD = 'tarjeta'
 
 
+def get_total_with_vip_discount(apartado) -> float:
+    """Calculate total with VIP discount applied."""
+    total = float(apartado.total or 0)
+    if apartado.vip_discount_pct and apartado.vip_discount_pct > 0:
+        discount_amount = total * (apartado.vip_discount_pct / 100)
+        return total - discount_amount
+    return total
+
+
+def get_pedido_total_with_vip_discount(pedido) -> float:
+    """Return pedido total (already includes VIP discount applied in backend)."""
+    # The total stored in DB already includes VIP discount applied during creation
+    return float(pedido.total or 0)
+
+
 # TypedDict definitions for better type safety
 class SalesData(TypedDict):
     """Structure for sales data returned by _get_sales_by_payment_date."""
@@ -631,7 +646,7 @@ def _process_new_schema_stats(
     # --- Apartados liquidados (pre-filtrados por fecha de liquidación) ---
     if apartados_liquidados:
         for ap in apartados_liquidados:
-            total = float(ap.total or 0)
+            total = get_total_with_vip_discount(ap)
             
             # Contar como ventas de crédito liquidadas
             counters['ventas_credito_count'] += 1
@@ -662,7 +677,7 @@ def _process_new_schema_stats(
     ).all()
 
     for ap in apartados_otros:
-        total = float(ap.total or 0)
+        total = get_total_with_vip_discount(ap)
         amount_paid = float(ap.amount_paid or 0)
         saldo_pendiente = max(0.0, total - amount_paid)
 
@@ -754,7 +769,7 @@ def _process_pedidos_contado(
             counters['costo_pedidos_contado'] += costo_pedido
         
         counters['num_piezas_vendidas'] += pedido.cantidad
-        counters['total_contado'] += float(pedido.total)
+        counters['total_contado'] += get_pedido_total_with_vip_discount(pedido)
         counters['contado_count'] += 1
 
 
@@ -771,8 +786,9 @@ def _process_pedidos_liquidados(
         # El total del pedido es el monto que se liquidó completamente
         
         # CAMBIO: Usar el total del pedido, no el total pagado neto
-        counters['pedidos_liquidados_total'] += float(pedido.total)
-        counters['pedidos_total'] += float(pedido.total)
+        total_with_vip = get_pedido_total_with_vip_discount(pedido)
+        counters['pedidos_liquidados_total'] += total_with_vip
+        counters['pedidos_total'] += total_with_vip
         counters['pedidos_anticipos'] += float(pedido.anticipo_pagado)
         counters['pedidos_saldo'] += float(pedido.saldo_pendiente)
         
@@ -844,7 +860,7 @@ def _process_pedidos_pendientes(
         # Solo actualizar contadores específicos de pedidos pendientes
         # Los contadores generales de anticipos/abonos se calculan en _calculate_ventas_pasivas
         counters['pedidos_pendientes_anticipos'] += anticipo_neto
-        counters['pedidos_total'] += float(pedido.total)
+        counters['pedidos_total'] += get_pedido_total_with_vip_discount(pedido)
         counters['pedidos_anticipos'] += anticipo_neto
         counters['pedidos_saldo'] += float(pedido.saldo_pendiente)
         
@@ -1169,7 +1185,8 @@ def _calculate_cuentas_por_cobrar(
     cuentas_por_cobrar = 0.0
     # Apartados pendientes (nuevo esquema)
     for apartado in apartados_pendientes:
-        saldo = float(apartado.total or 0) - float(apartado.amount_paid or 0)
+        total_with_vip = get_total_with_vip_discount(apartado)
+        saldo = total_with_vip - float(apartado.amount_paid or 0)
         cuentas_por_cobrar += saldo
 
     # Apartados nuevos (Apartado) pendientes o vencidos creados en el periodo
@@ -1180,7 +1197,8 @@ def _calculate_cuentas_por_cobrar(
         Apartado.credit_status.in_(["pendiente", "vencido"]),
     ).all()
     for ap in apartados_nuevos_pendientes:
-        saldo = float(ap.total or 0) - float(ap.amount_paid or 0)
+        total_with_vip = get_total_with_vip_discount(ap)
+        saldo = total_with_vip - float(ap.amount_paid or 0)
         cuentas_por_cobrar += saldo
     for pedido in pedidos_pendientes:
         cuentas_por_cobrar += float(pedido.saldo_pendiente)
@@ -1241,7 +1259,7 @@ def _build_vendor_stats(
             
             vendor_stats[pedido.user_id]["sales_count"] += 1
             vendor_stats[pedido.user_id]["contado_count"] += 1
-            vendor_stats[pedido.user_id]["total_contado"] += float(pedido.total)
+            vendor_stats[pedido.user_id]["total_contado"] += get_pedido_total_with_vip_discount(pedido)
             vendor_stats[pedido.user_id]["total_efectivo_contado"] += efectivo
             vendor_stats[pedido.user_id]["total_tarjeta_contado"] += tarjeta
             vendor_stats[pedido.user_id]["total_tarjeta_neto"] += tarjeta * TARJETA_DISCOUNT_RATE
@@ -1302,7 +1320,8 @@ def _build_vendor_stats(
             
             vendor_stats[vendedor_id]["abonos_apartados"] += abonos_neto
             vendor_stats[vendedor_id]["venta_total_pasiva"] += abonos_neto
-            vendor_stats[vendedor_id]["cuentas_por_cobrar"] += float(apartado.total) - float(apartado.amount_paid or 0)
+            total_with_vip = get_total_with_vip_discount(apartado)
+            vendor_stats[vendedor_id]["cuentas_por_cobrar"] += total_with_vip - float(apartado.amount_paid or 0)
     
     # También incluir apartados que tienen abonos en el periodo pero fueron creados fuera del periodo
     apartados_con_abonos = db.query(Apartado).join(CreditPayment).filter(
@@ -2012,7 +2031,7 @@ def _build_historiales(
             vendor = db.query(User).filter(User.id == pedido.user_id).first()
             vendedor = vendor.email if vendor else "Unknown"
         
-        total_pedido = float(pedido.total or 0)
+        total_pedido = get_pedido_total_with_vip_discount(pedido)
         anticipo_pedido = float(pedido.anticipo_pagado)
         saldo_pedido = float(pedido.saldo_pendiente)
         
@@ -2102,7 +2121,7 @@ def _build_historiales(
             codigo_producto = producto.codigo if producto else "N/A"
             
             costo_pedido = 0.0
-            precio_venta = float(pedido.total or 0)
+            precio_venta = get_pedido_total_with_vip_discount(pedido)
             if producto and producto.cost_price:
                 costo_unitario = float(producto.cost_price)
                 cantidad = int(pedido.cantidad or 1)
@@ -2133,7 +2152,7 @@ def _build_historiales(
             vendor = db.query(User).filter(User.id == pedido.user_id).first()
             vendedor = vendor.email if vendor else "Unknown"
         
-        total_pedido = float(pedido.total or 0)
+        total_pedido = get_pedido_total_with_vip_discount(pedido)
         anticipo_pedido = float(pedido.anticipo_pagado)
         saldo_pedido = float(pedido.saldo_pendiente)
         
@@ -2223,7 +2242,7 @@ def _build_historiales(
             codigo_producto = producto.codigo if producto else "N/A"
             
             costo_pedido = 0.0
-            precio_venta = float(pedido.total or 0)
+            precio_venta = get_pedido_total_with_vip_discount(pedido)
             if producto and producto.cost_price:
                 costo_unitario = float(producto.cost_price)
                 cantidad = int(pedido.cantidad or 1)
@@ -2260,8 +2279,8 @@ def _build_historiales(
         if apartado.vendedor_id:
             vendor = db.query(User).filter(User.id == apartado.vendedor_id).first()
             vendedor = vendor.email if vendor else "Unknown"
-        
-        total_apartado = float(apartado.total or 0)
+
+        total_apartado = get_total_with_vip_discount(apartado)
         anticipo_apartado = float(apartado.amount_paid or 0)
         saldo_apartado = total_apartado - anticipo_apartado
         
@@ -2597,7 +2616,7 @@ def _build_historiales(
             vendor = db.query(User).filter(User.id == pedido.user_id).first()
             vendedor = vendor.email if vendor else "Unknown"
         
-        total_pedido = float(pedido.total or 0)
+        total_pedido = get_pedido_total_with_vip_discount(pedido)
         anticipo_pedido = float(pedido.anticipo_pagado)
         saldo_pedido = float(pedido.saldo_pendiente)
         motivo = "Vencido" if pedido.estado == "vencido" else "Cancelado"
@@ -2715,7 +2734,7 @@ def _build_historiales(
             codigo_producto = producto.codigo if producto else "N/A"
             
             costo_pedido = 0.0
-            precio_venta = float(pedido.total or 0)
+            precio_venta = get_pedido_total_with_vip_discount(pedido)
             if producto and producto.cost_price:
                 costo_unitario = float(producto.cost_price)
                 cantidad = int(pedido.cantidad or 1)
@@ -2894,7 +2913,7 @@ def _build_sales_details(
             vendor = db.query(User).filter(User.id == pedido.user_id).first()
             vendedor = vendor.email if vendor else "Unknown"
         
-        total_pedido = float(pedido.total or 0)
+        total_pedido = get_pedido_total_with_vip_discount(pedido)
         
         # Obtener items del pedido
         pedido_items = db.query(PedidoItem).filter(PedidoItem.pedido_id == pedido.id).all()
@@ -2995,7 +3014,7 @@ def _build_sales_details(
             codigo_producto = producto.codigo if producto else "N/A"
             
             costo_pedido = 0.0
-            precio_venta = float(pedido.total or 0)
+            precio_venta = get_pedido_total_with_vip_discount(pedido)
             if producto and producto.cost_price:
                 costo_unitario = float(producto.cost_price)
                 cantidad = int(pedido.cantidad or 1)
@@ -3089,7 +3108,7 @@ def _build_piezas_recibidas(
                 "talla": producto.talla if producto else None,
                 "cantidad": pedido.cantidad,
                 "precio_unitario": float(pedido.precio_unitario),
-                "total": float(pedido.total),
+                "total": get_pedido_total_with_vip_discount(pedido),
                 "vendedor": vendedor,
             })
     
@@ -3181,7 +3200,7 @@ def _build_piezas_solicitadas_cliente(
                 "talla": producto.talla if producto else None,
                 "cantidad": pedido.cantidad,
                 "precio_unitario": float(pedido.precio_unitario),
-                "total": float(pedido.total),
+                "total": get_pedido_total_with_vip_discount(pedido),
                 "anticipo_pagado": float(pedido.anticipo_pagado),
                 "anticipo_efectivo": anticipo_efectivo,
                 "anticipo_tarjeta": anticipo_tarjeta,
@@ -3260,7 +3279,7 @@ def _build_piezas_pedidas_proveedor(
                 "talla": producto.talla if producto else None,
                 "cantidad": pedido.cantidad,
                 "precio_unitario": float(pedido.precio_unitario),
-                "total": float(pedido.total),
+                "total": get_pedido_total_with_vip_discount(pedido),
                 "estado": pedido.estado,
                 "tipo_pedido": pedido.tipo_pedido,
                 "vendedor": vendedor,
@@ -3384,10 +3403,11 @@ def _build_daily_summaries(
             costo_pedido = float(producto.cost_price) * pedido.cantidad
             daily_stats[sale_date]["costo"] += costo_pedido
         
-        daily_stats[sale_date]["venta"] += float(pedido.total)
+        daily_stats[sale_date]["venta"] += get_pedido_total_with_vip_discount(pedido)
         # Utilidad = total - costo
         if producto and producto.cost_price:
-            utilidad_pedido = float(pedido.total) - (float(producto.cost_price) * pedido.cantidad)
+            total_with_vip = get_pedido_total_with_vip_discount(pedido)
+            utilidad_pedido = total_with_vip - (float(producto.cost_price) * pedido.cantidad)
             daily_stats[sale_date]["utilidad"] += utilidad_pedido
     
     return list(daily_stats.values())

@@ -70,7 +70,10 @@ class Pedido(Base):
     # Notas
     notas_cliente = Column(Text)
     notas_internas = Column(Text)
-    
+
+    # Descuento VIP
+    vip_discount_pct = Column(Numeric(5, 2), nullable=False, default=0)
+
     # Metadatos
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

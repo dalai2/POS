@@ -49,6 +49,7 @@ class ApartadoOut(BaseModel):
     notas_cliente: str | None
     amount_paid: float | None
     credit_status: str | None
+    vip_discount_pct: float = 0
     payments: List[dict]
 
     class Config:
@@ -81,12 +82,15 @@ async def create_apartado_route(
     """
     # Get the raw JSON data from request body
     body = await request.json()
+    print(f"DEBUG APARTADO ENDPOINT: Body received: {body}")
+
     vendedor_id = body.get('vendedor_id') or user.id
     utilidad = body.get('utilidad')
     total_cost = body.get('total_cost')
     customer_name = body.get('customer_name')
     customer_phone = body.get('customer_phone')
     customer_address = body.get('customer_address')
+    vip_discount_pct_val = Decimal(str(body.get('vip_discount_pct', 0)))
 
     if not items:
         raise HTTPException(status_code=400, detail="No hay artículos en el apartado")
@@ -122,10 +126,12 @@ async def create_apartado_route(
 
     subtotal_val = subtotal.quantize(Decimal("0.01"))
     discount_val = Decimal(str(discount_amount or 0)).quantize(Decimal("0.01"))
+    vip_discount_val = (subtotal_val * vip_discount_pct_val / Decimal("100")).quantize(Decimal("0.01"))
     tax_rate_val = Decimal(str(tax_rate or 0)).quantize(Decimal("0.01"))
-    taxable = max(Decimal("0"), subtotal_val - discount_val).quantize(Decimal("0.01"))
+    taxable = max(Decimal("0"), subtotal_val - discount_val - vip_discount_val).quantize(Decimal("0.01"))
     tax_amount_val = (taxable * tax_rate_val / Decimal("100")).quantize(Decimal("0.01"))
     total_val = (taxable + tax_amount_val).quantize(Decimal("0.01"))
+
 
     # Save payments (required for apartado)
     paid = Decimal("0")
@@ -160,6 +166,7 @@ async def create_apartado_route(
         customer_address=customer_address,
         amount_paid=paid,
         credit_status="pendiente",
+        vip_discount_pct=vip_discount_pct_val,
         folio_apartado=folio_apartado,  # Asignar folio al crear
     )
     db.add(apartado)
@@ -243,6 +250,7 @@ async def create_apartado_route(
         notas_cliente=apartado.notas_cliente,
         amount_paid=apartado.amount_paid,
         credit_status=apartado.credit_status,
+        vip_discount_pct=apartado.vip_discount_pct,
         payments=payments_list
     )
 
@@ -322,6 +330,7 @@ def update_apartado(
         notas_cliente=apartado.notas_cliente,
         amount_paid=apartado.amount_paid,
         credit_status=apartado.credit_status,
+        vip_discount_pct=apartado.vip_discount_pct,
         payments=payments_list
     )
 
@@ -368,6 +377,7 @@ def get_apartado(
         notas_cliente=apartado.notas_cliente,
         amount_paid=apartado.amount_paid,
         credit_status=apartado.credit_status,
+        vip_discount_pct=apartado.vip_discount_pct,
         payments=payments_list
     )
 

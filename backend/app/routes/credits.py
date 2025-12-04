@@ -49,6 +49,7 @@ class CreditSaleDetail(BaseModel):
     vendedor_id: Optional[int]
     vendedor_email: Optional[str]
     created_at: str
+    vip_discount_pct: float = 0
     payments: List[CreditPaymentResponse]
 
     class Config:
@@ -156,6 +157,7 @@ def get_credit_sales(
             "vendedor_id": sale.vendedor_id,
             "vendedor_email": vendedor_email,
             "created_at": sale.created_at.isoformat(),
+            "vip_discount_pct": float(sale.vip_discount_pct),
             "payments": payments
         })
     

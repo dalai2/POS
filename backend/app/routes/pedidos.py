@@ -119,9 +119,11 @@ def create_pedido(
         total_pedido += item_total
         cantidad_total += item.cantidad
 
-    # Usar el total proporcionado o calcular automáticamente
-    total = float(pedido.total) if pedido.total is not None else float(total_pedido)
-    
+    # Aplicar descuento VIP al total calculado
+    subtotal = float(pedido.total) if pedido.total is not None else float(total_pedido)
+    vip_discount_val = subtotal * pedido.vip_discount_pct / 100
+    total = subtotal - vip_discount_val
+
     # Usar el user_id proporcionado o el usuario autenticado
     vendedor_id = pedido.user_id if pedido.user_id else user.id
     
@@ -166,6 +168,7 @@ def create_pedido(
             cliente_email=pedido.cliente_email,
             cantidad=cantidad_total,
             notas_cliente=pedido.notas_cliente,
+            vip_discount_pct=pedido.vip_discount_pct,
             folio_pedido=folio_pedido,  # Asignar folio al crear
         )
         
@@ -264,6 +267,7 @@ def create_pedido(
             cliente_email=pedido.cliente_email,
             cantidad=cantidad_total,
             notas_cliente=pedido.notas_cliente,
+            vip_discount_pct=pedido.vip_discount_pct,
             folio_pedido=folio_pedido,  # Asignar folio al crear
         )
 
