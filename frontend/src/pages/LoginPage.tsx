@@ -18,7 +18,7 @@ export default function LoginPage() {
       localStorage.setItem('refresh', res.data.refresh_token)
       localStorage.setItem('tenant', tenant)
       localStorage.setItem('role', res.data.role || 'cashier')
-      window.location.href = '/products'
+      window.location.href = '/pedidos'
     } catch (err: any) {
       setMessage(err?.response?.data?.detail || 'Inicio de sesión fallido')
     }

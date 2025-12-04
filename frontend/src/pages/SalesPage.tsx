@@ -43,6 +43,10 @@ export default function SalesPage() {
   const [card, setCard] = useState('')
   const [discount, setDiscount] = useState('0')
   const [isProcessing, setIsProcessing] = useState(false)
+
+  // Estados para descuento VIP
+  const [showVipModal, setShowVipModal] = useState(false)
+  const [vipDiscount, setVipDiscount] = useState('')
   
   // Filtros
   const [modeloFilter, setModeloFilter] = useState('')
@@ -201,6 +205,17 @@ export default function SalesPage() {
     return sum + lineSub
   }, 0) * 100) / 100
 
+  // Calcular subtotal base (sin descuentos individuales)
+  const subtotalBase = Math.round(cart.reduce((sum, ci) => {
+    const unit = parseFloat(ci.product.price || '0')
+    const discountPct = ci.product.descuento_porcentaje || ci.product.default_discount_pct || 0
+    const unitBase = discountPct > 0 ? unit / (1 - discountPct / 100) : unit
+    return sum + (unitBase * ci.quantity)
+  }, 0) * 100) / 100
+
+  // Calcular descuento total de productos individuales
+  const productDiscountTotal = subtotalBase - subtotal
+
   const totalCost = Math.round(cart.reduce((sum, ci) => {
     const cost = parseFloat(ci.product.costo || ci.product.cost_price || '0') || 0
     return sum + (cost * ci.quantity)
@@ -218,6 +233,30 @@ export default function SalesPage() {
   const cardNumCalc = Math.round((parseFloat(card || '0') || 0) * 100) / 100
   const paid = Math.round((cashNumCalc + cardNumCalc) * 100) / 100
   const change = Math.max(0, Math.round((paid - total) * 100) / 100)
+
+  // Funciones para descuento VIP
+  const getTotalWithVipDiscount = () => {
+    const totalValue = total
+    const discountAmount = vipDiscount ? (totalValue * parseFloat(vipDiscount) / 100) : 0
+    return Math.round((totalValue - discountAmount) * 100) / 100
+  }
+
+  const applyVipDiscount = () => {
+    const discount = parseFloat(vipDiscount)
+    if (isNaN(discount) || discount < 0 || discount > 100) {
+      setMsg('El descuento VIP debe ser un porcentaje entre 0 y 100')
+      return
+    }
+    setShowVipModal(false)
+    setMsg(`✅ Descuento VIP del ${discount}% aplicado`)
+    setTimeout(() => setMsg(''), 3000)
+  }
+
+  const removeVipDiscount = () => {
+    setVipDiscount('')
+    setMsg('✅ Descuento VIP removido')
+    setTimeout(() => setMsg(''), 3000)
+  }
 
   // Reset calculations when dependencies change
   useEffect(() => {
@@ -670,8 +709,9 @@ export default function SalesPage() {
 
       // Verificar pago con tolerancia mínima para errores de redondeo
       const tolerance = 0.001 // 0.1 centavo de tolerancia
-      if (saleType === 'contado' && (paid - total) < -tolerance) {
-        setMsg(`Pago insuficiente. Total: $${total.toFixed(2)}, Pagado: $${paid.toFixed(2)}`)
+      const finalTotal = getTotalWithVipDiscount()
+      if (saleType === 'contado' && (paid - finalTotal) < -tolerance) {
+        setMsg(`Pago insuficiente. Total: $${finalTotal.toFixed(2)}, Pagado: $${paid.toFixed(2)}`)
         setIsProcessing(false)
         return
       }
@@ -697,11 +737,18 @@ export default function SalesPage() {
         if (apartadoCardNum > 0) payments.push({ method: 'card', amount: parseFloat(apartadoCardNum.toFixed(2)) })
       }
 
+      // Calcular total con descuento VIP aplicado
+      const subtotalValue = subtotal
+      const vipDiscountAmount = vipDiscount ? (subtotalValue * parseFloat(vipDiscount) / 100) : 0
+      const totalWithVipDiscount = subtotalValue - vipDiscountAmount
+
       const saleData: any = {
         items,
         discount_amount: parseFloat(discountAmountCalc.toFixed(2)),
         tax_rate: 0,  // IVA siempre 0
-        tipo_venta: saleType  // Ya es 'credito' directamente
+        tipo_venta: saleType,  // Ya es 'credito' directamente
+        // El total ya incluye el descuento VIP aplicado
+        total: Math.round(totalWithVipDiscount * 100) / 100
       }
 
       // Add vendedor_id if selected
@@ -757,12 +804,13 @@ export default function SalesPage() {
       setDiscount('0')
       setCustomerName('')
       setCustomerPhone('')
+      setVipDiscount('')
       
       // Mostrar folio correcto según el tipo de venta
       const folio = saleType === 'credito' 
         ? (cleanFolio(r.data.folio_apartado) || `AP-${r.data.id}`)
         : (cleanFolio(r.data.folio_venta) || `V-${r.data.id}`)
-      setMsg(`✅ ${saleType === 'credito' ? 'Apartado' : 'Venta'} realizada. Folio ${folio}. Total $${r.data.total}`)
+      setMsg(`✅ ${saleType === 'credito' ? 'Apartado' : 'Venta'} realizada. Folio ${folio}. Total $${getTotalWithVipDiscount().toFixed(2)}`)
       
       // Generar ticket de venta - usar el valor calculado ANTES de limpiar
       const finalInitialPayment = saleType === 'credito' ? initialPaymentAmount : 0
@@ -772,7 +820,9 @@ export default function SalesPage() {
         ...r.data,
         tipo_venta: saleType  // Asegurar que tipo_venta esté presente
       }
-      printSaleTicket(saleDataForTicket, currentCart, subtotal, discountAmountCalc, total, paid, change, finalInitialPayment)
+      // Usar el total con descuento VIP para el ticket
+      const ticketTotal = vipDiscount ? getTotalWithVipDiscount() : total
+      printSaleTicket(saleDataForTicket, currentCart, subtotal, discountAmountCalc + vipDiscountAmount, ticketTotal, paid, change, finalInitialPayment)
       
       setIsProcessing(false)  // Desbloquear después de completar
     } catch (e: any) {
@@ -868,9 +918,21 @@ export default function SalesPage() {
 
           {/* Customer Info */}
             <div className="bg-amber-50 rounded-lg p-4">
-            <h3 className="font-semibold mb-2">
-              {saleType === 'credito' ? 'Información del Cliente' : 'Cliente'}
-            </h3>
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="font-semibold">
+                {saleType === 'credito' ? 'Información del Cliente' : 'Cliente'}
+              </h3>
+              <button
+                onClick={() => setShowVipModal(true)}
+                className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all ${
+                  vipDiscount
+                    ? 'bg-yellow-600 text-white hover:bg-yellow-700'
+                    : 'bg-gray-600 text-white hover:bg-gray-700'
+                }`}
+              >
+                {vipDiscount ? `VIP -${vipDiscount}%` : 'VIP'}
+              </button>
+            </div>
             <div className="grid grid-cols-2 gap-3">
                 <input
                   className="border border-gray-300 rounded-lg px-3 py-2"
@@ -892,18 +954,18 @@ export default function SalesPage() {
             <table className="w-full">
               <thead className="bg-gray-100 sticky top-0">
                 <tr>
-                  <th className="px-3 py-2 text-left text-sm">Producto</th>
-                  <th className="px-3 py-2 text-center text-sm">Cant</th>
-                  <th className="px-3 py-2 text-right text-sm">Precio</th>
-                  <th className="px-3 py-2 text-right text-sm">Desc%</th>
-                  <th className="px-3 py-2 text-right text-sm">Total</th>
-                  <th className="px-3 py-2"></th>
+                  <th className="px-4 py-4 text-left text-lg font-bold">Producto</th>
+                  <th className="px-4 py-4 text-center text-lg font-bold">Cant</th>
+                  <th className="px-4 py-4 text-right text-lg font-bold">Precio</th>
+                  <th className="px-4 py-4 text-right text-lg font-bold">Desc%</th>
+                  <th className="px-4 py-4 text-right text-lg font-bold">Total</th>
+                  <th className="px-4 py-4"></th>
                 </tr>
               </thead>
               <tbody>
                 {cart.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="text-center py-8 text-gray-400">
+                    <td colSpan={6} className="text-center py-12 text-gray-400 text-lg">
                       Carrito vacío
                     </td>
                   </tr>
@@ -917,24 +979,24 @@ export default function SalesPage() {
                     
                     return (
                       <tr key={ci.product.id} className="border-t">
-                        <td className="px-3 py-2 text-sm">{ci.product.name}</td>
-                        <td className="px-3 py-2 text-center">
+                        <td className="px-4 py-4 text-lg">{ci.product.name}</td>
+                        <td className="px-4 py-4 text-center text-lg">
                           <input
                             type="number"
                             min="1"
                             value={ci.quantity}
                             onChange={e => updateQty(ci.product.id, Number(e.target.value))}
-                            className="w-16 border rounded px-2 py-1 text-center"
+                            className="w-20 border rounded px-3 py-2 text-center text-lg"
                           />
                         </td>
-                        <td className="px-3 py-2 text-right text-sm">${precioOriginal.toFixed(2)}</td>
-                        <td className="px-3 py-2 text-right text-sm text-gray-600">
+                        <td className="px-4 py-4 text-right text-lg">${precioOriginal.toFixed(2)}</td>
+                        <td className="px-4 py-4 text-right text-lg text-gray-600">
                           {discPct > 0 ? `${discPct.toFixed(1)}%` : '-'}
                         </td>
-                        <td className="px-3 py-2 text-right font-bold">
+                        <td className="px-4 py-4 text-right font-bold text-lg">
                           ${lineTotal.toFixed(2)}
                         </td>
-                        <td className="px-3 py-2">
+                        <td className="px-4 py-4">
                           <button
                             onClick={() => removeItem(ci.product.id)}
                             className="text-red-600 hover:text-red-800"
@@ -954,19 +1016,38 @@ export default function SalesPage() {
           <div className="bg-gray-50 rounded-lg p-4 space-y-3">
             <div className="flex justify-between text-lg">
               <span>Subtotal:</span>
+              <span className="font-bold">${subtotalBase.toFixed(2)}</span>
+            </div>
+
+            {productDiscountTotal > 0 && (
+              <div className="flex justify-between text-red-600">
+                <span>Descuento productos:</span>
+                <span>-${productDiscountTotal.toFixed(2)}</span>
+              </div>
+            )}
+
+            <div className="flex justify-between text-lg border-t border-gray-200 pt-2">
+              <span>Subtotal neto:</span>
               <span className="font-bold">${subtotal.toFixed(2)}</span>
             </div>
 
             {discountAmountCalc > 0 && (
               <div className="flex justify-between text-red-600">
-                <span>Descuento:</span>
+                <span>Descuento general:</span>
                 <span>-${discountAmountCalc.toFixed(2)}</span>
+              </div>
+            )}
+
+            {vipDiscount && (
+              <div className="flex justify-between text-red-600">
+                <span>Descuento VIP ({vipDiscount}%):</span>
+                <span>-${(total * parseFloat(vipDiscount) / 100).toFixed(2)}</span>
               </div>
             )}
 
             <div className="border-t-2 border-gray-300 pt-2 flex justify-between text-2xl font-bold">
               <span>TOTAL:</span>
-              <span className="text-green-600">${total.toFixed(2)}</span>
+              <span className="text-green-600">${getTotalWithVipDiscount().toFixed(2)}</span>
             </div>
 
             {/* Payment fields */}
@@ -1215,6 +1296,61 @@ export default function SalesPage() {
             </div>
         </div>
       </div>
+      )}
+
+      {/* Modal para descuento VIP */}
+      {showVipModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold mb-4">🎁 Descuento VIP</h3>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Porcentaje de descuento (%)
+              </label>
+              <input
+                type="number"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                placeholder="0"
+                min="0"
+                max="100"
+                step="0.01"
+                value={vipDiscount}
+                onChange={e => setVipDiscount(e.target.value)}
+              />
+              {vipDiscount && (
+                <div className="mt-3 p-3 bg-yellow-50 rounded-lg">
+                  <div className="text-sm text-yellow-800">
+                    <strong>Base para descuento:</strong> ${total.toFixed(2)}<br/>
+                    <strong>Descuento VIP ({vipDiscount}%):</strong> -${(total * parseFloat(vipDiscount) / 100).toFixed(2)}<br/>
+                    <strong>Total final:</strong> ${getTotalWithVipDiscount().toFixed(2)}
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="flex gap-3">
+              {vipDiscount && (
+                <button
+                  onClick={removeVipDiscount}
+                  className="flex-1 bg-red-500 text-white py-2 px-4 rounded-lg hover:bg-red-600"
+                >
+                  Remover Descuento
+                </button>
+              )}
+              <button
+                onClick={() => setShowVipModal(false)}
+                className="flex-1 bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={applyVipDiscount}
+                className="flex-1 bg-yellow-600 text-white py-2 px-4 rounded-lg hover:bg-yellow-700"
+              >
+                Aplicar Descuento
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </Layout>
   )

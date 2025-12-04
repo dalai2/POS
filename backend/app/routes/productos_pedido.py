@@ -187,6 +187,7 @@ class PedidoBase(BaseModel):
     metodo_pago_efectivo: Optional[float] = 0  # Para pedidos de contado
     metodo_pago_tarjeta: Optional[float] = 0  # Para pedidos de contado
     notas_cliente: Optional[str] = None
+    total: Optional[float] = None  # Total opcional para sobrescribir cálculo automático
     items: Optional[List[PedidoItemCreate]] = None  # Lista de items para múltiples productos
 
 class PedidoCreate(PedidoBase):

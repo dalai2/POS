@@ -87,6 +87,10 @@ export default function PedidosPage() {
   const [importMode, setImportMode] = useState<'add' | 'replace'>('add')
   const [importing, setImporting] = useState(false)
   const [userRole, setUserRole] = useState<string>('')
+
+  // Estados para descuento VIP
+  const [showVipModal, setShowVipModal] = useState(false)
+  const [vipDiscount, setVipDiscount] = useState('')
   
   const [newProduct, setNewProduct] = useState({
     modelo: '',
@@ -301,6 +305,29 @@ export default function PedidosPage() {
     return Math.ceil(cart.reduce((sum, ci) => sum + (parseFloat(ci.producto.precio.toString()) * ci.cantidad), 0))
   }
 
+  const getTotalWithDiscount = () => {
+    const subtotal = getTotal()
+    const discountAmount = vipDiscount ? (subtotal * parseFloat(vipDiscount) / 100) : 0
+    return Math.ceil(subtotal - discountAmount)
+  }
+
+  const applyVipDiscount = () => {
+    const discount = parseFloat(vipDiscount)
+    if (isNaN(discount) || discount < 0 || discount > 100) {
+      setMsg('El descuento VIP debe ser un porcentaje entre 0 y 100')
+      return
+    }
+    setShowVipModal(false)
+    setMsg(`✅ Descuento VIP del ${discount}% aplicado`)
+    setTimeout(() => setMsg(''), 3000)
+  }
+
+  const removeVipDiscount = () => {
+    setVipDiscount('')
+    setMsg('✅ Descuento VIP removido')
+    setTimeout(() => setMsg(''), 3000)
+  }
+
   const createProduct = async () => {
     if (!newProduct.codigo.trim()) {
       setMsg('El código es requerido')
@@ -508,6 +535,9 @@ export default function PedidosPage() {
       console.log('Tenant:', localStorage.getItem('tenant'))
       
       // Crear un solo pedido con todos los productos del carrito
+      const subtotal = cart.reduce((sum, item) => sum + (item.producto.precio * item.cantidad), 0)
+      const totalConDescuento = vipDiscount ? subtotal * (1 - parseFloat(vipDiscount) / 100) : subtotal
+
       const pedidoData = {
         items: cart.map(item => ({
           producto_pedido_id: item.producto.id,
@@ -520,7 +550,9 @@ export default function PedidosPage() {
         metodo_pago_efectivo: parseFloat(metodoPagoEfectivo) || 0,
         metodo_pago_tarjeta: parseFloat(metodoPagoTarjeta) || 0,
         notas_cliente: notasCliente || null,
-        user_id: vendedorId ? parseInt(vendedorId) : undefined
+        user_id: vendedorId ? parseInt(vendedorId) : undefined,
+        // El total ya incluye el descuento VIP aplicado
+        total: Math.ceil(totalConDescuento)
       }
       
       console.log('Sending pedido data:', pedidoData)
@@ -597,6 +629,7 @@ export default function PedidosPage() {
       setMetodoPagoEfectivo('')
       setMetodoPagoTarjeta('')
       setTipoPedido('apartado')
+      setVipDiscount('')
       
       // Limpiar mensaje después de 3 segundos
       setTimeout(() => setMsg(''), 3000)
@@ -628,7 +661,19 @@ export default function PedidosPage() {
 
           {/* Customer Info */}
           <div className="bg-amber-50 rounded-lg p-4">
-            <h3 className="font-semibold mb-2">Información del Cliente</h3>
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="font-semibold">Información del Cliente</h3>
+              <button
+                onClick={() => setShowVipModal(true)}
+                className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all ${
+                  vipDiscount
+                    ? 'bg-yellow-600 text-white hover:bg-yellow-700'
+                    : 'bg-gray-600 text-white hover:bg-gray-700'
+                }`}
+              >
+                {vipDiscount ? `VIP -${vipDiscount}%` : 'VIP'}
+              </button>
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <input
                 className="border border-gray-300 rounded-lg px-3 py-2"
@@ -720,9 +765,21 @@ export default function PedidosPage() {
                 />
               </div>
               <div className={`col-span-2 p-3 rounded-lg ${tipoPedido === 'contado' ? 'bg-green-100' : 'bg-orange-100'}`}>
+                {vipDiscount && (
+                  <div className="flex justify-between text-sm mb-2">
+                    <span className="font-medium">Subtotal:</span>
+                    <span className="font-bold">${getTotal()}</span>
+                  </div>
+                )}
+                {vipDiscount && (
+                  <div className="flex justify-between text-sm mb-1 text-red-600">
+                    <span className="font-medium">Descuento VIP (-{vipDiscount}%):</span>
+                    <span className="font-bold">-${Math.ceil(getTotal() * parseFloat(vipDiscount) / 100)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-sm">
                   <span className="font-medium">Total del pedido:</span>
-                  <span className="font-bold">${getTotal()}</span>
+                  <span className="font-bold">${getTotalWithDiscount()}</span>
                 </div>
                 <div className="flex justify-between text-sm mt-1">
                   <span className="font-medium">{tipoPedido === 'contado' ? 'Total pagado:' : 'Anticipo:'}</span>
@@ -734,7 +791,7 @@ export default function PedidosPage() {
                   <div className="flex justify-between text-sm mt-1">
                     <span className="font-medium">Saldo pendiente:</span>
                     <span className="font-bold text-red-700">
-                      ${Math.ceil(getTotal() - ((parseFloat(metodoPagoEfectivo) || 0) + (parseFloat(metodoPagoTarjeta) || 0)))}
+                      ${Math.ceil(getTotalWithDiscount() - ((parseFloat(metodoPagoEfectivo) || 0) + (parseFloat(metodoPagoTarjeta) || 0)))}
                     </span>
                   </div>
                 )}
@@ -1078,8 +1135,13 @@ export default function PedidosPage() {
               <p className="text-gray-700">
                 <strong>Productos:</strong> {cart.length} {cart.length === 1 ? 'producto' : 'productos'}
               </p>
+              {vipDiscount && (
+                <p className="text-gray-700">
+                  <strong>Descuento VIP aplicado:</strong> -{vipDiscount}%
+                </p>
+              )}
               <p className="text-gray-700">
-                <strong>Total:</strong> ${Math.ceil(cart.reduce((sum, item) => sum + (item.producto.precio * item.cantidad), 0))}
+                <strong>Total final:</strong> ${getTotalWithDiscount()}
               </p>
               {(parseFloat(metodoPagoEfectivo) > 0 || parseFloat(metodoPagoTarjeta) > 0) && (
                 <p className="text-gray-700">
@@ -1110,6 +1172,61 @@ export default function PedidosPage() {
           </div>
         </div>
       )}
+      {/* Modal para descuento VIP */}
+      {showVipModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold mb-4">🎁 Descuento VIP</h3>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Porcentaje de descuento (%)
+              </label>
+              <input
+                type="number"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                placeholder="0"
+                min="0"
+                max="100"
+                step="0.01"
+                value={vipDiscount}
+                onChange={e => setVipDiscount(e.target.value)}
+              />
+              {vipDiscount && (
+                <div className="mt-3 p-3 bg-yellow-50 rounded-lg">
+                  <div className="text-sm text-yellow-800">
+                    <strong>Subtotal:</strong> ${getTotal()}<br/>
+                    <strong>Descuento ({vipDiscount}%):</strong> -${Math.ceil(getTotal() * parseFloat(vipDiscount) / 100)}<br/>
+                    <strong>Total con descuento:</strong> ${getTotalWithDiscount()}
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="flex gap-3">
+              {vipDiscount && (
+                <button
+                  onClick={removeVipDiscount}
+                  className="flex-1 bg-red-500 text-white py-2 px-4 rounded-lg hover:bg-red-600"
+                >
+                  Remover Descuento
+                </button>
+              )}
+              <button
+                onClick={() => setShowVipModal(false)}
+                className="flex-1 bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={applyVipDiscount}
+                className="flex-1 bg-yellow-600 text-white py-2 px-4 rounded-lg hover:bg-yellow-700"
+              >
+                Aplicar Descuento
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal para crear producto */}
       {showCreateProductModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">

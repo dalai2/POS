@@ -200,6 +200,7 @@ async def create_sale(
     customer_name = body.get('customer_name')
     customer_phone = body.get('customer_phone')
     customer_address = body.get('customer_address')
+    total_override = body.get('total')  # Total opcional para sobrescribir cálculo automático
 
     if not items:
         raise HTTPException(status_code=400, detail="No hay artículos en la venta")
@@ -235,7 +236,10 @@ async def create_sale(
     tax_rate_val = Decimal(str(tax_rate or 0)).quantize(Decimal("0.01"))
     taxable = max(Decimal("0"), subtotal_val - discount_val).quantize(Decimal("0.01"))
     tax_amount_val = (taxable * tax_rate_val / Decimal("100")).quantize(Decimal("0.01"))
-    total_val = (taxable + tax_amount_val).quantize(Decimal("0.01"))
+    calculated_total = (taxable + tax_amount_val).quantize(Decimal("0.01"))
+
+    # Usar el total proporcionado o el calculado
+    total_val = Decimal(str(total_override)).quantize(Decimal("0.01")) if total_override is not None else calculated_total
 
     # Save payments (optional)
     paid = Decimal("0")

@@ -101,7 +101,7 @@ def create_pedido(
     productos_map = {}
     total_pedido = Decimal("0")
     cantidad_total = 0
-    
+
     for item in items_to_create:
         producto = db.query(ProductoPedido).filter(
             ProductoPedido.id == item.producto_pedido_id,
@@ -109,17 +109,18 @@ def create_pedido(
             ProductoPedido.active == True,
             ProductoPedido.disponible == True
         ).first()
-        
+
         if not producto:
             raise HTTPException(status_code=404, detail=f"Producto no disponible: {item.producto_pedido_id}")
-        
+
         productos_map[item.producto_pedido_id] = producto
         precio_unitario = Decimal(str(producto.precio))
         item_total = precio_unitario * item.cantidad
         total_pedido += item_total
         cantidad_total += item.cantidad
-    
-    total = float(total_pedido)
+
+    # Usar el total proporcionado o calcular automáticamente
+    total = float(pedido.total) if pedido.total is not None else float(total_pedido)
     
     # Usar el user_id proporcionado o el usuario autenticado
     vendedor_id = pedido.user_id if pedido.user_id else user.id
