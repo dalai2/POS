@@ -1262,7 +1262,7 @@ export default function SalesPage() {
                     </div>
                     <div className="text-right">
                       <div className="font-medium">${(parseFloat(ci.product.price || '0') * ci.quantity).toFixed(2)}</div>
-                      {ci.discount_pct > 0 && <div className="text-sm text-red-600">Desc: {ci.discount_pct.toFixed(1)}%</div>}
+                      {(ci.discount_pct || 0) > 0 && <div className="text-sm text-red-600">Desc: {(ci.discount_pct || 0).toFixed(1)}%</div>}
                     </div>
                   </div>
                 ))}

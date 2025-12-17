@@ -160,7 +160,7 @@ export default function CreditsPage() {
         const ticketHTML = generateApartadoPaymentTicketHTML({
           sale: {
             ...selectedCredit,
-            total: totalWithVip, // Usar total con descuento VIP aplicado
+            total: selectedCredit.total, // Usar total con descuento VIP aplicado
             vip_discount_pct: selectedCredit.vip_discount_pct || 0
           },
           saleItems,
