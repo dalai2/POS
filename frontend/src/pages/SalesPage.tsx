@@ -156,30 +156,24 @@ export default function SalesPage() {
   }
 
   const addToCart = (p: Product) => {
-    setProductToAdd(p)
-    setShowConfirmModal(true)
-  }
-
-  const confirmAddToCart = () => {
-    if (!productToAdd) return
-    
     setCart(prev => {
-      const idx = prev.findIndex(ci => ci.product.id === productToAdd.id)
+      const idx = prev.findIndex(ci => ci.product.id === p.id)
       if (idx >= 0) {
         const next = [...prev]
         next[idx] = { ...next[idx], quantity: next[idx].quantity + 1 }
         return next
       }
-      return [...prev, { product: productToAdd, quantity: 1, discount_pct: productToAdd.descuento_porcentaje || productToAdd.default_discount_pct || 0 }]
+      return [...prev, { product: p, quantity: 1, discount_pct: p.descuento_porcentaje || p.default_discount_pct || 0 }]
     })
-    
-    setShowConfirmModal(false)
-    setProductToAdd(null)
   }
 
-  const cancelAddToCart = () => {
+  const confirmCheckout = () => {
     setShowConfirmModal(false)
-    setProductToAdd(null)
+    performCheckout()
+  }
+
+  const cancelCheckout = () => {
+    setShowConfirmModal(false)
   }
 
   const updateQty = (id: number, qty: number) => {
@@ -674,15 +668,24 @@ export default function SalesPage() {
     if (isProcessing) {
       return
     }
-    
+
+    if (cart.length === 0) {
+      setMsg('No hay artículos')
+      return
+    }
+
+    // Mostrar modal de confirmación antes de procesar
+    setShowConfirmModal(true)
+  }
+
+  const performCheckout = async () => {
+    // Prevenir doble ejecución
+    if (isProcessing) {
+      return
+    }
+
     try {
       setIsProcessing(true)  // Bloquear mientras procesa
-      
-      if (cart.length === 0) {
-        setMsg('No hay artículos')
-        setIsProcessing(false)
-        return
-      }
 
       // Validate sale type specific requirements
       if (saleType === 'credito' && !vendedorId) {
@@ -770,7 +773,7 @@ export default function SalesPage() {
       if (customerName.trim()) {
         saleData.customer_name = customerName.trim()
       }
-      
+
       // Add phone for all sales
       if (customerPhone.trim()) {
         saleData.customer_phone = customerPhone.trim()
@@ -785,22 +788,22 @@ export default function SalesPage() {
         // Para ventas de contado
         r = await api.post('/ventas/', saleData)
       }
-      
+
       // Guardar valores ANTES de limpiar los estados
       const cashAmount = saleType === 'contado' ? parseFloat(cash || '0') : parseFloat(apartadoCash || '0')
       const cardAmount = saleType === 'contado' ? parseFloat(card || '0') : parseFloat(apartadoCard || '0')
       const initialPaymentAmount = cashAmount + cardAmount
       const currentCart = [...cart]
-      
+
       console.log('===== Initial payment info =====')
       console.log('saleType:', saleType)
       console.log('cashAmount:', cashAmount)
       console.log('cardAmount:', cardAmount)
       console.log('initialPaymentAmount:', initialPaymentAmount)
       console.log('================================')
-      
+
       // Ya no necesitamos registrar pagos adicionales - se envían en el array payments al crear la venta
-      
+
       setCart([])
       setCash('')
       setCard('')
@@ -810,13 +813,13 @@ export default function SalesPage() {
       setCustomerName('')
       setCustomerPhone('')
       setVipDiscount('')
-      
+
       // Mostrar folio correcto según el tipo de venta
-      const folio = saleType === 'credito' 
+      const folio = saleType === 'credito'
         ? (cleanFolio(r.data.folio_apartado) || `AP-${r.data.id}`)
         : (cleanFolio(r.data.folio_venta) || `V-${r.data.id}`)
       setMsg(`✅ ${saleType === 'credito' ? 'Apartado' : 'Venta'} realizada. Folio ${folio}. Total $${getTotalWithVipDiscount().toFixed(2)}`)
-      
+
       // Generar ticket de venta - usar el valor calculado ANTES de limpiar
       const finalInitialPayment = saleType === 'credito' ? initialPaymentAmount : 0
       console.log('CALLING printSaleTicket with initialPayment:', finalInitialPayment)
@@ -828,7 +831,7 @@ export default function SalesPage() {
       // Usar el total con descuento VIP para el ticket
       const ticketTotal = vipDiscount ? getTotalWithVipDiscount() : total
       printSaleTicket(saleDataForTicket, currentCart, subtotal, discountAmountCalc + vipDiscountAmount, ticketTotal, paid, change, finalInitialPayment)
-      
+
       setIsProcessing(false)  // Desbloquear después de completar
     } catch (e: any) {
       setMsg(e?.response?.data?.detail || 'Error al crear venta')
@@ -1239,68 +1242,77 @@ export default function SalesPage() {
         </div>
       </div>
 
-      {/* Modal de Confirmación */}
-      {showConfirmModal && productToAdd && (
+      {/* Modal de Confirmación de Checkout */}
+      {showConfirmModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold mb-4">Confirmar Producto</h3>
+          <div className="bg-white rounded-lg p-6 max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold mb-4">Confirmar Venta</h3>
+
+            {/* Resumen del carrito */}
             <div className="mb-4">
-              <p className="text-gray-700 mb-2">
-                <strong>Producto:</strong> {productToAdd.name}
-              </p>
-              {productToAdd.modelo && (
-                <p className="text-gray-700 mb-2">
-                  <strong>Modelo:</strong> {productToAdd.modelo}
-                </p>
-              )}
-              <p className="text-gray-700 mb-2">
-                <strong>Precio:</strong> ${parseFloat(productToAdd.price || '0').toFixed(2)}
-              </p>
-              {productToAdd.codigo && (
-                <p className="text-gray-700 mb-2">
-                  <strong>Código:</strong> {productToAdd.codigo}
-                </p>
-              )}
-              {productToAdd.quilataje && (
-                <p className="text-gray-700 mb-2">
-                  <strong>Quilataje:</strong> {productToAdd.quilataje}
-                </p>
-              )}
-              {productToAdd.talla && (
-                <p className="text-gray-700 mb-2">
-                  <strong>Talla:</strong> {productToAdd.talla}
-                </p>
-              )}
-              {productToAdd.color && (
-                <p className="text-gray-700 mb-2">
-                  <strong>Color:</strong> {productToAdd.color}
-                </p>
-              )}
-              {productToAdd.peso_gramos && (
-                <p className="text-gray-700 mb-2">
-                  <strong>Peso:</strong> {productToAdd.peso_gramos}g
-                </p>
-              )}
+              <h4 className="font-medium mb-2">Productos en el carrito:</h4>
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {cart.map((ci, index) => (
+                  <div key={ci.product.id} className="flex justify-between items-center p-2 bg-gray-50 rounded">
+                    <div>
+                      <div className="font-medium">{ci.product.name}</div>
+                      {ci.product.modelo && <div className="text-sm text-gray-600">Modelo: {ci.product.modelo}</div>}
+                      {ci.product.codigo && <div className="text-sm text-gray-600">Código: {ci.product.codigo}</div>}
+                      <div className="text-sm">Cantidad: {ci.quantity}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-medium">${(parseFloat(ci.product.price || '0') * ci.quantity).toFixed(2)}</div>
+                      {ci.discount_pct > 0 && <div className="text-sm text-red-600">Desc: {ci.discount_pct.toFixed(1)}%</div>}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
+
+            {/* Totales */}
+            <div className="border-t pt-4 mb-4">
+              <div className="flex justify-between font-medium">
+                <span>Subtotal:</span>
+                <span>${subtotal.toFixed(2)}</span>
+              </div>
+              {productDiscountTotal > 0 && (
+                <div className="flex justify-between text-red-600">
+                  <span>Descuento productos:</span>
+                  <span>-${productDiscountTotal.toFixed(2)}</span>
+                </div>
+              )}
+              {vipDiscount && (
+                <div className="flex justify-between text-red-600">
+                  <span>Descuento VIP ({vipDiscount}%):</span>
+                  <span>-${(total * parseFloat(vipDiscount) / 100).toFixed(2)}</span>
+                </div>
+              )}
+              <div className="flex justify-between font-bold text-lg border-t pt-2">
+                <span>TOTAL:</span>
+                <span>${getTotalWithVipDiscount().toFixed(2)}</span>
+              </div>
+            </div>
+
             <p className="text-gray-600 mb-6">
-              ¿Deseas agregar este producto al carrito?
+              ¿Confirmas que deseas procesar esta venta?
             </p>
+
             <div className="flex gap-3">
               <button
-                onClick={cancelAddToCart}
+                onClick={cancelCheckout}
                 className="flex-1 bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600"
               >
                 Cancelar
               </button>
               <button
-                onClick={confirmAddToCart}
-                className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700"
+                onClick={confirmCheckout}
+                className="flex-1 bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700"
               >
-                Agregar
+                Confirmar Venta
               </button>
             </div>
+          </div>
         </div>
-      </div>
       )}
 
       {/* Modal para descuento VIP */}

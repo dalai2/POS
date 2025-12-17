@@ -4,7 +4,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, condecimal
 from sqlalchemy.orm import Session
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, case
 from sqlalchemy.exc import IntegrityError
 
 from app.core.database import get_db
@@ -87,6 +87,21 @@ def list_products(
             )
     if active is not None:
         query = query.filter(Product.active == active)
+
+    # When searching, prioritize products where codigo contains the search term,
+    # ordered by code length (shorter codes first), then by other matches
+    if q:
+        qn = q.strip().lower()
+        # Order by: 1) whether codigo contains search term, 2) length of codigo, 3) product id
+        query = query.order_by(
+            case(
+                (func.lower(Product.codigo).like(f"%{qn}%"), 0),
+                else_=1
+            ),
+            func.length(Product.codigo),
+            Product.id
+        )
+
     items = query.offset(skip).limit(limit).all()
     return items
 
