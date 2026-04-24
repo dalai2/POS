@@ -743,32 +743,36 @@ export default function GestionPedidosPage() {
       </tr>
     </table>
 
-    <!-- Golden Line 2 -->
-    <div class="gold-line"></div>
+    <!-- Items Table Container with Watermark -->
+    <div style="position: relative; margin: 10px 0;">
+      <!-- Watermark -->
+      <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); opacity: 0.12; z-index: 0; pointer-events: none;">
+        <img src="${logoBase64}" alt="Watermark" style="width: 200px; height: auto; filter: grayscale(100%);" />
+      </div>
 
-    <!-- Items Table -->
-    <table>
-      <thead>
-        <tr>
-          <th style="width: 5%;">Cant.</th>
-          <th style="width: 10%;">Código</th>
-          <th style="width: 45%;">Descripción</th>
-          <th style="width: 12%;">Precio x gramo</th>
-          <th style="width: 10%;">Desc.</th>
-          <th style="width: 12%;">Importe</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td>${pedido.cantidad}</td>
-          <td>${pedido.producto?.codigo || ''}</td>
-          <td>${description}</td>
-          <td>$${pedido.precio_unitario.toFixed(2)}</td>
-          <td>$0.00</td>
-          <td>$${pedido.total.toFixed(2)}</td>
-        </tr>
-      </tbody>
-    </table>
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 5%;">Cant.</th>
+            <th style="width: 10%;">Código</th>
+            <th style="width: 45%;">Descripción</th>
+            <th style="width: 12%;">Precio x gramo</th>
+            <th style="width: 10%;">Desc.</th>
+            <th style="width: 12%;">Importe</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>${pedido.cantidad}</td>
+            <td>${pedido.producto?.codigo || ''}</td>
+            <td>${description}</td>
+            <td>$${pedido.precio_unitario.toFixed(2)}</td>
+            <td>$0.00</td>
+            <td>$${pedido.total.toFixed(2)}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
 
     <!-- Totals -->
     <div class="totals">
@@ -792,10 +796,7 @@ export default function GestionPedidosPage() {
       <div class="gold-line" style="margin-top: 20px;"></div>
     </div>
     
-    <!-- Watermark -->
-    <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; opacity: 0.12; z-index: 0; pointer-events: none;">
-      <img src="${logoBase64}" alt="Watermark" style="width: 200px; height: auto; filter: grayscale(100%);" />
-    </div>
+
   </div>
 </body></html>`
 

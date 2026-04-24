@@ -324,45 +324,48 @@ export default function SalesHistoryPage() {
     <!-- Golden Line 2 -->
     <div class="gold-line"></div>
 
-    <!-- Items Table -->
-    <table>
-      <thead>
-        <tr>
-          <th style="width: 5%;">Cant.</th>
-          <th style="width: 10%;">Código</th>
-          <th style="width: 45%;">Descripción</th>
-          <th style="width: 12%;">Precio x gramo</th>
-          <th style="width: 10%;">Desc%</th>
-          <th style="width: 12%;">Importe</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${items.map((item: any) => {
-          const discountPct = parseFloat(item.discount_pct || '0')
-          const quantity = Math.max(1, parseInt(item.quantity || '1'))
-          // Precio unitario neto (con descuento) preferentemente desde total_price/quantity; fallback a unit_price
-          const netUnit = (() => {
-            const totalPrice = parseFloat(item.total_price || 'NaN')
-            if (!Number.isNaN(totalPrice) && quantity > 0) return totalPrice / quantity
-            const up = parseFloat(item.unit_price || '0')
-            // si viene unit_price pero ya neto, será coherente con discount=0 o igual a neto
-            return up
-          })()
-          // Precio original (sin descuento) calculado desde neto y porcentaje
-          const originalUnit = discountPct > 0 && discountPct < 100 ? (netUnit / (1 - discountPct / 100)) : netUnit
-          const importe = netUnit * quantity
-          return `
+    <!-- Items Table Container with Watermark -->
+    <div style="position: relative; margin: 6px 0;">
+      <!-- Watermark -->
+      <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); opacity: 0.12; z-index: 0; pointer-events: none;">
+        <img src="${logoBase64}" alt="Watermark" style="width: 200px; height: auto; filter: grayscale(100%);" />
+      </div>
+
+      <table>
+        <thead>
           <tr>
-            <td>${quantity}</td>
-            <td>${item.codigo || ''}</td>
-            <td>${item.name || 'Producto sin descripción'}</td>
-            <td>$${originalUnit.toFixed(2)}</td>
-            <td>${discountPct > 0 ? discountPct.toFixed(1) + '%' : '-'}</td>
-            <td>$${importe.toFixed(2)}</td>
+            <th style="width: 5%;">Cant.</th>
+            <th style="width: 10%;">Código</th>
+            <th style="width: 45%;">Descripción</th>
+            <th style="width: 12%;">Precio x gramo</th>
+            <th style="width: 10%;">Desc%</th>
+            <th style="width: 12%;">Importe</th>
           </tr>
-        `}).join('')}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          ${items.map((item: any) => {
+            const discountPct = parseFloat(item.discount_pct || '0')
+            const quantity = Math.max(1, parseInt(item.quantity || '1'))
+            const netUnit = (() => {
+              const totalPrice = parseFloat(item.total_price || 'NaN')
+              if (!Number.isNaN(totalPrice) && quantity > 0) return totalPrice / quantity
+              return parseFloat(item.unit_price || '0')
+            })()
+            const originalUnit = discountPct > 0 && discountPct < 100 ? (netUnit / (1 - discountPct / 100)) : netUnit
+            const importe = netUnit * quantity
+            return `
+            <tr>
+              <td>${quantity}</td>
+              <td>${item.codigo || ''}</td>
+              <td>${item.name || 'Producto sin descripción'}</td>
+              <td>$${originalUnit.toFixed(2)}</td>
+              <td>${discountPct > 0 ? discountPct.toFixed(1) + '%' : '-'}</td>
+              <td>$${importe.toFixed(2)}</td>
+            </tr>
+          `}).join('')}
+        </tbody>
+      </table>
+    </div>
 
     <!-- Totals -->
     <div class="totals">
@@ -389,10 +392,7 @@ export default function SalesHistoryPage() {
       <div class="gold-line" style="margin-top: 20px;"></div>
     </div>
     
-    <!-- Watermark -->
-    <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; opacity: 0.12; z-index: 0; pointer-events: none;">
-      <img src="${logoBase64}" alt="Watermark" style="width: 200px; height: auto; filter: grayscale(100%);" />
-    </div>
+
   </div>
 </body></html>`
 

@@ -589,31 +589,38 @@ export default function SalesPage() {
     <!-- Golden Line 2 -->
     <div class="gold-line"></div>
 
-    <!-- Items Table -->
-    <table>
-      <thead>
-        <tr>
-          <th style="width: 5%;">Cant.</th>
-          <th style="width: 10%;">Código</th>
-          <th style="width: 45%;">Descripción</th>
-          <th style="width: 12%;">Precio x gramo</th>
-          <th style="width: 10%;">Desc%</th>
-          <th style="width: 12%;">Importe</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${items.map(item => `
+    <!-- Items Table Container with Watermark -->
+    <div style="position: relative; margin: 6px 0;">
+      <!-- Watermark -->
+      <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); opacity: 0.12; z-index: 0; pointer-events: none;">
+        <img src="${logoBase64}" alt="Watermark" style="width: 200px; height: auto; filter: grayscale(100%);" />
+      </div>
+
+      <table>
+        <thead>
           <tr>
-            <td>${item.quantity}</td>
-            <td>${item.code}</td>
-            <td>${item.name}</td>
-            <td>$${item.price.toFixed(2)}</td>
-            <td>${item.discount_pct > 0 ? item.discount_pct.toFixed(1) + '%' : '-'}</td>
-            <td>$${item.total.toFixed(2)}</td>
+            <th style="width: 5%;">Cant.</th>
+            <th style="width: 10%;">Código</th>
+            <th style="width: 45%;">Descripción</th>
+            <th style="width: 12%;">Precio x gramo</th>
+            <th style="width: 10%;">Desc%</th>
+            <th style="width: 12%;">Importe</th>
           </tr>
-        `).join('')}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          ${items.map(item => `
+            <tr>
+              <td>${item.quantity}</td>
+              <td>${item.code}</td>
+              <td>${item.name}</td>
+              <td>$${item.price.toFixed(2)}</td>
+              <td>${item.discount_pct > 0 ? item.discount_pct.toFixed(1) + '%' : '-'}</td>
+              <td>$${item.total.toFixed(2)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
 
     <!-- Totals -->
     <div class="totals">
@@ -642,10 +649,7 @@ export default function SalesPage() {
       <div class="gold-line" style="margin-top: 20px;"></div>
     </div>
     
-    <!-- Watermark -->
-    <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; opacity: 0.12; z-index: 0; pointer-events: none;">
-      <img src="${logoBase64}" alt="Watermark" style="width: 200px; height: auto; filter: grayscale(100%);" />
-    </div>
+
   </div>
 </body></html>`
 

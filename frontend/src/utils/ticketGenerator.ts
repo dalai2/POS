@@ -650,22 +650,29 @@ export const generateApartadoPaymentTicketHTML = (params: {
     <!-- Golden Line 2 -->
     <div class="gold-line"></div>
 
-    <!-- Items Table -->
-    <table>
-      <thead>
-        <tr>
-          <th style="width: 5%;">Cant.</th>
-          <th style="width: 10%;">Código</th>
-          <th style="width: 45%;">Descripción</th>
-          <th style="width: 12%;">Precio x gramo</th>
-          <th style="width: 10%;">Desc%</th>
-          <th style="width: 12%;">Importe</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${itemsHTML}
-      </tbody>
-    </table>
+    <!-- Items Table Container with Watermark -->
+    <div style="position: relative; margin: 10px 0;">
+      <!-- Watermark -->
+      <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); opacity: 0.12; z-index: 0; pointer-events: none;">
+        <img src="${logoBase64}" alt="Watermark" style="width: 200px; height: auto; filter: grayscale(100%);" />
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 5%;">Cant.</th>
+            <th style="width: 10%;">Código</th>
+            <th style="width: 45%;">Descripción</th>
+            <th style="width: 12%;">Precio x gramo</th>
+            <th style="width: 10%;">Desc%</th>
+            <th style="width: 12%;">Importe</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${itemsHTML}
+        </tbody>
+      </table>
+    </div>
 
     <!-- Totals -->
     <div class="totals">
@@ -695,10 +702,7 @@ export const generateApartadoPaymentTicketHTML = (params: {
       <div class="gold-line" style="margin-top: 20px;"></div>
     </div>
     
-    <!-- Watermark -->
-    <div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); opacity: 0.2; z-index: 0; pointer-events: none;">
-      <img src="${logoBase64}" alt="Watermark" style="width: 200px; height: auto; filter: grayscale(100%);" />
-    </div>
+
   </div>
 </body></html>`
 }
