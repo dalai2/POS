@@ -552,14 +552,15 @@ export default function GestionPedidosPage() {
       size: 8.5in 5.5in;
       margin: 0;
     }
-    html, body {
-      width: 100%;
+    body {
+      width: 5.5in;
+      height: 8.5in;
       margin: 0;
-      padding: 0;
+      padding: 0.2in;
       font-family: Arial, sans-serif;
-      font-size: 9px;
-    }
-    .gold-line {
+      font-size: 11px;
+      box-sizing: border-box;
+    }.gold-line {
       background: linear-gradient(to right, #000000 0%, #fff0bb 2%, #ffdd55 5%, #ffdd55 30%, #000000 35%, #fff0bb 50%, #ffdd55 65%, #000000 70%, #fff0bb 95%, #000000 100%) !important;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
@@ -574,14 +575,14 @@ export default function GestionPedidosPage() {
   }
   body {
     margin: 0;
-    padding: 1mm 4mm 0 4mm;
+    padding: 0.2in;
     font-family: Arial, sans-serif;
-    font-size: 9px;
+    font-size: 11px;
     color: #000;
-    width: 8.2in;
-    display: flex;
-    flex-direction: column;
-    page-break-after: avoid;
+    width: 5.5in;
+    height: 8.5in;
+    display: block;
+    box-sizing: border-box;
   }
   .gold-line { 
     background: linear-gradient(to right, #000000 0%, #fff0bb 2%, #ffdd55 5%, #ffdd55 30%, #000000 35%, #fff0bb 50%, #ffdd55 65%, #000000 70%, #fff0bb 95%, #000000 100%) !important; 
@@ -695,7 +696,7 @@ export default function GestionPedidosPage() {
     <div class="header-section">
       <!-- Company Logo -->
       <div class="logo-container">
-        <img src="${logoBase64}" alt="Logo" style="max-width: 132px; max-height: 68px; display: block;" onerror="this.style.display='none'" />
+        <img src="${logoBase64}" alt="Logo" style="max-width: 175px; max-height: 90px; display: block;" onerror="this.style.display='none'" />
       </div>
 
       <!-- Header Info -->

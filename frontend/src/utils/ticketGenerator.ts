@@ -153,15 +153,17 @@ export const generatePedidoTicketHTML = (params: {
 <style>
   @media print {
     @page {
-      size: A4;
+      size: 5.5in 8.5in;
       margin: 0;
     }
     body {
       margin: 0;
-      padding: 0;
+      padding: 0.2in;
       font-family: Arial, sans-serif;
-      font-size: 12px;
-      height: 100vh;
+      font-size: 11px;
+      width: 5.5in;
+      height: 8.5in;
+      box-sizing: border-box;
     }
     .gold-line {
       background: linear-gradient(to right, #000000 0%, #fff0bb 2%, #ffdd55 5%, #ffdd55 30%, #000000 35%, #fff0bb 50%, #ffdd55 65%, #000000 70%, #fff0bb 95%, #000000 100%) !important;
@@ -177,16 +179,15 @@ export const generatePedidoTicketHTML = (params: {
     }
   }
   body {
-    margin: 0 auto;
-    padding: 10px;
+    margin: 0;
+    padding: 0.2in;
     font-family: Arial, sans-serif;
-    font-size: 12px;
+    font-size: 11px;
     color: #000;
-    width: 210mm;
-    height: 297mm;
-    display: flex;
-    flex-direction: column;
-    page-break-after: avoid;
+    width: 5.5in;
+    height: 8.5in;
+    display: block;
+    box-sizing: border-box;
   }
   .gold-line { 
     background: linear-gradient(to right, #000000 0%, #fff0bb 2%, #ffdd55 5%, #ffdd55 30%, #000000 35%, #fff0bb 50%, #ffdd55 65%, #000000 70%, #fff0bb 95%, #000000 100%) !important; 
@@ -283,7 +284,7 @@ export const generatePedidoTicketHTML = (params: {
     <div class="header-section">
       <!-- Company Logo -->
       <div class="logo-container">
-        <img src="${logoBase64}" alt="Logo" style="max-width: 350px; max-height: 180px; display: block;" onerror="this.style.display='none'" />
+        <img src="${logoBase64}" alt="Logo" style="max-width: 175px; max-height: 90px; display: block;" onerror="this.style.display='none'" />
       </div>
 
       <!-- Header Info -->
@@ -473,15 +474,15 @@ export const generateApartadoPaymentTicketHTML = (params: {
 <style>
   @media print {
     @page {
-      size: A4;
-      margin: 0;
+      size: 5.5in 8.5in;
+      margin: 0.5in;
     }
     body {
       margin: 0;
       padding: 0;
       font-family: Arial, sans-serif;
-      font-size: 12px;
-      height: 100vh;
+      font-size: 11px;
+      width: 4.5in;
     }
     .gold-line {
       background: linear-gradient(to right, #000000 0%, #fff0bb 2%, #ffdd55 5%, #ffdd55 30%, #000000 35%, #fff0bb 50%, #ffdd55 65%, #000000 70%, #fff0bb 95%, #000000 100%) !important;
@@ -498,12 +499,11 @@ export const generateApartadoPaymentTicketHTML = (params: {
   }
   body {
     margin: 0 auto;
-    padding: 10px;
+    padding: 0;
     font-family: Arial, sans-serif;
-    font-size: 12px;
+    font-size: 11px;
     color: #000;
-    width: 210mm;
-    height: 297mm;
+    width: 4.5in;
     display: flex;
     flex-direction: column;
     page-break-after: avoid;
@@ -603,7 +603,7 @@ export const generateApartadoPaymentTicketHTML = (params: {
     <div class="header-section">
       <!-- Company Logo -->
       <div class="logo-container">
-        <img src="${logoBase64}" alt="Logo" style="max-width: 350px; max-height: 180px; display: block;" onerror="this.style.display='none'" />
+        <img src="${logoBase64}" alt="Logo" style="max-width: 175px; max-height: 90px; display: block;" onerror="this.style.display='none'" />
       </div>
 
       <!-- Header Info -->
