@@ -549,15 +549,15 @@ export default function GestionPedidosPage() {
 <style>
   @media print {
     @page {
-      size: A4;
+      size: 8.5in 5.5in;
       margin: 0;
     }
-    body {
+    html, body {
+      width: 100%;
       margin: 0;
       padding: 0;
       font-family: Arial, sans-serif;
-      font-size: 12px;
-      height: 100vh;
+      font-size: 9px;
     }
     .gold-line {
       background: linear-gradient(to right, #000000 0%, #fff0bb 2%, #ffdd55 5%, #ffdd55 30%, #000000 35%, #fff0bb 50%, #ffdd55 65%, #000000 70%, #fff0bb 95%, #000000 100%) !important;
@@ -573,34 +573,33 @@ export default function GestionPedidosPage() {
     }
   }
   body {
-    margin: 0 auto;
-    padding: 10px;
+    margin: 0;
+    padding: 1mm 4mm 0 4mm;
     font-family: Arial, sans-serif;
-    font-size: 12px;
+    font-size: 9px;
     color: #000;
-    width: 210mm;
-    height: 297mm;
+    width: 8.2in;
     display: flex;
     flex-direction: column;
     page-break-after: avoid;
   }
   .gold-line { 
     background: linear-gradient(to right, #000000 0%, #fff0bb 2%, #ffdd55 5%, #ffdd55 30%, #000000 35%, #fff0bb 50%, #ffdd55 65%, #000000 70%, #fff0bb 95%, #000000 100%) !important; 
-    height: 4px; 
-    margin: 10px 0;
+    height: 3px; 
+    margin: 8px 0;
     border: none;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
   .logo-container {
     text-align: left;
-    margin-bottom: 5px;
+    margin-bottom: 3px;
   }
   .header-section {
     display: flex;
     align-items: flex-start;
-    gap: 10px;
-    margin-bottom: 10px;
+    gap: 8px;
+    margin-bottom: 6px;
   }
   .header-section .logo-container {
     flex-shrink: 0;
@@ -610,33 +609,33 @@ export default function GestionPedidosPage() {
     margin-top: 0;
   }
   .company-name {
-    font-size: 24px;
+    font-size: 14px;
     font-weight: bold;
     color: #8B7355;
     margin-bottom: 3px;
   }
   .company-subtitle {
-    font-size: 14px;
+    font-size: 8px;
     font-weight: normal;
     color: #8B7355;
     text-align: center;
     margin-top: -5px;
   }
   .header-info {
-    font-size: 9px;
-    margin-top: 10px;
+    font-size: 7px;
+    margin-top: 4px;
     text-align: right;
   }
   .header-info div {
     margin-bottom: 2px;
   }
   .customer-info {
-    font-size: 11px;
-    margin-top: 15px;
+    font-size: 8px;
+    margin-top: 8px;
     width: 100%;
   }
   .customer-info td {
-    padding: 2px 4px;
+    padding: 2px 3px;
     border: 1px solid #ddd;
   }
   .customer-info td:first-child {
@@ -646,32 +645,32 @@ export default function GestionPedidosPage() {
   table {
     width: 100%;
     border-collapse: collapse;
-    margin: 10px 0;
+    margin: 6px 0;
   }
   th {
     background-color: #fff0bb;
-    padding: 3px 4px;
+    padding: 2px 3px;
     text-align: left;
-    font-size: 10px;
+    font-size: 8px;
     font-weight: bold;
   }
   td {
-    padding: 2px 4px;
-    font-size: 10px;
+    padding: 2px 3px;
+    font-size: 8px;
   }
   .totals {
     text-align: right;
-    font-size: 11px;
-    margin-top: 15px;
+    font-size: 8px;
+    margin-top: 8px;
   }
   .footer-info {
-    margin-top: 20px;
-    font-size: 9px;
+    margin-top: 10px;
+    font-size: 7px;
   }
   .policy {
     font-weight: bold;
     text-transform: uppercase;
-    margin-top: 10px;
+    margin-top: 8px;
   }
   img { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .container {
@@ -681,12 +680,13 @@ export default function GestionPedidosPage() {
     display: flex;
     flex-direction: column;
     page-break-inside: avoid;
+    position: relative;
   }
   .main-content {
     flex: 1;
   }
   .footer-section {
-    margin-top: auto;
+    margin-top: 6px;
   }
 </style></head>
 <body>
@@ -695,7 +695,7 @@ export default function GestionPedidosPage() {
     <div class="header-section">
       <!-- Company Logo -->
       <div class="logo-container">
-        <img src="${logoBase64}" alt="Logo" style="max-width: 350px; max-height: 180px; display: block;" onerror="this.style.display='none'" />
+        <img src="${logoBase64}" alt="Logo" style="max-width: 132px; max-height: 68px; display: block;" onerror="this.style.display='none'" />
       </div>
 
       <!-- Header Info -->
@@ -777,7 +777,7 @@ export default function GestionPedidosPage() {
     </div>
     
     <!-- Watermark -->
-    <div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); opacity: 0.2; z-index: 0; pointer-events: none;">
+    <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; opacity: 0.12; z-index: 0; pointer-events: none;">
       <img src="${logoBase64}" alt="Watermark" style="width: 200px; height: auto; filter: grayscale(100%);" />
     </div>
   </div>
