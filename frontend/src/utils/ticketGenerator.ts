@@ -283,7 +283,7 @@ export const generatePedidoTicketHTML = (params: {
     <div class="header-section">
       <!-- Company Logo -->
       <div class="logo-container">
-        <img src="${logoBase64}" alt="Logo" style="max-width: 315px; max-height: 162px; display: block;" onerror="this.style.display='none'" />
+        <img src="${logoBase64}" alt="Logo" style="max-width: 350px; max-height: 180px; display: block;" onerror="this.style.display='none'" />
       </div>
 
       <!-- Header Info -->
@@ -291,7 +291,7 @@ export const generatePedidoTicketHTML = (params: {
         <div><strong>FOLIO DE PEDIDO :</strong> ${cleanFolio(pedido.folio_pedido) || 'PED-' + String(pedido.id).padStart(6, '0')}</div>
         <div><strong>FECHA PEDIDO :</strong> ${formattedDate}</div>
         <div><strong>MÉTODO DE PAGO :</strong> ${paymentData ? (paymentData.method.toUpperCase() === 'MIXTO' ? 'EFECTIVO / TARJETA' : (paymentData.method.toUpperCase() === 'CASH' || paymentData.method.toUpperCase() === 'EFECTIVO' ? 'EFECTIVO' : (paymentData.method.toUpperCase() === 'CARD' || paymentData.method.toUpperCase() === 'TARJETA' ? 'TARJETA' : 'N/A'))) : 'N/A'}</div>
-        <div>HIDALGO #207 ZONA CENTRO C.P: 37000. LEÓN, GTO.</div>
+        <div>HIDALGO #112 ZONA CENTRO, LOCAL 12, 23 Y 24 C.P: 37000. LEÓN, GTO.</div>
         <div>WhatsApp: 4776621788</div>
       </div>
     </div>
@@ -603,7 +603,7 @@ export const generateApartadoPaymentTicketHTML = (params: {
     <div class="header-section">
       <!-- Company Logo -->
       <div class="logo-container">
-        <img src="${logoBase64}" alt="Logo" style="max-width: 315px; max-height: 162px; display: block;" onerror="this.style.display='none'" />
+        <img src="${logoBase64}" alt="Logo" style="max-width: 350px; max-height: 180px; display: block;" onerror="this.style.display='none'" />
       </div>
 
       <!-- Header Info -->
@@ -611,7 +611,7 @@ export const generateApartadoPaymentTicketHTML = (params: {
         <div><strong>FOLIO DE APARTADO :</strong> ${cleanFolio(sale.folio_apartado) || 'AP-' + String(sale.id).padStart(6, '0')}</div>
         <div><strong>FECHA VENTA :</strong> ${formattedDate}</div>
         <div><strong>MÉTODO DE PAGO :</strong> ${paymentData.method.toUpperCase() === 'MIXTO' ? 'EFECTIVO / TARJETA' : (paymentData.method.toUpperCase() === 'CASH' || paymentData.method.toUpperCase() === 'EFECTIVO' ? 'EFECTIVO' : (paymentData.method.toUpperCase() === 'CARD' || paymentData.method.toUpperCase() === 'TARJETA' ? 'TARJETA' : 'N/A'))}</div>
-        <div>HIDALGO #207 ZONA CENTRO C.P: 37000. LEÓN, GTO.</div>
+        <div>HIDALGO #112 ZONA CENTRO, LOCAL 12, 23 Y 24 C.P: 37000. LEÓN, GTO.</div>
         <div>WhatsApp: 4776621788</div>
       </div>
     </div>
