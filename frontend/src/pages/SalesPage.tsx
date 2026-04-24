@@ -394,16 +394,25 @@ export default function SalesPage() {
   @media print {
     @page {
       size: 5.5in 8.5in;
-      margin: 0;
+      margin: 0 !important;
+    }
+    html, body {
+      margin: 0 !important;
+      padding: 0 !important;
+      width: 100%;
+      height: 100%;
     }
     body {
-      margin: 0;
-      padding: 0.2in;
       font-family: Arial, sans-serif;
       font-size: 11px;
+      box-sizing: border-box;
+    }
+    .container {
+      padding: 0.1in;
       width: 5.5in;
       height: 8.5in;
       box-sizing: border-box;
+      margin: 0;
     }
     .gold-line {
       background: linear-gradient(to right, #000000 0%, #fff0bb 2%, #ffdd55 5%, #ffdd55 30%, #000000 35%, #fff0bb 50%, #ffdd55 65%, #000000 70%, #fff0bb 95%, #000000 100%) !important;
@@ -419,14 +428,20 @@ export default function SalesPage() {
     }
   }
   body {
-    margin: 0;
-    padding: 0.2in;
+    margin: 0 !important;
+    padding: 0 !important;
     font-family: Arial, sans-serif;
     font-size: 11px;
     color: #000;
+    width: 100%;
+    height: 100%;
+    display: block;
+    box-sizing: border-box;
+  }
+  .container {
+    padding: 0.1in;
     width: 5.5in;
     height: 8.5in;
-    display: block;
     box-sizing: border-box;
   }
   .gold-line { 
