@@ -23,6 +23,7 @@ class Apartado(Base):
     utilidad = Column(Numeric(10, 2), nullable=True, default=0)
     total_cost = Column(Numeric(10, 2), nullable=True, default=0)
     folio_apartado = Column(String(50), nullable=True, index=True)
+    descuento_vip_pct = Column(Numeric(5, 2), nullable=False, default=0)
 
     customer_name = Column(String(255), nullable=True)
     customer_phone = Column(String(50), nullable=True)

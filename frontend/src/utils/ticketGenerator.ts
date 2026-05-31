@@ -206,21 +206,21 @@ export const generatePedidoTicketHTML = (params: {
   }
   .gold-line { 
     background: linear-gradient(to right, #000000 0%, #fff0bb 2%, #ffdd55 5%, #ffdd55 30%, #000000 35%, #fff0bb 50%, #ffdd55 65%, #000000 70%, #fff0bb 95%, #000000 100%) !important; 
-    height: 4px; 
-    margin: 10px 0;
+    height: 3px; 
+    margin: 8px 0;
     border: none;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
   .logo-container {
     text-align: left;
-    margin-bottom: 5px;
+    margin-bottom: 3px;
   }
   .header-section {
     display: flex;
     align-items: flex-start;
-    gap: 10px;
-    margin-bottom: 10px;
+    gap: 8px;
+    margin-bottom: 6px;
   }
   .header-section .logo-container {
     flex-shrink: 0;
@@ -229,21 +229,34 @@ export const generatePedidoTicketHTML = (params: {
     margin-left: auto;
     margin-top: 0;
   }
+  .company-name {
+    font-size: 14px;
+    font-weight: bold;
+    color: #8B7355;
+    margin-bottom: 3px;
+  }
+  .company-subtitle {
+    font-size: 8px;
+    font-weight: normal;
+    color: #8B7355;
+    text-align: center;
+    margin-top: -5px;
+  }
   .header-info {
-    font-size: 9px;
-    margin-top: 10px;
+    font-size: 7px;
+    margin-top: 4px;
     text-align: right;
   }
   .header-info div {
     margin-bottom: 2px;
   }
   .customer-info {
-    font-size: 11px;
-    margin-top: 15px;
+    font-size: 8px;
+    margin-top: 8px;
     width: 100%;
   }
   .customer-info td {
-    padding: 2px 4px;
+    padding: 2px 3px;
     border: 1px solid #ddd;
   }
   .customer-info td:first-child {
@@ -253,32 +266,32 @@ export const generatePedidoTicketHTML = (params: {
   table {
     width: 100%;
     border-collapse: collapse;
-    margin: 10px 0;
+    margin: 6px 0;
   }
   th {
     background-color: #fff0bb;
-    padding: 3px 4px;
+    padding: 2px 3px;
     text-align: left;
-    font-size: 10px;
+    font-size: 8px;
     font-weight: bold;
   }
   td {
-    padding: 2px 4px;
-    font-size: 10px;
+    padding: 2px 3px;
+    font-size: 8px;
   }
   .totals {
     text-align: right;
-    font-size: 11px;
-    margin-top: 15px;
+    font-size: 8px;
+    margin-top: 8px;
   }
   .footer-info {
-    margin-top: 20px;
-    font-size: 9px;
+    margin-top: 10px;
+    font-size: 7px;
   }
   .policy {
     font-weight: bold;
     text-transform: uppercase;
-    margin-top: 10px;
+    margin-top: 8px;
   }
   img { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .container {
@@ -288,9 +301,13 @@ export const generatePedidoTicketHTML = (params: {
     display: flex;
     flex-direction: column;
     page-break-inside: avoid;
+    position: relative;
+  }
+  .main-content {
+    flex: 1;
   }
   .footer-section {
-    margin-top: auto;
+    margin-top: 6px;
   }
 </style></head>
 <body>
@@ -307,7 +324,7 @@ export const generatePedidoTicketHTML = (params: {
         <div><strong>FOLIO DE PEDIDO :</strong> ${cleanFolio(pedido.folio_pedido) || 'PED-' + String(pedido.id).padStart(6, '0')}</div>
         <div><strong>FECHA PEDIDO :</strong> ${formattedDate}</div>
         <div><strong>MÉTODO DE PAGO :</strong> ${paymentData ? (paymentData.method.toUpperCase() === 'MIXTO' ? 'EFECTIVO / TARJETA' : (paymentData.method.toUpperCase() === 'CASH' || paymentData.method.toUpperCase() === 'EFECTIVO' ? 'EFECTIVO' : (paymentData.method.toUpperCase() === 'CARD' || paymentData.method.toUpperCase() === 'TARJETA' ? 'TARJETA' : 'N/A'))) : 'N/A'}</div>
-        <div>HIDALGO #112 ZONA CENTRO, LOCAL 12, 23 Y 24 C.P: 37000. LEÓN, GTO.</div>
+        <div>HIDALGO #207 ZONA CENTRO C.P: 37000. LEÓN, GTO.</div>
         <div>WhatsApp: 4776621788</div>
       </div>
     </div>
@@ -483,6 +500,11 @@ export const generateApartadoPaymentTicketHTML = (params: {
   })
 
   const saleTotal = Number(sale.total)
+  const saleSubtotal = Number(sale.subtotal || saleTotal)
+  const generalDiscount = Number(sale.discount_amount || 0)
+  const vipPct = Number(sale.descuento_vip_pct || 0)
+  const subtotalBeforeVip = saleSubtotal - generalDiscount
+  const vipAmount = vipPct > 0 ? (subtotalBeforeVip * vipPct / 100) : 0
 
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>Ticket Abono ${sale.id}</title>
@@ -490,14 +512,25 @@ export const generateApartadoPaymentTicketHTML = (params: {
   @media print {
     @page {
       size: 5.5in 8.5in;
-      margin: 0.5in;
+      margin: 0 !important;
+    }
+    html, body {
+      margin: 0 !important;
+      padding: 0 !important;
+      width: 100%;
+      height: 100%;
     }
     body {
-      margin: 0;
-      padding: 0;
       font-family: Arial, sans-serif;
       font-size: 11px;
-      width: 4.5in;
+      box-sizing: border-box;
+    }
+    .container {
+      padding: 0.1in;
+      width: 5.5in;
+      height: 8.5in;
+      box-sizing: border-box;
+      margin: 0;
     }
     .gold-line {
       background: linear-gradient(to right, #000000 0%, #fff0bb 2%, #ffdd55 5%, #ffdd55 30%, #000000 35%, #fff0bb 50%, #ffdd55 65%, #000000 70%, #fff0bb 95%, #000000 100%) !important;
@@ -513,33 +546,39 @@ export const generateApartadoPaymentTicketHTML = (params: {
     }
   }
   body {
-    margin: 0 auto;
-    padding: 0;
+    margin: 0 !important;
+    padding: 0 !important;
     font-family: Arial, sans-serif;
     font-size: 11px;
     color: #000;
-    width: 4.5in;
-    display: flex;
-    flex-direction: column;
-    page-break-after: avoid;
+    width: 100%;
+    height: 100%;
+    display: block;
+    box-sizing: border-box;
+  }
+  .container {
+    padding: 0.1in;
+    width: 5.5in;
+    height: 8.5in;
+    box-sizing: border-box;
   }
   .gold-line { 
     background: linear-gradient(to right, #000000 0%, #fff0bb 2%, #ffdd55 5%, #ffdd55 30%, #000000 35%, #fff0bb 50%, #ffdd55 65%, #000000 70%, #fff0bb 95%, #000000 100%) !important; 
-    height: 4px; 
-    margin: 10px 0;
+    height: 3px; 
+    margin: 8px 0;
     border: none;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
   .logo-container {
     text-align: left;
-    margin-bottom: 5px;
+    margin-bottom: 3px;
   }
   .header-section {
     display: flex;
     align-items: flex-start;
-    gap: 10px;
-    margin-bottom: 10px;
+    gap: 8px;
+    margin-bottom: 6px;
   }
   .header-section .logo-container {
     flex-shrink: 0;
@@ -548,21 +587,34 @@ export const generateApartadoPaymentTicketHTML = (params: {
     margin-left: auto;
     margin-top: 0;
   }
+  .company-name {
+    font-size: 14px;
+    font-weight: bold;
+    color: #8B7355;
+    margin-bottom: 3px;
+  }
+  .company-subtitle {
+    font-size: 8px;
+    font-weight: normal;
+    color: #8B7355;
+    text-align: center;
+    margin-top: -5px;
+  }
   .header-info {
-    font-size: 9px;
-    margin-top: 10px;
+    font-size: 7px;
+    margin-top: 4px;
     text-align: right;
   }
   .header-info div {
     margin-bottom: 2px;
   }
   .customer-info {
-    font-size: 11px;
-    margin-top: 15px;
+    font-size: 8px;
+    margin-top: 8px;
     width: 100%;
   }
   .customer-info td {
-    padding: 2px 4px;
+    padding: 2px 3px;
     border: 1px solid #ddd;
   }
   .customer-info td:first-child {
@@ -572,32 +624,32 @@ export const generateApartadoPaymentTicketHTML = (params: {
   table {
     width: 100%;
     border-collapse: collapse;
-    margin: 10px 0;
+    margin: 6px 0;
   }
   th {
     background-color: #fff0bb;
-    padding: 3px 4px;
+    padding: 2px 3px;
     text-align: left;
-    font-size: 10px;
+    font-size: 8px;
     font-weight: bold;
   }
   td {
-    padding: 2px 4px;
-    font-size: 10px;
+    padding: 2px 3px;
+    font-size: 8px;
   }
   .totals {
     text-align: right;
-    font-size: 11px;
-    margin-top: 15px;
+    font-size: 8px;
+    margin-top: 8px;
   }
   .footer-info {
-    margin-top: 20px;
-    font-size: 9px;
+    margin-top: 10px;
+    font-size: 7px;
   }
   .policy {
     font-weight: bold;
     text-transform: uppercase;
-    margin-top: 10px;
+    margin-top: 8px;
   }
   img { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .container {
@@ -607,9 +659,13 @@ export const generateApartadoPaymentTicketHTML = (params: {
     display: flex;
     flex-direction: column;
     page-break-inside: avoid;
+    position: relative;
+  }
+  .main-content {
+    flex: 1;
   }
   .footer-section {
-    margin-top: auto;
+    margin-top: 6px;
   }
 </style></head>
 <body>
@@ -626,7 +682,7 @@ export const generateApartadoPaymentTicketHTML = (params: {
         <div><strong>FOLIO DE APARTADO :</strong> ${cleanFolio(sale.folio_apartado) || 'AP-' + String(sale.id).padStart(6, '0')}</div>
         <div><strong>FECHA VENTA :</strong> ${formattedDate}</div>
         <div><strong>MÉTODO DE PAGO :</strong> ${paymentData.method.toUpperCase() === 'MIXTO' ? 'EFECTIVO / TARJETA' : (paymentData.method.toUpperCase() === 'CASH' || paymentData.method.toUpperCase() === 'EFECTIVO' ? 'EFECTIVO' : (paymentData.method.toUpperCase() === 'CARD' || paymentData.method.toUpperCase() === 'TARJETA' ? 'TARJETA' : 'N/A'))}</div>
-        <div>HIDALGO #112 ZONA CENTRO, LOCAL 12, 23 Y 24 C.P: 37000. LEÓN, GTO.</div>
+        <div>HIDALGO #207 ZONA CENTRO C.P: 37000. LEÓN, GTO.</div>
         <div>WhatsApp: 4776621788</div>
       </div>
     </div>
@@ -651,7 +707,7 @@ export const generateApartadoPaymentTicketHTML = (params: {
     <div class="gold-line"></div>
 
     <!-- Items Table Container with Watermark -->
-    <div style="position: relative; margin: 10px 0;">
+    <div style="position: relative; margin: 6px 0;">
       <!-- Watermark -->
       <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); opacity: 0.12; z-index: 0; pointer-events: none;">
         <img src="${logoBase64}" alt="Watermark" style="width: 200px; height: auto; filter: grayscale(100%);" />
@@ -676,6 +732,9 @@ export const generateApartadoPaymentTicketHTML = (params: {
 
     <!-- Totals -->
     <div class="totals">
+      <div><strong>SUBTOTAL :</strong> $${saleSubtotal.toFixed(2)}</div>
+      ${generalDiscount > 0 ? `<div><strong>DESCUENTO :</strong> -$${generalDiscount.toFixed(2)}</div>` : ''}
+      ${vipPct > 0 ? `<div><strong>DESCUENTO VIP (-${vipPct.toFixed(0)}%) :</strong> -$${vipAmount.toFixed(2)}</div>` : ''}
       <div><strong>TOTAL :</strong> $${saleTotal.toFixed(2)}</div>
       <div><strong>PAGADO PREVIO :</strong> $${paymentData.previousPaid.toFixed(2)}</div>
       <div><strong>ABONO ACTUAL :</strong> $${paymentData.amount.toFixed(2)} (${paymentData.method.toUpperCase()})</div>

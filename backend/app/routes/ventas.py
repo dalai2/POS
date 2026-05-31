@@ -165,6 +165,7 @@ class SaleOut(BaseModel):
     total_cost: condecimal(max_digits=10, decimal_places=2) | None = None
     folio_venta: str | None = None  # Folio único para ventas de contado
     folio_apartado: str | None = None  # Folio único para apartados (legacy)
+    descuento_vip_pct: float | None = None
 
     # Credit sale fields
     customer_name: str | None = None
@@ -201,6 +202,7 @@ async def create_sale(
     customer_phone = body.get('customer_phone')
     customer_address = body.get('customer_address')
     total_override = body.get('total')  # Total opcional para sobrescribir cálculo automático
+    descuento_vip_pct_val = body.get('descuento_vip_pct', 0)
 
     if not items:
         raise HTTPException(status_code=400, detail="No hay artículos en la venta")
@@ -281,6 +283,7 @@ async def create_sale(
             customer_phone=customer_phone,
             customer_address=customer_address,
             folio_venta=folio_venta,  # Asignar folio al crear
+            descuento_vip_pct=Decimal(str(descuento_vip_pct_val)).quantize(Decimal("0.01")),
         )
         db.add(venta)
         upsert_customer(db, tenant.id, customer_name, customer_phone)
@@ -335,6 +338,7 @@ async def create_sale(
             customer_name=venta.customer_name,
             customer_phone=venta.customer_phone,
             customer_address=venta.customer_address,
+            descuento_vip_pct=float(venta.descuento_vip_pct) if venta.descuento_vip_pct is not None else 0,
             amount_paid=paid,
             payments=payments_list
         )
@@ -388,6 +392,7 @@ def return_sale(
             customer_name=orig_venta.customer_name,
             customer_phone=orig_venta.customer_phone,
             customer_address=orig_venta.customer_address,
+            descuento_vip_pct=orig_venta.descuento_vip_pct,
         )
         db.add(ret)
         db.flush()
@@ -438,6 +443,7 @@ def return_sale(
             customer_phone=ret.customer_phone,
             customer_address=ret.customer_address,
             folio_venta=ret.folio_venta,
+            descuento_vip_pct=float(ret.descuento_vip_pct) if ret.descuento_vip_pct is not None else 0,
             amount_paid=0,
             payments=[]
         )
@@ -543,6 +549,7 @@ def get_sale(
             customer_name=cont.customer_name,
             customer_phone=cont.customer_phone,
             customer_address=cont.customer_address,
+            descuento_vip_pct=float(cont.descuento_vip_pct) if cont.descuento_vip_pct is not None else 0,
             payments=payments_list
         )
     ap = db.query(Apartado).filter(Apartado.id == sale_id, Apartado.tenant_id == tenant.id).first()
@@ -569,6 +576,7 @@ def get_sale(
             customer_name=ap.customer_name,
             customer_phone=ap.customer_phone,
             customer_address=ap.customer_address,
+            descuento_vip_pct=float(ap.descuento_vip_pct) if getattr(ap, 'descuento_vip_pct', None) is not None else 0,
             amount_paid=ap.amount_paid,
             credit_status=ap.credit_status,
             payments=payments_list

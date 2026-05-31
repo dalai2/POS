@@ -624,6 +624,9 @@ export default function SalesPage() {
 
     <!-- Totals -->
     <div class="totals">
+      <div><strong>SUBTOTAL :</strong> $${subtotal.toFixed(2)}</div>
+      ${(discountAmount - (parseFloat(saleData.descuento_vip_pct || '0') > 0 ? (subtotal - (discountAmount - (subtotal * parseFloat(saleData.descuento_vip_pct || '0') / 100))) * (parseFloat(saleData.descuento_vip_pct || '0') / 100) : 0)) > 0.01 ? `<div><strong>DESCUENTO :</strong> -$${(discountAmount - (parseFloat(saleData.descuento_vip_pct || '0') > 0 ? subtotal * parseFloat(saleData.descuento_vip_pct || '0') / 100 : 0)).toFixed(2)}</div>` : ''}
+      ${parseFloat(saleData.descuento_vip_pct || '0') > 0 ? `<div><strong>DESCUENTO VIP (-${parseFloat(saleData.descuento_vip_pct).toFixed(0)}%) :</strong> -$${(subtotal * parseFloat(saleData.descuento_vip_pct) / 100).toFixed(2)}</div>` : ''}
       <div><strong>TOTAL :</strong> $${total.toFixed(2)}</div>
       ${saleData.tipo_venta === 'contado' && efectivoPaid > 0 ? `<div><strong>EFECTIVO :</strong> $${efectivoPaid.toFixed(2)}</div>` : ''}
       ${saleData.tipo_venta === 'contado' && tarjetaPaid > 0 ? `<div><strong>TARJETA :</strong> $${tarjetaPaid.toFixed(2)}</div>` : ''}
@@ -768,7 +771,8 @@ export default function SalesPage() {
         tax_rate: 0,  // IVA siempre 0
         tipo_venta: saleType,  // Ya es 'credito' directamente
         // El total ya incluye el descuento VIP aplicado
-        total: Math.round(totalWithVipDiscount * 100) / 100
+        total: Math.round(totalWithVipDiscount * 100) / 100,
+        descuento_vip_pct: vipDiscount ? parseFloat(vipDiscount) : 0
       }
 
       // Add vendedor_id if selected
@@ -838,7 +842,8 @@ export default function SalesPage() {
       // Asegurar que saleData tenga tipo_venta para que printSaleTicket sepa qué folio usar
       const saleDataForTicket = {
         ...r.data,
-        tipo_venta: saleType  // Asegurar que tipo_venta esté presente
+        tipo_venta: saleType,  // Asegurar que tipo_venta esté presente
+        descuento_vip_pct: vipDiscount ? parseFloat(vipDiscount) : 0
       }
       // Usar el total con descuento VIP para el ticket
       const ticketTotal = vipDiscount ? getTotalWithVipDiscount() : total

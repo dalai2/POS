@@ -25,6 +25,7 @@ class VentasContado(Base):
     
     # Folio único para ventas de contado
     folio_venta = Column(String(50), nullable=True, index=True)
+    descuento_vip_pct = Column(Numeric(5, 2), nullable=False, default=0)
     
     # Customer information (optional, for better ticket reporting)
     customer_name = Column(String(255), nullable=True)

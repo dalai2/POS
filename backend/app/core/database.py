@@ -69,6 +69,33 @@ def _run_migration_notas_cliente() -> None:
 
 
 
+def _run_migration_vip_discount() -> None:
+    """Ejecuta migración para agregar columna descuento_vip_pct a apartados y ventas_contado si no existe"""
+    try:
+        inspector = inspect(engine)
+        
+        # Migración apartados
+        if 'apartados' in inspector.get_table_names():
+            columns = [col['name'] for col in inspector.get_columns('apartados')]
+            if 'descuento_vip_pct' not in columns:
+                print("Ejecutando migración: Agregar columna descuento_vip_pct a apartados...")
+                with engine.connect() as connection:
+                    connection.execute(text("ALTER TABLE apartados ADD COLUMN IF NOT EXISTS descuento_vip_pct NUMERIC(5, 2) DEFAULT 0"))
+                    connection.commit()
+                print("✅ Migración completada: columna descuento_vip_pct agregada a apartados")
+                
+        # Migración ventas_contado
+        if 'ventas_contado' in inspector.get_table_names():
+            columns = [col['name'] for col in inspector.get_columns('ventas_contado')]
+            if 'descuento_vip_pct' not in columns:
+                print("Ejecutando migración: Agregar columna descuento_vip_pct a ventas_contado...")
+                with engine.connect() as connection:
+                    connection.execute(text("ALTER TABLE ventas_contado ADD COLUMN IF NOT EXISTS descuento_vip_pct NUMERIC(5, 2) DEFAULT 0"))
+                    connection.commit()
+                print("✅ Migración completada: columna descuento_vip_pct agregada a ventas_contado")
+    except Exception as e:
+        print(f"Error en migración vip discount: {e}")
+
 def init_db() -> None:
     # Create tables in dev/test without running Alembic
     if settings.env in {"dev", "test"}:
@@ -76,5 +103,4 @@ def init_db() -> None:
 
     # Ejecutar migraciones si es necesario
     _run_migration_notas_cliente()
-
-
+    _run_migration_vip_discount()

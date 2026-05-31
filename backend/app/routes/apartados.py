@@ -43,6 +43,7 @@ class ApartadoOut(BaseModel):
     utilidad: float | None
     total_cost: float | None
     folio_apartado: str | None
+    descuento_vip_pct: float | None
     customer_name: str | None
     customer_phone: str | None
     customer_address: str | None
@@ -87,6 +88,8 @@ async def create_apartado_route(
     customer_name = body.get('customer_name')
     customer_phone = body.get('customer_phone')
     customer_address = body.get('customer_address')
+    total_override = body.get('total')
+    descuento_vip_pct_val = body.get('descuento_vip_pct', 0)
 
     if not items:
         raise HTTPException(status_code=400, detail="No hay artículos en el apartado")
@@ -125,7 +128,9 @@ async def create_apartado_route(
     tax_rate_val = Decimal(str(tax_rate or 0)).quantize(Decimal("0.01"))
     taxable = max(Decimal("0"), subtotal_val - discount_val).quantize(Decimal("0.01"))
     tax_amount_val = (taxable * tax_rate_val / Decimal("100")).quantize(Decimal("0.01"))
-    total_val = (taxable + tax_amount_val).quantize(Decimal("0.01"))
+    calculated_total = (taxable + tax_amount_val).quantize(Decimal("0.01"))
+    
+    total_val = Decimal(str(total_override)).quantize(Decimal("0.01")) if total_override is not None else calculated_total
 
     # Save payments (required for apartado)
     paid = Decimal("0")
@@ -161,6 +166,7 @@ async def create_apartado_route(
         amount_paid=paid,
         credit_status="pendiente",
         folio_apartado=folio_apartado,  # Asignar folio al crear
+        descuento_vip_pct=Decimal(str(descuento_vip_pct_val)).quantize(Decimal("0.01")),
     )
     db.add(apartado)
     upsert_customer(db, tenant.id, customer_name, customer_phone)
@@ -237,6 +243,7 @@ async def create_apartado_route(
         utilidad=apartado.utilidad,
         total_cost=apartado.total_cost,
         folio_apartado=apartado.folio_apartado,
+        descuento_vip_pct=float(apartado.descuento_vip_pct) if apartado.descuento_vip_pct is not None else 0,
         customer_name=apartado.customer_name,
         customer_phone=apartado.customer_phone,
         customer_address=apartado.customer_address,
@@ -316,6 +323,7 @@ def update_apartado(
         utilidad=apartado.utilidad,
         total_cost=apartado.total_cost,
         folio_apartado=apartado.folio_apartado,
+        descuento_vip_pct=float(apartado.descuento_vip_pct) if apartado.descuento_vip_pct is not None else 0,
         customer_name=apartado.customer_name,
         customer_phone=apartado.customer_phone,
         customer_address=apartado.customer_address,
@@ -362,6 +370,7 @@ def get_apartado(
         utilidad=apartado.utilidad,
         total_cost=apartado.total_cost,
         folio_apartado=apartado.folio_apartado,
+        descuento_vip_pct=float(apartado.descuento_vip_pct) if apartado.descuento_vip_pct is not None else 0,
         customer_name=apartado.customer_name,
         customer_phone=apartado.customer_phone,
         customer_address=apartado.customer_address,
